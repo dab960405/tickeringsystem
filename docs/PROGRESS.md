@@ -20,7 +20,8 @@ Siguiente fase: **Fase 1 (dominio base)**, pendiente de empezar.
 - `.env.example` documentado, README inicial y ADR-001 a ADR-005.
 - Revisión de versiones: todas las fijadas existen en Maven Central (Boot 3.5.16, Testcontainers 1.21.4, springdoc 2.8.17, JaCoCo 0.8.16, Spotless 3.11.0, google-java-format 2.0.0, enforcer 3.7.0, Maven 3.9.16).
 - `.gitignore`: eliminadas las entradas ajenas (`node_modules/`, `.next/`).
-- CI: `.github/workflows/ci.yml` diseñado (ver ADR-005). **Pendiente de que el usuario lo suba**: la integración de v0 no tiene permiso `workflows` en GitHub y no puede subir archivos de `.github/workflows/`.
+- CI: `.github/workflows/ci.yml` ya está en `main` (PR #1, ver ADR-005). La IA no puede leer el estado de las ejecuciones de Actions (la integración no tiene ese permiso): el usuario debe confirmar que el workflow está en verde.
+- Revisión de retoma (2026-11-05): `./mvnw clean verify` vuelve a pasar con Temurin 21.0.13 (7 tests, 0 fallos, BUILD SUCCESS). Sin etiquetas `<n>` en los POM, todas las versiones existen en Maven Central (google-java-format 2.0.0 incluido) y `.gitignore` limpio.
 
 ## Próximos 3 pasos
 
