@@ -14,21 +14,21 @@ Fase 0: código completo y `./mvnw verify` en verde (local y CI). Queda **sin ve
 | Entidades y repositorios de `venue`, `event`, `tickettype` | Hecho (con tests unitarios y `@DataJpaTest` *IT) |
 | Seed de datos solo para perfil `dev` (`db/seed`) | Pendiente |
 | CRUD REST de venues (`/api/v1/venues`) con DTOs records, validación y `PageResponse<T>` | Hecho (`@WebMvcTest` + tests unitarios del servicio; roles en Fase 2) |
-| CRUD REST de eventos y tipos de entrada | Pendiente |
+| CRUD REST de eventos y tipos de entrada | Parcial: `GET /events` y `GET /events/{id}` publicados; servicios de evento (crear, editar, publicar, cancelar) y de tipos de entrada con tests. Faltan los endpoints de escritura (`POST/PUT /events`, `publish`, `cancel`, `POST /events/{id}/ticket-types`, `PUT /ticket-types/{id}`) |
 | Manejo global de errores (`ProblemDetail`) | Hecho (`GlobalExceptionHandler`, mapeo 404/409/422/500 y `errors` por campo) |
 | Swagger muestra todos los endpoints | Parcial: springdoc 2.8.17 en `/swagger-ui.html`, venues documentados; falta `bearerAuth` (Fase 2) y el resto de rutas |
 | Tests unitarios y de repositorio verdes | Verde hasta ahora |
 
 ## Última implementación publicada
 
-- `dcb3bf5` feat: add venue CRUD API with pagination and OpenAPI docs
+- `9686f24` feat: add ticket type service with duplicate-name and editability rules (CI en verde)
 
-Commits de esta sesión (rama `dev`): `b788dcf`, `9beb22b`, `9241fb5`, `be243a3`, `c187039`, `53f7b18`, `ced25c9`, `dcb3bf5`.
+Commits anteriores (rama `dev`): `b788dcf`, `9beb22b`, `9241fb5`, `be243a3`, `c187039`, `53f7b18`, `ced25c9`, `dcb3bf5`, `e480f7a`, `01748f2`, `9686f24`.
 
 ## Próximos 3 pasos
 
-1. CRUD de eventos: `GET /events` con filtros `q`, `category`, `city`, `from`, `to` (solo PUBLISHED), `GET /events/{id}` con tipos de entrada, `POST/PUT /events`, `publish` (requiere al menos un tipo de entrada) y `cancel`.
-2. Tipos de entrada: `POST /events/{id}/ticket-types` y `PUT /ticket-types/{id}` (sin bajar el total por debajo de lo vendido o reservado; regla ya implementada en `TicketType.update`).
+1. Endpoints de escritura de eventos: `POST/PUT /events`, `POST /events/{id}/publish` y `POST /events/{id}/cancel` (el usuario actual llega de forma provisional hasta la Fase 2).
+2. Controlador de tipos de entrada: `POST /events/{id}/ticket-types` y `PUT /ticket-types/{id}`.
 3. Seed `db/seed` para el perfil `dev` y un test que compruebe que Swagger (`/v3/api-docs`) lista todas las rutas; después, cierre de la Fase 1.
 
 ## Decisiones tomadas (pendientes de registrar como ADR con el usuario)
