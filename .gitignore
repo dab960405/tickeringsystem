@@ -29,7 +29,3 @@ crash.log
 
 # Logs
 *.log
-
-# Leftovers from the initial workspace template
-node_modules/
-.next/
