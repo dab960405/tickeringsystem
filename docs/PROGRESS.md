@@ -4,46 +4,69 @@
 
 ## Fase actual
 
-**Fase 0 (esqueleto): código completo, falta confirmar un criterio.**
+**Fase 1 (dominio base): IN_PROGRESS.**
 
-| Criterio de aceptación (Fase 0) | Estado |
+Fase 0: código completo y `./mvnw verify` en verde (local y CI). Queda **sin verificar** por la IA `docker compose --profile infra up` (el entorno no tiene Docker): lo debe comprobar el usuario en local.
+
+| Criterio de aceptación (Fase 1) | Estado |
 | --- | --- |
-| `./mvnw verify` pasa | Hecho: verificado localmente con Temurin 21.0.13 (7 tests, 0 fallos) |
-| `docker compose --profile infra up` levanta Postgres, Redis, Kafka y Mongo sanos | **Sin verificar**: el entorno de desarrollo no tiene Docker. Lo debe comprobar el usuario en local |
+| Migraciones Flyway (V1–V10) | Hecho, validadas en CI con Postgres real (`FlywayMigrationIT`) |
+| Entidades y repositorios de `venue`, `event`, `tickettype` | Hecho (con tests unitarios y `@DataJpaTest` *IT) |
+| Seed de datos solo para perfil `dev` (`db/seed`) | Pendiente |
+| CRUD REST de venues, eventos y tipos de entrada (DTOs records, validación, `PageResponse<T>`) | Pendiente |
+| Manejo global de errores (`ProblemDetail`) | Pendiente (jerarquía `BusinessException` ya creada) |
+| Swagger muestra todos los endpoints | Pendiente |
+| Tests unitarios y de repositorio verdes | Verde hasta ahora |
 
-Siguiente fase: **Fase 1 (dominio base)**, pendiente de empezar.
+## Última implementación publicada
 
-## Completado
+- `c187039` feat: add ticket type entity with optimistic locking and repository
 
-- Maven multi-módulo (`common-events`, `ticketing-api`, `notification-service`) con POM padre, Maven Wrapper 3.9.16, enforcer (Java 21), JaCoCo (umbral 70 % en `service`/`domain`) y Spotless.
-- `docker-compose.yml` con perfil `infra` (Postgres 17, Redis 7, Kafka 4 en modo KRaft, Mongo 7), con healthchecks, red y volúmenes con nombre.
-- `.env.example` documentado, README inicial y ADR-001 a ADR-005.
-- Revisión de versiones: todas las fijadas existen en Maven Central (Boot 3.5.16, Testcontainers 1.21.4, springdoc 2.8.17, JaCoCo 0.8.16, Spotless 3.11.0, google-java-format 2.0.0, enforcer 3.7.0, Maven 3.9.16).
-- `.gitignore`: eliminadas las entradas ajenas (`node_modules/`, `.next/`).
-- CI: `.github/workflows/ci.yml` ya está en `main` (PR #1, ver ADR-005). La IA no puede leer el estado de las ejecuciones de Actions (la integración no tiene ese permiso): el usuario debe confirmar que el workflow está en verde.
-- Revisión de retoma (2026-11-05): `./mvnw clean verify` vuelve a pasar con Temurin 21.0.13 (7 tests, 0 fallos, BUILD SUCCESS). Sin etiquetas `<n>` en los POM, todas las versiones existen en Maven Central (google-java-format 2.0.0 incluido) y `.gitignore` limpio.
+Commits de esta sesión (rama `dev`): `b788dcf`, `9beb22b`, `9241fb5`, `be243a3`, `c187039`.
 
 ## Próximos 3 pasos
 
-1. Fase 1: añadir dependencias (JPA, Flyway, PostgreSQL y Testcontainers) y las migraciones `V1__create_users.sql` … `V8__create_outbox_events.sql`, junto con la clase base de tests con Testcontainers.
-2. Fase 1: entidades y repositorios de `venue`, `event` y `tickettype`, con `@DataJpaTest` sobre Postgres real.
-3. Fase 1: CRUD REST (DTOs como records, validación, `PageResponse<T>`), `@RestControllerAdvice` con `ProblemDetail` y Swagger.
+1. `@RestControllerAdvice` global con `ProblemDetail` (mapeo de `BusinessException` a 404/409/422 y errores de validación en `errors`).
+2. `PageResponse<T>` + CRUD de venues (`/api/v1/venues`) con DTOs records, validación y `@WebMvcTest` (la seguridad por rol llega en la Fase 2).
+3. CRUD de eventos y tipos de entrada, springdoc con `bearerAuth`, y seed `db/seed` para el perfil `dev`.
+
+## Decisiones tomadas (pendientes de registrar como ADR con el usuario)
+
+Elegidas por ser la opción más simple; se registrarán en `docs/decisions.md` cuando el usuario confirme la numeración (ver "Decisiones pendientes"):
+
+- Ciclo de estados del evento: `DRAFT → PUBLISHED | CANCELLED`, `PUBLISHED → CANCELLED | FINISHED`; editable solo en `DRAFT` o `PUBLISHED`.
+- `events.organizer_id` se guarda como UUID simple (sin relación JPA a `User`) para no acoplar módulos.
+- IDs UUID generados por Hibernate (`GenerationType.UUID`) en el `persist`.
+- Columna `currency` (`CHAR(3)`, default `USD`) en todas las tablas con dinero: `ticket_types`, `orders`, `order_items`, `payments`.
+- Un único `payment` por orden (`UNIQUE (order_id)`).
 
 ## Decisiones pendientes del usuario
 
-- **Región de AWS**: se decide en la etapa 0 de la pista AWS. No se creará ningún recurso sin tu confirmación.
-- **Librería JWT** (Fase 2): `jjwt` u `oauth2-resource-server`. Lo decidirá la IA con un ADR siguiendo la opción más simple, salvo que prefieras otra.
-- **Mapeo de DTOs** (Fase 1): por defecto, mapeo manual con records, que es lo más simple. Quedará registrado en un ADR.
+- **ADR-006**: confirmar qué decisión ocupa ese número antes de añadir ADRs nuevos.
+- **Región de AWS**: etapa 0 de la pista AWS. No se creará ningún recurso sin confirmación.
+- **Librería JWT** (Fase 2): `jjwt` u `oauth2-resource-server`.
+- **Mapeo de DTOs**: por defecto mapeo manual con records.
 
 ## Comandos de verificación
 
 ```bash
-./mvnw clean verify                      # build completo con tests, cobertura y formato
+./mvnw clean verify                      # build completo (requiere Docker para los *IT)
+./mvnw clean verify -DskipITs            # sin Docker: unitarios, formato y cobertura
 docker compose --profile infra up -d     # dependencias locales
 docker compose ps                        # todo debe estar "healthy"
 ```
 
+## Tests ejecutados (sesión 2026-11-05)
+
+- Local (Temurin 21.0.13, sin Docker): `./mvnw -B clean verify -DskipITs` → BUILD SUCCESS, 41 tests unitarios, 0 fallos.
+- Los `*IT` (Testcontainers) no se pueden ejecutar en el entorno de la IA; se verifican en GitHub Actions (job "Build and test", consultado con `gh api .../check-runs`).
+- CI en verde confirmado para `b788dcf`, `9beb22b`, `9241fb5`.
+
 ## Problemas conocidos
 
-- El entorno de la IA no tiene Docker, así que los tests de Testcontainers (desde la Fase 1) y Compose solo se verifican en GitHub Actions o en tu máquina.
+- El entorno de la IA no tiene Docker: Testcontainers y Compose solo se verifican en CI o en local.
 - El job `docker-build` de CI llega en la Fase 6 (todavía no hay Dockerfiles).
+
+## Cambios locales sin publicar
+
+Ninguno.
