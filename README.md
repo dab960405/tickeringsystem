@@ -1,5 +1,7 @@
 # Ticketing Platform
 
+[![CI](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml/badge.svg)](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml)
+
 Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El foco está en resolver bien la concurrencia sobre el stock, las reservas temporales, las transacciones, la caché, la mensajería asíncrona y la seguridad.
 
 > Estado: **Fase 0 (esqueleto)** completada. Las funcionalidades de negocio se añaden fase a fase (ver `docs/decisions.md` y la sección "Hoja de ruta").
@@ -66,7 +68,8 @@ Para detener y borrar los volúmenes: `docker compose --profile infra down -v`.
 
 ## Hoja de ruta
 
-- [x] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`)
+- [x] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`). Falta verificar Compose en local
+- [x] CI adelantado: `ci.yml` con `./mvnw -B clean verify` (ADR-005)
 - [ ] Fase 1: Dominio base (Flyway, entidades, CRUD, errores, Swagger)
 - [ ] Fase 2: Seguridad (JWT, roles, propiedad, rate limiting)
 - [ ] Fase 3: Reservas y órdenes (concurrencia, idempotencia, webhook, expiración)

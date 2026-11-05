@@ -46,6 +46,13 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 - **Decisión:** la regla de JaCoCo se configura ya en la Fase 0 por paquete (`*.service`, `*.domain`) sobre los datos combinados de tests unitarios e integración. Mientras no existan esos paquetes la regla no tiene clases que evaluar y pasa.
 - **Consecuencias:** desde la Fase 1 cualquier código de negocio sin tests rompe el build.
 
+## ADR-005: Workflow de CI adelantado y rama `dev`
+
+- **Fecha:** 2026-11-05
+- **Contexto:** la especificación sitúa los workflows en la Fase 7, pero el usuario necesita una verificación independiente (`./mvnw -B clean verify` en runners con Docker) desde ahora, porque el entorno de desarrollo asistido no siempre tiene Docker para Testcontainers.
+- **Decisión:** crear ya `.github/workflows/ci.yml` con el job `build-test` (Temurin 21, caché Maven, `permissions: contents: read`, `concurrency`, subida de reportes de Surefire/Failsafe y JaCoCo). El job `docker-build` se añadirá en la Fase 6, cuando existan los Dockerfiles, y `deploy.yml` en la Fase 7. El trabajo se hace en la rama `dev`; `main` solo recibe cambios verificados por CI. Actions fijadas por tag mayor: `checkout@v7`, `setup-java@v6`, `upload-artifact@v7`.
+- **Consecuencias:** cada push y pull request queda verificado en GitHub desde la Fase 0. La Fase 7 sigue pendiente de `docker-build`, `deploy.yml`, Dependabot y el badge.
+
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta.
