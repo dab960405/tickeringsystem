@@ -1,0 +1,21 @@
+CREATE TABLE ticket_types (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id           UUID          NOT NULL REFERENCES events (id),
+    name               VARCHAR(100)  NOT NULL,
+    price              NUMERIC(12, 2) NOT NULL,
+    currency           CHAR(3)       NOT NULL DEFAULT 'USD',
+    total_quantity     INTEGER       NOT NULL,
+    available_quantity INTEGER       NOT NULL,
+    version            BIGINT        NOT NULL DEFAULT 0,
+    sale_starts_at     TIMESTAMPTZ   NOT NULL,
+    sale_ends_at       TIMESTAMPTZ   NOT NULL,
+    max_per_order      INTEGER       NOT NULL,
+    created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    CONSTRAINT ck_ticket_types_price CHECK (price >= 0),
+    CONSTRAINT ck_ticket_types_total CHECK (total_quantity > 0),
+    CONSTRAINT ck_ticket_types_available CHECK (available_quantity >= 0 AND available_quantity <= total_quantity),
+    CONSTRAINT ck_ticket_types_max_per_order CHECK (max_per_order > 0),
+    CONSTRAINT ck_ticket_types_sale_window CHECK (sale_ends_at > sale_starts_at),
+    CONSTRAINT uq_ticket_types_event_name UNIQUE (event_id, name)
+);
