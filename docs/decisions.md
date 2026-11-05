@@ -53,8 +53,27 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 - **Decisión:** crear ya `.github/workflows/ci.yml` con el job `build-test` (Temurin 21, caché Maven, `permissions: contents: read`, `concurrency`, subida de reportes de Surefire/Failsafe y JaCoCo). El job `docker-build` se añadirá en la Fase 6, cuando existan los Dockerfiles, y `deploy.yml` en la Fase 7. El trabajo se hace en la rama `dev`; `main` solo recibe cambios verificados por CI. Actions fijadas por tag mayor: `checkout@v7`, `setup-java@v6`, `upload-artifact@v7`.
 - **Consecuencias:** cada push y pull request queda verificado en GitHub desde la Fase 0. La Fase 7 sigue pendiente de `docker-build`, `deploy.yml`, Dependabot y el badge.
 
+## ADR-006: JWT con `spring-boot-starter-oauth2-resource-server` y HS256
+
+- **Fecha:** 2026-11-05
+- **Contexto:** la Fase 2 necesita emitir y validar JWT. Opciones: `jjwt` o el soporte nativo de Spring Security (Nimbus).
+- **Decisión:** `spring-boot-starter-oauth2-resource-server` con `NimbusJwtEncoder`/`NimbusJwtDecoder` y HS256. El secreto se lee de `JWT_SECRET` (Base64, mínimo 256 bits; el arranque falla si es más corto). Claims: `sub` (id de usuario), `role`, `iat`, `exp` y `type` (`access` o `refresh`); el refresh token añade `jti`. El decodificador de acceso rechaza tokens con `type` distinto de `access`.
+- **Consecuencias:** sin dependencias extra ni filtro JWT propio; la validación de firma y expiración la hace el filtro estándar `BearerTokenAuthenticationFilter`. Decidido con el usuario.
+
+## ADR-007: Redis desde la Fase 2 para refresh tokens y rate limiting de login
+
+- **Fecha:** 2026-11-05
+- **Contexto:** la especificación (sección 9) guarda el hash del `jti` del refresh token en Redis para poder revocarlo y pide rate limiting en login con contador en Redis, pero Redis se plantea en la Fase 4.
+- **Decisión:** añadir `spring-boot-starter-data-redis` en la Fase 2. Clave `auth:refresh:<sha256(jti)>` con TTL igual a la vida del refresh token; logout la borra. Rate limiting de login con ventana fija: `INCR` sobre `rate:login:<ip>:<email>` y `EXPIRE` en el primer intento; al superar el límite, 429.
+- **Consecuencias:** los tests de integración levantan también un contenedor Redis. La degradación con Redis caído se trata en la Fase 4. Decidido con el usuario.
+
+## ADR-008: Mapeo DTO manual con records
+
+- **Fecha:** 2026-11-05
+- **Contexto:** estaba pendiente elegir entre MapStruct y mapeo manual.
+- **Decisión:** mapeo manual con métodos estáticos `from(...)` en los records de respuesta, como ya se hizo en la Fase 1.
+- **Consecuencias:** sin procesador de anotaciones adicional; el mapeo es explícito y lo cubren los tests de controlador.
+
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta.
-- **Librería JWT:** `jjwt` frente a `oauth2-resource-server` (Fase 2).
-- **Mapeo DTO:** MapStruct frente a mapeo manual con records (Fase 1).
