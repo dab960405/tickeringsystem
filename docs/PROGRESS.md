@@ -4,7 +4,7 @@
 
 ## Fase actual
 
-**Fase 1 (dominio base): IN_PROGRESS.**
+**Fase 1 (dominio base): COMPLETA** (CI en verde en `944b375`). Siguiente: **Fase 2 (seguridad)**, pendiente de empezar.
 
 Fase 0: código completo y `./mvnw verify` en verde (local y CI). Queda **sin verificar** por la IA `docker compose --profile infra up` (el entorno no tiene Docker): lo debe comprobar el usuario en local.
 
@@ -12,24 +12,24 @@ Fase 0: código completo y `./mvnw verify` en verde (local y CI). Queda **sin ve
 | --- | --- |
 | Migraciones Flyway (V1–V10) | Hecho, validadas en CI con Postgres real (`FlywayMigrationIT`) |
 | Entidades y repositorios de `venue`, `event`, `tickettype` | Hecho (con tests unitarios y `@DataJpaTest` *IT) |
-| Seed de datos solo para perfil `dev` (`db/seed`) | Pendiente |
+| Seed de datos solo para perfil `dev` (`db/seed`) | Hecho: `R__seed_dev_data.sql` (migración repetible e idempotente) cargada solo con `application-dev.yml`; los IT usan el perfil `test`; `DevSeedMigrationIT` lo valida en un esquema aislado |
 | CRUD REST de venues (`/api/v1/venues`) con DTOs records, validación y `PageResponse<T>` | Hecho (`@WebMvcTest` + tests unitarios del servicio; roles en Fase 2) |
-| CRUD REST de eventos y tipos de entrada | Parcial: `GET /events` y `GET /events/{id}` publicados; servicios de evento (crear, editar, publicar, cancelar) y de tipos de entrada con tests. Faltan los endpoints de escritura (`POST/PUT /events`, `publish`, `cancel`, `POST /events/{id}/ticket-types`, `PUT /ticket-types/{id}`) |
+| CRUD REST de eventos y tipos de entrada | Hecho: `POST/PUT /events`, `publish`, `cancel`, `POST /events/{id}/ticket-types`, `PUT /ticket-types/{id}` con `@WebMvcTest`. El organizador llega provisionalmente en la cabecera `X-User-Id` hasta la Fase 2 |
 | Manejo global de errores (`ProblemDetail`) | Hecho (`GlobalExceptionHandler`, mapeo 404/409/422/500 y `errors` por campo) |
-| Swagger muestra todos los endpoints | Parcial: springdoc 2.8.17 en `/swagger-ui.html`, venues documentados; falta `bearerAuth` (Fase 2) y el resto de rutas |
-| Tests unitarios y de repositorio verdes | Verde hasta ahora |
+| Swagger muestra todos los endpoints | Hecho: todas las rutas de la Fase 1 con resumen y respuestas; `OpenApiDocsIT` lo comprueba en `/v3/api-docs`. `bearerAuth` llega en la Fase 2 |
+| Tests unitarios y de repositorio verdes | Hecho: verdes en CI (`944b375`, unitarios + `*IT` con Testcontainers) |
 
 ## Última implementación publicada
 
-- `9686f24` feat: add ticket type service with duplicate-name and editability rules (CI en verde)
+- `944b375` test: verify OpenAPI documents every phase 1 endpoint
 
-Commits anteriores (rama `dev`): `b788dcf`, `9beb22b`, `9241fb5`, `be243a3`, `c187039`, `53f7b18`, `ced25c9`, `dcb3bf5`, `e480f7a`, `01748f2`, `9686f24`.
+Commits de la sesión de retoma (rama `dev`): `2e3b6ac`, `dbea9a6`, `f526101`, `739e828`, `944b375`.
 
 ## Próximos 3 pasos
 
-1. Endpoints de escritura de eventos: `POST/PUT /events`, `POST /events/{id}/publish` y `POST /events/{id}/cancel` (el usuario actual llega de forma provisional hasta la Fase 2).
-2. Controlador de tipos de entrada: `POST /events/{id}/ticket-types` y `PUT /ticket-types/{id}`.
-3. Seed `db/seed` para el perfil `dev` y un test que compruebe que Swagger (`/v3/api-docs`) lista todas las rutas; después, cierre de la Fase 1.
+1. Fase 2: decidir librería JWT (propuesta: `oauth2-resource-server` nativo con HS256, sin dependencia extra) y añadir `spring-boot-starter-security`.
+2. Fase 2: entidad `User`, registro (`POST /auth/register`) con BCrypt y política de contraseña, y sustituir `X-User-Id` por el principal autenticado.
+3. Fase 2: login con access token (15 min) y refresh token (7 días), con matriz de tests por rol.
 
 ## Decisiones tomadas (pendientes de registrar como ADR con el usuario)
 
@@ -42,6 +42,8 @@ Elegidas por ser la opción más simple; se registrarán en `docs/decisions.md` 
 - IDs UUID generados por Hibernate (`GenerationType.UUID`) en el `persist`.
 - Columna `currency` (`CHAR(3)`, default `USD`) en todas las tablas con dinero: `ticket_types`, `orders`, `order_items`, `payments`.
 - Un único `payment` por orden (`UNIQUE (order_id)`).
+- Organizador provisional: cabecera `X-User-Id` en `POST /events` hasta la Fase 2 (lo más simple sin adelantar seguridad).
+- Seed `dev` como migración repetible (`R__`) para no bloquear nuevas migraciones versionadas; contraseña pública de demo `Password123` para los tres usuarios.
 
 ## Decisiones pendientes del usuario
 
@@ -59,11 +61,11 @@ docker compose --profile infra up -d     # dependencias locales
 docker compose ps                        # todo debe estar "healthy"
 ```
 
-## Tests ejecutados (sesión 2026-11-05)
+## Tests ejecutados (sesión de retoma 2026-11-05)
 
-- Local (Temurin 21.0.13, sin Docker): `./mvnw -B clean verify -DskipITs` → BUILD SUCCESS, 61 tests unitarios/slice, 0 fallos.
-- Los `*IT` (Testcontainers) no se pueden ejecutar en el entorno de la IA; se verifican en GitHub Actions (job "Build and test", consultado con `gh api .../check-runs`).
-- CI en verde confirmado para `b788dcf`, `9beb22b`, `9241fb5`, `be243a3`, `53f7b18`, `ced25c9` (`c187039` cancelado por `concurrency` al llegar `53f7b18`, que lo incluye).
+- Local (Temurin 21.0.13, sin Docker): `./mvnw -B clean verify -DskipITs` → BUILD SUCCESS, 86 tests unitarios/slice en `ticketing-api` + 5 en `common-events` + 1 en `notification-service`, 0 fallos.
+- Local `./mvnw -B clean verify` completo: los `*IT` fallan solo por falta de Docker (`Could not find a valid Docker environment`); no es un fallo de código.
+- CI (GitHub Actions, con Docker): verde en `9686f24` y `f526101`. `944b375` (incluye `DevSeedMigrationIT` y `OpenApiDocsIT`). `dbea9a6` y `739e828` aparecen cancelados por `concurrency` (los incluyen commits posteriores en verde).
 
 ## Problemas conocidos
 
