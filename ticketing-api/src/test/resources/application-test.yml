@@ -11,3 +11,5 @@ ticketing:
     login:
       max-attempts: 5
       window-seconds: 60
+  payment:
+    webhook-secret: test-webhook-secret-for-integration-tests

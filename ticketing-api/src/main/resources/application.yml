@@ -69,3 +69,5 @@ ticketing:
       window-seconds: ${LOGIN_WINDOW_SECONDS:60}
   reservation:
     ttl-minutes: ${RESERVATION_TTL_MINUTES:10}
+  payment:
+    webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}
