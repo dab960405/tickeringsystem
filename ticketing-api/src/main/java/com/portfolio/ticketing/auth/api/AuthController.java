@@ -6,6 +6,7 @@ import com.portfolio.ticketing.user.domain.User;
 import com.portfolio.ticketing.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -67,6 +68,7 @@ public class AuthController {
   }
 
   @PostMapping("/logout")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Revoke a refresh token")
   @ApiResponse(responseCode = "204", description = "Refresh token revoked")
   @ApiResponse(responseCode = "400", description = "Validation error")

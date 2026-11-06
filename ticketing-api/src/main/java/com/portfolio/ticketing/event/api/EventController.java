@@ -6,6 +6,7 @@ import com.portfolio.ticketing.event.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -15,12 +16,13 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -63,19 +65,16 @@ public class EventController {
     return eventService.getPublished(id);
   }
 
-  // Phase 2 replaces the X-User-Id header with the authenticated principal from the JWT.
   @PostMapping
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Create an event in DRAFT status")
   @ApiResponse(responseCode = "201", description = "Event created")
   @ApiResponse(responseCode = "400", description = "Validation error")
   @ApiResponse(responseCode = "404", description = "Venue not found")
   @ApiResponse(responseCode = "422", description = "Event dates are inconsistent")
   public ResponseEntity<EventDetailResponse> create(
-      @Parameter(description = "Organizer id (temporary until JWT authentication)")
-          @RequestHeader("X-User-Id")
-          UUID organizerId,
-      @Valid @RequestBody EventRequest request) {
-    EventDetailResponse created = eventService.create(organizerId, request);
+      @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EventRequest request) {
+    EventDetailResponse created = eventService.create(UUID.fromString(jwt.getSubject()), request);
     URI location =
         ServletUriComponentsBuilder.fromCurrentRequest()
             .path("/{id}")
@@ -85,6 +84,7 @@ public class EventController {
   }
 
   @PutMapping("/{id}")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Update an event")
   @ApiResponse(responseCode = "200", description = "Event updated")
   @ApiResponse(responseCode = "400", description = "Validation error")
@@ -96,6 +96,7 @@ public class EventController {
   }
 
   @PostMapping("/{id}/publish")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Publish an event (requires at least one ticket type)")
   @ApiResponse(responseCode = "200", description = "Event published")
   @ApiResponse(responseCode = "404", description = "Event not found")
@@ -106,6 +107,7 @@ public class EventController {
   }
 
   @PostMapping("/{id}/cancel")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Cancel an event")
   @ApiResponse(responseCode = "200", description = "Event cancelled")
   @ApiResponse(responseCode = "404", description = "Event not found")

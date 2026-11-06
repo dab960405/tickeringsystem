@@ -3,6 +3,7 @@ package com.portfolio.ticketing.tickettype.api;
 import com.portfolio.ticketing.tickettype.service.TicketTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -28,6 +29,7 @@ public class TicketTypeController {
   }
 
   @PostMapping("/events/{eventId}/ticket-types")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Create a ticket type for an event")
   @ApiResponse(responseCode = "201", description = "Ticket type created")
   @ApiResponse(responseCode = "400", description = "Validation error")
@@ -46,6 +48,7 @@ public class TicketTypeController {
   }
 
   @PutMapping("/ticket-types/{id}")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Update a ticket type (total cannot drop below sold or reserved)")
   @ApiResponse(responseCode = "200", description = "Ticket type updated")
   @ApiResponse(responseCode = "400", description = "Validation error")

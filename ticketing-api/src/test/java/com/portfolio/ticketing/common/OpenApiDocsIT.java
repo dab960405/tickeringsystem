@@ -30,6 +30,19 @@ class OpenApiDocsIT extends AbstractIntegrationTest {
     assertOperations(paths, "/api/v1/events/{id}/cancel", "post");
     assertOperations(paths, "/api/v1/events/{eventId}/ticket-types", "post");
     assertOperations(paths, "/api/v1/ticket-types/{id}", "put");
+    assertOperations(paths, "/api/v1/auth/register", "post");
+    assertOperations(paths, "/api/v1/auth/login", "post");
+    assertOperations(paths, "/api/v1/auth/refresh", "post");
+    assertOperations(paths, "/api/v1/auth/logout", "post");
+    assertThat(
+            response
+                .getBody()
+                .path("components")
+                .path("securitySchemes")
+                .path("bearerAuth")
+                .path("scheme")
+                .asText())
+        .isEqualTo("bearer");
   }
 
   @Test

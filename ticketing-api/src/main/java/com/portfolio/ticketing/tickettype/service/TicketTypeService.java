@@ -10,6 +10,7 @@ import com.portfolio.ticketing.tickettype.api.TicketTypeResponse;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import java.util.UUID;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ public class TicketTypeService {
     this.eventService = eventService;
   }
 
+  @PreAuthorize("@eventAuthorizationService.canManage(#eventId, authentication)")
   public TicketTypeResponse create(UUID eventId, TicketTypeRequest request) {
     Event event = eventService.findEvent(eventId);
     requireEditable(event);
@@ -41,6 +43,7 @@ public class TicketTypeService {
     return TicketTypeResponse.from(ticketTypeRepository.save(ticketType));
   }
 
+  @PreAuthorize("@ticketTypeAuthorizationService.canManage(#id, authentication)")
   public TicketTypeResponse update(UUID id, TicketTypeRequest request) {
     TicketType ticketType =
         ticketTypeRepository

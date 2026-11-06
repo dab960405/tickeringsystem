@@ -4,6 +4,7 @@ import com.portfolio.ticketing.common.api.PageResponse;
 import com.portfolio.ticketing.venue.service.VenueService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -50,6 +51,7 @@ public class VenueController {
   }
 
   @PostMapping
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Create a venue")
   @ApiResponse(responseCode = "201", description = "Venue created")
   @ApiResponse(responseCode = "400", description = "Validation error")
@@ -64,6 +66,7 @@ public class VenueController {
   }
 
   @PutMapping("/{id}")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Update a venue")
   @ApiResponse(responseCode = "200", description = "Venue updated")
   @ApiResponse(responseCode = "400", description = "Validation error")
@@ -73,6 +76,7 @@ public class VenueController {
   }
 
   @DeleteMapping("/{id}")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(summary = "Delete a venue")
   @ApiResponse(responseCode = "204", description = "Venue deleted")
   @ApiResponse(responseCode = "404", description = "Venue not found")

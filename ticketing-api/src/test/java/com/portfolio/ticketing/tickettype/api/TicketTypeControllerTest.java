@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -66,6 +67,32 @@ class TicketTypeControllerTest {
         .andExpect(header().string("Location", "http://localhost/api/v1/ticket-types/" + ID))
         .andExpect(jsonPath("$.currency").value("USD"))
         .andExpect(jsonPath("$.availableQuantity").value(100));
+  }
+
+  @Test
+  @WithMockUser(roles = "USER")
+  void should_return403_when_userRoleCreatesTicketType() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/events/" + EVENT_ID + "/ticket-types")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(ticketTypeService);
+  }
+
+  @Test
+  @WithAnonymousUser
+  void should_return401_when_ticketTypeMutationIsAnonymous() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/events/" + EVENT_ID + "/ticket-types")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoInteractions(ticketTypeService);
   }
 
   @Test

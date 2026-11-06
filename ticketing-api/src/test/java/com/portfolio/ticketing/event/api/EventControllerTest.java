@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -30,6 +31,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,6 +51,7 @@ class EventControllerTest {
   @MockitoBean private EventService eventService;
 
   @Test
+  @WithAnonymousUser
   void should_passFiltersToService_when_searchingCatalog() throws Exception {
     EventSummaryResponse summary =
         new EventSummaryResponse(
@@ -96,7 +100,10 @@ class EventControllerTest {
     mockMvc
         .perform(
             post("/api/v1/events")
-                .header("X-User-Id", ID.toString())
+                .with(
+                    jwt()
+                        .jwt(token -> token.subject(ID.toString()).claim("role", "ORGANIZER"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(VALID_BODY))
         .andExpect(status().isCreated())
@@ -109,7 +116,10 @@ class EventControllerTest {
     mockMvc
         .perform(
             post("/api/v1/events")
-                .header("X-User-Id", ID.toString())
+                .with(
+                    jwt()
+                        .jwt(token -> token.subject(ID.toString()).claim("role", "ORGANIZER"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_ORGANIZER")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"title\":\"\"}"))
         .andExpect(status().isBadRequest());
@@ -118,10 +128,21 @@ class EventControllerTest {
   }
 
   @Test
-  void should_return400_when_organizerHeaderIsMissing() throws Exception {
+  @WithAnonymousUser
+  void should_return401_when_organizerTokenIsMissing() throws Exception {
     mockMvc
         .perform(post("/api/v1/events").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isUnauthorized());
+
+    verifyNoInteractions(eventService);
+  }
+
+  @Test
+  @WithMockUser(roles = "USER")
+  void should_return403_when_userRoleCreatesEvent() throws Exception {
+    mockMvc
+        .perform(post("/api/v1/events").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(eventService);
   }

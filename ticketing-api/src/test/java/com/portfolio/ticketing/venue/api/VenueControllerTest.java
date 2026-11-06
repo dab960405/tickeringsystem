@@ -3,6 +3,7 @@ package com.portfolio.ticketing.venue.api;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -25,6 +26,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -58,6 +60,26 @@ class VenueControllerTest {
   }
 
   @Test
+  @WithMockUser(roles = "USER")
+  void should_return403_when_nonAdminCreatesVenue() throws Exception {
+    mockMvc
+        .perform(post("/api/v1/venues").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(venueService);
+  }
+
+  @Test
+  @WithAnonymousUser
+  void should_return401_when_venueMutationIsAnonymous() throws Exception {
+    mockMvc
+        .perform(post("/api/v1/venues").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+        .andExpect(status().isUnauthorized());
+
+    verifyNoInteractions(venueService);
+  }
+
+  @Test
   void should_return400WithFieldErrors_when_bodyIsInvalid() throws Exception {
     mockMvc
         .perform(
@@ -76,6 +98,7 @@ class VenueControllerTest {
   }
 
   @Test
+  @WithAnonymousUser
   void should_returnPageResponse_when_listingVenues() throws Exception {
     when(venueService.list(any(Pageable.class)))
         .thenReturn(new PageResponse<>(List.of(RESPONSE), 0, 20, 1, 1));

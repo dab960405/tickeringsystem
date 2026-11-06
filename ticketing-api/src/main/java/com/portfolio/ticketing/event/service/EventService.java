@@ -16,6 +16,7 @@ import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.service.VenueService;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +58,7 @@ public class EventService {
     return eventRepository.findById(id).orElseThrow(() -> notFound(id));
   }
 
+  @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
   @Transactional
   public EventDetailResponse create(UUID organizerId, EventRequest request) {
     Venue venue = venueService.findVenue(request.venueId());
@@ -72,6 +74,7 @@ public class EventService {
     return toDetail(eventRepository.save(event));
   }
 
+  @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse update(UUID id, EventRequest request) {
     Event event = findEvent(id);
@@ -86,6 +89,7 @@ public class EventService {
     return toDetail(eventRepository.saveAndFlush(event));
   }
 
+  @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse publish(UUID id) {
     Event event = findEvent(id);
@@ -99,6 +103,7 @@ public class EventService {
 
   // Expiring the event's active reservations and emitting EventCancelled arrive with the
   // reservation (phase 3) and outbox (phase 4) modules.
+  @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse cancel(UUID id) {
     Event event = findEvent(id);
