@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,6 +38,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
           case BusinessRuleViolationException ignored -> HttpStatus.UNPROCESSABLE_ENTITY;
         };
     return problem(status, exception.getMessage(), typeOf(exception));
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  ProblemDetail handleAccessDenied(AccessDeniedException exception) {
+    return problem(
+        HttpStatus.FORBIDDEN, "You do not have permission for this resource", "forbidden");
   }
 
   @ExceptionHandler(AuthenticationFailedException.class)

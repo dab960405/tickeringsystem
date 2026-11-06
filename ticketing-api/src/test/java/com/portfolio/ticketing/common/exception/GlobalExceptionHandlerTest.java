@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +54,7 @@ class GlobalExceptionHandlerTest {
             "transition", () -> new InvalidStateTransitionException("Invalid transition"),
             "duplicate", () -> new DuplicateResourceException("Already exists"),
             "rule", () -> new BusinessRuleViolationException("Rule broken"),
+            "denied", () -> new AccessDeniedException("Denied"),
             "unexpected", () -> new IllegalStateException("secret internal detail"));
 
     @GetMapping("/test/fail/{kind}")
@@ -71,6 +73,7 @@ class GlobalExceptionHandlerTest {
         Arguments.of("transition", 409),
         Arguments.of("duplicate", 409),
         Arguments.of("rule", 422),
+        Arguments.of("denied", 403),
         Arguments.of("unexpected", 500));
   }
 
