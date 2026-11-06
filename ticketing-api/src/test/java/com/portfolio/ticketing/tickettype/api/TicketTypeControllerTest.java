@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.portfolio.ticketing.auth.config.SecurityConfig;
+import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.tickettype.service.TicketTypeService;
@@ -19,11 +21,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(TicketTypeController.class)
+@WebMvcTest(
+    value = TicketTypeController.class,
+    properties = "ticketing.security.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@Import({SecurityConfig.class, SecurityErrorHandler.class})
+@WithMockUser(roles = "ORGANIZER")
 class TicketTypeControllerTest {
 
   private static final UUID EVENT_ID = UUID.fromString("0b5e6f1a-3c2d-4e5f-8a9b-1c2d3e4f5a6b");

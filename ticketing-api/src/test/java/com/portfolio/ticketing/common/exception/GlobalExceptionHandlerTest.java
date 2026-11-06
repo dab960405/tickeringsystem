@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.portfolio.ticketing.auth.config.SecurityConfig;
+import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
@@ -18,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,8 +28,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-@WebMvcTest(controllers = GlobalExceptionHandlerTest.FailingController.class)
-@Import(GlobalExceptionHandlerTest.FailingController.class)
+@WebMvcTest(
+    controllers = GlobalExceptionHandlerTest.FailingController.class,
+    properties = "ticketing.security.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@Import({
+  GlobalExceptionHandlerTest.FailingController.class,
+  SecurityConfig.class,
+  SecurityErrorHandler.class
+})
+@WithMockUser
 class GlobalExceptionHandlerTest {
 
   @Autowired private MockMvc mockMvc;

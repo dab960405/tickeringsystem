@@ -27,6 +27,11 @@ spring:
     web:
       pageable:
         max-page-size: 100
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
 
 springdoc:
   swagger-ui:
@@ -52,3 +57,13 @@ management:
 info:
   app:
     name: ${spring.application.name}
+
+ticketing:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
+      refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
+    login:
+      max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+      window-seconds: ${LOGIN_WINDOW_SECONDS:60}

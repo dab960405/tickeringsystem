@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.portfolio.ticketing.auth.config.SecurityConfig;
+import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.api.PageResponse;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.venue.service.VenueService;
@@ -20,12 +22,18 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(VenueController.class)
+@WebMvcTest(
+    value = VenueController.class,
+    properties = "ticketing.security.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@Import({SecurityConfig.class, SecurityErrorHandler.class})
+@WithMockUser(roles = "ADMIN")
 class VenueControllerTest {
 
   private static final UUID ID = UUID.fromString("7d4f1c9e-2b1a-4c3d-9e8f-0a1b2c3d4e5f");

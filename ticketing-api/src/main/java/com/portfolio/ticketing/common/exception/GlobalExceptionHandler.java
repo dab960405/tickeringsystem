@@ -39,6 +39,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return problem(status, exception.getMessage(), typeOf(exception));
   }
 
+  @ExceptionHandler(AuthenticationFailedException.class)
+  ProblemDetail handleAuthenticationFailed(AuthenticationFailedException exception) {
+    return problem(HttpStatus.UNAUTHORIZED, exception.getMessage(), "unauthorized");
+  }
+
+  @ExceptionHandler(RateLimitExceededException.class)
+  ProblemDetail handleRateLimit(RateLimitExceededException exception) {
+    return problem(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), "rate-limit-exceeded");
+  }
+
   @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
   ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException exception) {
     return problem(
