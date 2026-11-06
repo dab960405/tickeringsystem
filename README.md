@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El foco está en resolver bien la concurrencia sobre el stock, las reservas temporales, las transacciones, la caché, la mensajería asíncrona y la seguridad.
 
-> Estado: **Fase 0 (esqueleto)** completada. Las funcionalidades de negocio se añaden fase a fase (ver `docs/decisions.md` y la sección "Hoja de ruta").
+> Estado: **Fase 1 (dominio base)** completada y **Fase 2 (seguridad)** implementada, pendiente de confirmar sus tests de integración en CI. Las funcionalidades se añaden fase a fase (ver `docs/decisions.md` y la sección "Hoja de ruta").
 
 ## Arquitectura (objetivo)
 
@@ -70,8 +70,8 @@ Para detener y borrar los volúmenes: `docker compose --profile infra down -v`.
 
 - [x] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`). Falta verificar Compose en local
 - [x] CI adelantado: `ci.yml` con `./mvnw -B clean verify` (ADR-005)
-- [ ] Fase 1: Dominio base (Flyway, entidades, CRUD, errores, Swagger)
-- [ ] Fase 2: Seguridad (JWT, roles, propiedad, rate limiting)
+- [x] Fase 1: Dominio base (Flyway, entidades, CRUD, errores, Swagger)
+- [ ] Fase 2: Seguridad (JWT, roles, propiedad, rate limiting). Implementación disponible en `dev`; falta confirmar los `*IT` en CI
 - [ ] Fase 3: Reservas y órdenes (concurrencia, idempotencia, webhook, expiración)
 - [ ] Fase 4: Redis (caché, TTL, degradación)
 - [ ] Fase 5: Mensajería (outbox, Kafka, notification-service)
