@@ -4,9 +4,9 @@
 
 ## Fase actual
 
-**Fase 2 (seguridad): implementación completa, pendiente de confirmar los tests de integración en CI.** No se inicia la Fase 3 hasta cerrar esta verificación.
+**Fase 2 (seguridad): completada y verificada en GitHub Actions.** El check `Build and test` terminó en `success` para `727330c`, incluyendo los tests de integración con Docker del runner.
 
-La Fase 1 (dominio base) está completa y su CI quedó verde en `944b375`. La Fase 0 conserva la limitación de verificar `docker compose --profile infra up` en una máquina con Docker.
+La Fase 1 (dominio base) está completa y su CI quedó verde en `944b375`. La Fase 0 conserva la limitación de verificar `docker compose --profile infra up` en una máquina con Docker. La Fase 3 (reservas y órdenes) es la siguiente.
 
 | Criterio de aceptación (Fase 2) | Estado |
 | --- | --- |
@@ -20,25 +20,23 @@ La Fase 1 (dominio base) está completa y su CI quedó verde en `944b375`. La Fa
 
 ## Última implementación publicada
 
-- `4b94c7d` feat: enforce JWT roles and resource ownership
+- `727330c` fix: map method security denials to 403 — cierre de seguridad con CI verde.
+- `23cdd27` docs: record verified phase zero baseline — reconciliación y diagnóstico publicados en `dev`.
 
-Commits publicados en esta sesión de retoma (rama `dev`):
-
-1. `583e0be` feat: add user registration with BCrypt
-2. `fc4c3d1` feat: add JWT authentication and Redis token lifecycle
-3. `4b94c7d` feat: enforce JWT roles and resource ownership
+La rama local quedó reconciliada con `origin/dev`; no se sobrescribió trabajo remoto.
 
 ## Última verificación y publicación
 
-- La verificación del estado `main` (`0836708`) con Temurin 21.0.13 terminó en **BUILD SUCCESS**, 7 tests y 0 fallos; ese resultado no se atribuye al código más reciente de `dev`.
-- Docker no está instalado en este entorno: Compose y Testcontainers quedan pendientes de verificación en GitHub Actions o en la máquina del usuario.
-- La rama local se reconcilió con `origin/dev` (`727330c`) sin sobrescribir sus cambios. El siguiente paso es verificar el código reconciliado y publicar esta documentación.
+- `./mvnw -B verify -DskipITs` sobre el código reconciliado: **BUILD SUCCESS**, 124 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service` (130 totales), 0 fallos; JaCoCo y Spotless correctos.
+- `./mvnw -B clean verify`: compilación y tests unitarios correctos; los 9 `*IT` fallaron al iniciar Testcontainers porque este entorno no tiene Docker. No se desactivó ningún test.
+- GitHub Actions: `Build and test` **success** en `727330c` (Fase 2 completa). El estado del commit documental `23cdd27` queda sujeto a su propio check.
+- Último push confirmado: `23cdd2721d9d036cee5cf54cfce167b77f2a88d0` en `origin/dev`.
 
 ## Próximos 3 pasos
 
-1. Confirmar en GitHub Actions el commit `4b94c7d`, incluyendo `AuthenticationFlowIT` y `OpenApiDocsIT`; corregir cualquier fallo real que aparezca.
-2. Cuando la integración de seguridad esté verde, cerrar la Fase 2 y registrar aquí el resultado de CI y de la matriz completa.
-3. Iniciar la Fase 3 con reservas: entidad, repositorio y decremento atómico de stock, sin adelantar esa implementación antes de cerrar la Fase 2.
+1. Fase 3: modelar `OrderState` y cubrir todas las transiciones válidas e inválidas con tests parametrizados.
+2. Fase 3: implementar reservas con decremento atómico condicional de `ticket_types`, TTL configurable y tests de concurrencia.
+3. Fase 3: implementar órdenes idempotentes, webhook HMAC, generación de tickets y expiración con devolución de stock exactamente una vez.
 
 ## Decisiones registradas
 
@@ -62,17 +60,17 @@ docker compose ps                        # todos deben aparecer healthy
 
 ## Tests ejecutados y resultados reales
 
-- `./mvnw -B verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 123 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service`, 0 fallos; JaCoCo y Spotless correctos.
+- `./mvnw -B verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 124 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service`, 0 fallos; JaCoCo y Spotless correctos.
 - `./mvnw -B clean verify`: los 9 `*IT` no pudieron ejecutarse porque el entorno no tiene Docker (`Could not find a valid Docker environment`). No se desactivó ningún test para ocultar esta limitación.
-- Consulta de GitHub Actions con `gh run list --branch dev`: HTTP 403 (`Resource not accessible by integration`). El estado de CI de los commits nuevos queda **sin confirmar**; no se afirma que esté verde.
+- `gh api .../commits/727330c/check-runs`: `Build and test` completado con `success`; `gh run list` no está permitido por el token, pero el endpoint de check runs sí confirma el resultado.
 
 ## Problemas conocidos
 
 - El entorno de la IA no tiene Docker: Testcontainers y Compose deben verificarse en GitHub Actions o en una máquina local con Docker.
 - El entorno tampoco tenía Java al iniciar esta retoma; se descargó Temurin 21.0.13 fuera del repositorio para ejecutar la verificación. No se añadieron binarios ni secretos al proyecto.
 - El job `docker-build` de CI llega en la Fase 6; todavía no hay Dockerfiles.
-- La Fase 2 no se considera cerrada hasta que los tests de integración de seguridad pasen en CI o en local.
+- La Fase 3 todavía no tiene implementación de reservas, órdenes, pagos ni expiración.
 
 ## Cambios locales sin publicar
 
-La actualización de esta documentación se publicará como el siguiente commit `docs:` en `dev`.
+Esta actualización documental se publicará como el siguiente commit `docs:` en `dev`.
