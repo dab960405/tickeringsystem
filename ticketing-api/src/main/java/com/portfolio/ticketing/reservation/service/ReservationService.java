@@ -77,9 +77,56 @@ public class ReservationService {
     return reservation;
   }
 
+  @Transactional(readOnly = true)
+  public Reservation findForOrder(UUID id, UUID userId) {
+    return findOwned(id, userId);
+  }
+
+  @Transactional
+  public ReservationConfirmationResult confirmForPayment(UUID id, UUID userId) {
+    Reservation reservation = findOwnedForUpdate(id, userId);
+    if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
+      return ReservationConfirmationResult.CONFIRMED;
+    }
+    if (reservation.getStatus() != ReservationStatus.ACTIVE
+        && reservation.getStatus() != ReservationStatus.EXPIRED) {
+      throw new InvalidStateTransitionException(
+          "Reservation cannot be confirmed from " + reservation.getStatus());
+    }
+    if (reservation.getStatus() == ReservationStatus.EXPIRED
+        && !inventoryService.tryReserve(
+            reservation.getTicketType().getId(), reservation.getQuantity())) {
+      return ReservationConfirmationResult.OUT_OF_STOCK;
+    }
+    if (reservationRepository.confirmForPayment(id, userId) == 0) {
+      throw new InvalidStateTransitionException("Reservation is no longer available for payment");
+    }
+    return ReservationConfirmationResult.CONFIRMED;
+  }
+
+  @Transactional
+  public void releaseForPayment(UUID id, UUID userId) {
+    Reservation reservation = findOwnedForUpdate(id, userId);
+    if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
+      throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
+    }
+    if (reservation.getStatus() != ReservationStatus.ACTIVE) {
+      return;
+    }
+    if (reservationRepository.cancelActive(id, userId) == 1) {
+      inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+    }
+  }
+
   private Reservation findOwned(UUID id, UUID userId) {
     return reservationRepository
         .findByIdAndUserId(id, userId)
+        .orElseThrow(() -> new ResourceNotFoundException("Reservation " + id + " not found"));
+  }
+
+  private Reservation findOwnedForUpdate(UUID id, UUID userId) {
+    return reservationRepository
+        .findOwnedForUpdate(id, userId)
         .orElseThrow(() -> new ResourceNotFoundException("Reservation " + id + " not found"));
   }
 

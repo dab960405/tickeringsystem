@@ -60,6 +60,20 @@ class TicketTypeInventoryServiceTest {
   }
 
   @Test
+  void should_returnTrue_when_tryReserveFindsStock() {
+    when(ticketTypeRepository.reserveStock(ID, 2)).thenReturn(1);
+
+    assertThat(inventoryService.tryReserve(ID, 2)).isTrue();
+  }
+
+  @Test
+  void should_returnFalse_when_tryReserveFindsNoStock() {
+    when(ticketTypeRepository.reserveStock(ID, 2)).thenReturn(0);
+
+    assertThat(inventoryService.tryReserve(ID, 2)).isFalse();
+  }
+
+  @Test
   void should_restoreStock_when_reservationIsReleased() {
     when(ticketTypeRepository.restoreStock(ID, 2)).thenReturn(1);
 

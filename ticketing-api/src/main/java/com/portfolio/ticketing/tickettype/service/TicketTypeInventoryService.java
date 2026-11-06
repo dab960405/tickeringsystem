@@ -27,10 +27,15 @@ public class TicketTypeInventoryService {
 
   @Transactional
   public void reserve(UUID id, int quantity) {
-    requirePositive(quantity);
-    if (ticketTypeRepository.reserveStock(id, quantity) == 0) {
+    if (!tryReserve(id, quantity)) {
       throw new InsufficientStockException("Not enough tickets available for ticket type " + id);
     }
+  }
+
+  @Transactional
+  public boolean tryReserve(UUID id, int quantity) {
+    requirePositive(quantity);
+    return ticketTypeRepository.reserveStock(id, quantity) == 1;
   }
 
   @Transactional
