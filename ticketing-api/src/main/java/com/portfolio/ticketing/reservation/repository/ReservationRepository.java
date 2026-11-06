@@ -1,12 +1,10 @@
 package com.portfolio.ticketing.reservation.repository;
 
 import com.portfolio.ticketing.reservation.domain.Reservation;
-import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,8 +14,17 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
 
   Optional<Reservation> findByIdAndUserId(UUID id, UUID userId);
 
-  List<Reservation> findByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
-      ReservationStatus status, Instant now, Pageable pageable);
+  @Query(
+      value =
+          """
+          SELECT * FROM reservations
+          WHERE status = 'ACTIVE' AND expires_at < :now
+          ORDER BY expires_at
+          LIMIT :limit
+          FOR UPDATE SKIP LOCKED
+          """,
+      nativeQuery = true)
+  List<Reservation> findExpiredForUpdate(@Param("now") Instant now, @Param("limit") int limit);
 
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query(
@@ -29,4 +36,15 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
           """,
       nativeQuery = true)
   int cancelActive(@Param("id") UUID id, @Param("userId") UUID userId);
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query(
+      value =
+          """
+          UPDATE reservations
+          SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
+          WHERE id = :id AND status = 'ACTIVE' AND expires_at < :now
+          """,
+      nativeQuery = true)
+  int expireActive(@Param("id") UUID id, @Param("now") Instant now);
 }
