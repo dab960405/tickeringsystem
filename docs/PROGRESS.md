@@ -4,39 +4,35 @@
 
 ## Fase actual
 
-**Fase 2 (seguridad): completada y verificada en GitHub Actions.** El check `Build and test` terminó en `success` para `727330c`, incluyendo los tests de integración con Docker del runner.
+**Fase 3 (reservas y órdenes): EN CURSO.** Las fases 0, 1 y 2 quedaron completadas según la documentación y la CI publicada anteriormente (`727330c`). La rama remota `dev` ya contenía trabajo adicional respecto a `main`; se retomó desde `e03a9f8` sin sobrescribirlo.
 
-La Fase 1 (dominio base) está completa y su CI quedó verde en `944b375`. La Fase 0 conserva la limitación de verificar `docker compose --profile infra up` en una máquina con Docker. La Fase 3 (reservas y órdenes) es la siguiente.
-
-| Criterio de aceptación (Fase 2) | Estado |
+| Criterio de Fase 3 | Estado |
 | --- | --- |
-| Registro con rol `USER`, email normalizado y BCrypt | Implementado (`POST /api/v1/auth/register`), con validación de contraseña y tests |
-| Login con access token de 15 minutos y refresh token de 7 días | Implementado (`POST /api/v1/auth/login`) con JWT HS256 y claims `sub`, `role`, `iat`, `exp`, `type` |
-| Refresh y logout revocable | Implementado (`POST /api/v1/auth/refresh`, `/logout`); Redis guarda solo SHA-256 del `jti` con TTL |
-| Roles y propiedad de recursos | Implementado con reglas de rutas, `@PreAuthorize` y servicios de autorización para eventos y tipos de entrada |
-| Rate limiting en login | Implementado con contador Redis de ventana fija y respuesta 429 |
-| Matriz de tests por rol y recursos ajenos | Tests unitarios y `@WebMvcTest` con seguridad real añadidos; `AuthenticationFlowIT` cubre el flujo con PostgreSQL y Redis |
-| Swagger con `bearerAuth` | Implementado en `OpenApiConfig` y operaciones protegidas; `OpenApiDocsIT` comprueba rutas y esquema |
+| Máquina de estados de la orden y transiciones parametrizadas | Implementada en `OrderStatus`, con tests de transiciones válidas e inválidas |
+| Reserva con `UPDATE` atómico condicional, ventana de venta y TTL configurable | Implementada, con tests unitarios y de API |
+| Expiración con lote, `FOR UPDATE SKIP LOCKED` y devolución de stock exactamente una vez | Implementada en `ReservationExpirationService`; existe `ReservationExpirationIT` |
+| Test de concurrencia de 100 hilos repetido 20 veces | Pendiente |
+| Órdenes desde reservas activas e idempotencia con `Idempotency-Key` | Pendiente |
+| Webhook HMAC, confirmación/cancelación y generación de tickets | Pendiente |
+| Eventos de dominio mediante outbox para estas operaciones | Pendiente |
 
 ## Última implementación publicada
 
-- `727330c` fix: map method security denials to 403 — cierre de seguridad con CI verde.
-- `23cdd27` docs: record verified phase zero baseline — reconciliación y diagnóstico publicados en `dev`.
-
-La rama local quedó reconciliada con `origin/dev`; no se sobrescribió trabajo remoto.
+- `e03a9f8` `feat: expire reservations with locked stock restoration`.
+- La rama local está basada en `origin/dev`; no se creó ningún recurso de AWS ni se modificaron ADRs anteriores.
 
 ## Última verificación y publicación
 
-- `./mvnw -B verify -DskipITs` sobre el código reconciliado: **BUILD SUCCESS**, 124 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service` (130 totales), 0 fallos; JaCoCo y Spotless correctos.
-- `./mvnw -B clean verify`: compilación y tests unitarios correctos; los 9 `*IT` fallaron al iniciar Testcontainers porque este entorno no tiene Docker. No se desactivó ningún test.
-- GitHub Actions: `Build and test` **success** en `727330c` (Fase 2 completa). El estado del commit documental `23cdd27` queda sujeto a su propio check.
-- Último push confirmado: `23cdd2721d9d036cee5cf54cfce167b77f2a88d0` en `origin/dev`.
+- `./mvnw -B verify -DskipITs`: **BUILD SUCCESS** con Temurin 21.0.13; 213 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service` (219 totales), 0 fallos; JaCoCo y Spotless correctos.
+- `./mvnw -B clean verify`: compilación y 219 tests unitarios/slices correctos; los 11 `*IT` fallaron al iniciar Testcontainers porque este entorno no tiene Docker (`Could not find a valid Docker environment`). No se desactivó ningún test.
+- Último commit disponible en `origin/dev` al iniciar esta sesión: `e03a9f8b524e0eafb72364d60d1acccc234fd0c7`.
+- El estado de GitHub Actions para `e03a9f8` no se ha comprobado en esta sesión.
 
 ## Próximos 3 pasos
 
-1. Fase 3: modelar `OrderState` y cubrir todas las transiciones válidas e inválidas con tests parametrizados.
-2. Fase 3: implementar reservas con decremento atómico condicional de `ticket_types`, TTL configurable y tests de concurrencia.
-3. Fase 3: implementar órdenes idempotentes, webhook HMAC, generación de tickets y expiración con devolución de stock exactamente una vez.
+1. Añadir entidades y repositorios de `order`, `order_items`, `payments` y `tickets`, reutilizando las migraciones existentes.
+2. Implementar creación de órdenes desde reservas activas con precio copiado e idempotencia por usuario y payload.
+3. Implementar webhook HMAC idempotente, generación de tickets y pruebas de concurrencia del flujo de reservas.
 
 ## Decisiones registradas
 
@@ -60,16 +56,16 @@ docker compose ps                        # todos deben aparecer healthy
 
 ## Tests ejecutados y resultados reales
 
-- `./mvnw -B verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 124 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service`, 0 fallos; JaCoCo y Spotless correctos.
-- `./mvnw -B clean verify`: los 9 `*IT` no pudieron ejecutarse porque el entorno no tiene Docker (`Could not find a valid Docker environment`). No se desactivó ningún test para ocultar esta limitación.
-- `gh api .../commits/727330c/check-runs`: `Build and test` completado con `success`; `gh run list` no está permitido por el token, pero el endpoint de check runs sí confirma el resultado.
+- `./mvnw -B verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 219 tests, 0 fallos.
+- `./mvnw -B clean verify`: 11 tests de integración con errores de inicialización por ausencia de Docker; no se ejecutó ninguna lógica de Testcontainers.
+- No se ejecutaron todavía los nuevos tests de órdenes ni el test de concurrencia de 100 hilos.
 
 ## Problemas conocidos
 
 - El entorno de la IA no tiene Docker: Testcontainers y Compose deben verificarse en GitHub Actions o en una máquina local con Docker.
-- El entorno tampoco tenía Java al iniciar esta retoma; se descargó Temurin 21.0.13 fuera del repositorio para ejecutar la verificación. No se añadieron binarios ni secretos al proyecto.
+- Java no estaba instalado al iniciar esta retoma; se descargó Temurin 21.0.13 fuera del repositorio. No se añadieron binarios ni secretos al proyecto.
 - El job `docker-build` de CI llega en la Fase 6; todavía no hay Dockerfiles.
-- La Fase 3 todavía no tiene implementación de reservas, órdenes, pagos ni expiración.
+- La Fase 3 todavía no tiene implementación de órdenes, pagos ni tickets.
 
 ## Cambios locales sin publicar
 
