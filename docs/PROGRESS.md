@@ -1,6 +1,6 @@
 # Progreso del proyecto
 
-Última actualización: 2026-11-05 · Rama de trabajo: `dev`
+Última actualización: 2026-11-06 · Rama de trabajo: `dev`
 
 ## Fase actual
 
@@ -27,6 +27,12 @@ Commits publicados en esta sesión de retoma (rama `dev`):
 1. `583e0be` feat: add user registration with BCrypt
 2. `fc4c3d1` feat: add JWT authentication and Redis token lifecycle
 3. `4b94c7d` feat: enforce JWT roles and resource ownership
+
+## Última verificación y publicación
+
+- La verificación del estado `main` (`0836708`) con Temurin 21.0.13 terminó en **BUILD SUCCESS**, 7 tests y 0 fallos; ese resultado no se atribuye al código más reciente de `dev`.
+- Docker no está instalado en este entorno: Compose y Testcontainers quedan pendientes de verificación en GitHub Actions o en la máquina del usuario.
+- La rama local se reconcilió con `origin/dev` (`727330c`) sin sobrescribir sus cambios. El siguiente paso es verificar el código reconciliado y publicar esta documentación.
 
 ## Próximos 3 pasos
 
@@ -63,6 +69,7 @@ docker compose ps                        # todos deben aparecer healthy
 ## Problemas conocidos
 
 - El entorno de la IA no tiene Docker: Testcontainers y Compose deben verificarse en GitHub Actions o en una máquina local con Docker.
+- El entorno tampoco tenía Java al iniciar esta retoma; se descargó Temurin 21.0.13 fuera del repositorio para ejecutar la verificación. No se añadieron binarios ni secretos al proyecto.
 - El job `docker-build` de CI llega en la Fase 6; todavía no hay Dockerfiles.
 - La Fase 2 no se considera cerrada hasta que los tests de integración de seguridad pasen en CI o en local.
 

@@ -68,7 +68,7 @@ Para detener y borrar los volúmenes: `docker compose --profile infra down -v`.
 
 ## Hoja de ruta
 
-- [x] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`). Falta verificar Compose en local
+- [ ] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`). Falta verificar Compose en local
 - [x] CI adelantado: `ci.yml` con `./mvnw -B clean verify` (ADR-005)
 - [x] Fase 1: Dominio base (Flyway, entidades, CRUD, errores, Swagger)
 - [ ] Fase 2: Seguridad (JWT, roles, propiedad, rate limiting). Implementación disponible en `dev`; falta confirmar los `*IT` en CI
