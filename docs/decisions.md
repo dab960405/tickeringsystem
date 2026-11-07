@@ -1,6 +1,6 @@
 # Registro de decisiones (ADR)
 
-Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y nunca se borran; si cambian, se añade una nueva que reemplaza a la anterior.
+Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se numeran y no se borran ni reescriben; si una decisión cambia, se añade otra que la sustituya. Los ADR individuales nuevos están en [`docs/adr/`](adr/).
 
 ---
 
@@ -49,7 +49,7 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 ## ADR-005: Workflow de CI adelantado y rama `dev`
 
 - **Fecha:** 2026-11-05
-- **Contexto:** la especificación sitúa los workflows en la Fase 7, pero el usuario necesita una verificación independiente (`./mvnw -B clean verify` en runners con Docker) desde ahora, porque el entorno de desarrollo asistido no siempre tiene Docker para Testcontainers.
+- **Contexto:** la especificación sitúa los workflows en la Fase 7, pero el usuario necesita una verificación independiente (`./mvnw -B clean verify` en runners con Docker), porque el entorno de desarrollo asistido no siempre tiene Docker para Testcontainers.
 - **Decisión:** crear ya `.github/workflows/ci.yml` con el job `build-test` (Temurin 21, caché Maven, `permissions: contents: read`, `concurrency`, subida de reportes de Surefire/Failsafe y JaCoCo). El job `docker-build` se añadirá en la Fase 6, cuando existan los Dockerfiles, y `deploy.yml` en la Fase 7. El trabajo se hace en la rama `dev`; `main` solo recibe cambios verificados por CI. Actions fijadas por tag mayor: `checkout@v7`, `setup-java@v6`, `upload-artifact@v7`.
 - **Consecuencias:** cada push y pull request queda verificado en GitHub desde la Fase 0. La Fase 7 sigue pendiente de `docker-build`, `deploy.yml`, Dependabot y el badge.
 
@@ -63,15 +63,15 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 ## ADR-007: Redis desde la Fase 2 para refresh tokens y rate limiting de login
 
 - **Fecha:** 2026-11-05
-- **Contexto:** la especificación (sección 9) guarda el hash del `jti` del refresh token en Redis para poder revocarlo y pide rate limiting en login con contador en Redis, pero Redis se plantea en la Fase 4.
+- **Contexto:** la especificación (sección 9) guarda el hash del `jti` del refresh token en Redis para poder revocarlo y pide rate limiting en login con contador en Redis, aunque Redis se planteaba en la Fase 4.
 - **Decisión:** añadir `spring-boot-starter-data-redis` en la Fase 2. Clave `auth:refresh:<sha256(jti)>` con TTL igual a la vida del refresh token; logout la borra. Rate limiting de login con ventana fija: `INCR` sobre `rate:login:<ip>:<email>` y `EXPIRE` en el primer intento; al superar el límite, 429.
-- **Consecuencias:** los tests de integración levantan también un contenedor Redis. La degradación con Redis caído se trata en la Fase 4. Decidido con el usuario.
+- **Consecuencias:** los tests de integración levantan también un contenedor Redis. La caché de catálogo y la degradación con Redis caído se tratan en la Fase 4. Decidido con el usuario.
 
 ## ADR-008: Mapeo DTO manual con records
 
 - **Fecha:** 2026-11-05
 - **Contexto:** estaba pendiente elegir entre MapStruct y mapeo manual.
-- **Decisión:** mapeo manual con métodos estáticos `from(...)` en los records de respuesta, como ya se hizo en la Fase 1.
+- **Decisión:** mapeo manual con métodos estáticos `from(...)` en los records de respuesta, como se hizo en la Fase 1.
 - **Consecuencias:** sin procesador de anotaciones adicional; el mapeo es explícito y lo cubren los tests de controlador.
 
 ## ADR-009: Cancelación de órdenes y reembolsos
@@ -81,6 +81,25 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 - **Decisión:** al cancelar una orden pendiente se libera la reserva activa y su stock; el pago permanece `PENDING` porque no existe un estado de cancelación y la orden final impide que un webhook posterior la confirme. Al reembolsar una orden pagada antes del evento, el pago pasa a `REFUNDED` y sus tickets a `CANCELLED`; la reserva queda `CONFIRMED` como historial y no se devuelve stock automáticamente, ya que no es un requisito explícito.
 - **Consecuencias:** las transiciones usan únicamente los estados definidos. Una devolución de stock posterior a reembolsos requeriría una regla de negocio y un ADR nuevos.
 
+## ADR-010: UPDATE atómico condicional para el inventario
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** descontar unidades con un único `UPDATE ... WHERE available_quantity >= :quantity`; la base de datos serializa la escritura y las filas afectadas indican éxito. Se prefiere a mantener bloqueos pesimistas explícitos durante la lógica de servicio y a gestionar conflictos/reintentos optimistas en un contador de alta contención.
+- **Documento:** [ADR-010](adr/ADR-010-atomic-inventory-update.md).
+
+## ADR-011: Idempotencia de órdenes y webhooks
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** clave de orden única por usuario y reserva; el mismo par clave/reserva reproduce la orden existente y reutilizar la clave con otra reserva es conflicto. Webhooks verifican HMAC y aplican transiciones idempotentes condicionadas por estado y referencia del proveedor.
+- **Límite:** aún no hay inbox ni ID de evento del proveedor persistido; el ADR documenta este límite y la evolución requerida para un gateway real.
+- **Documento:** [ADR-011](adr/ADR-011-order-and-webhook-idempotency.md).
+
+## ADR-012: Expiración con `FOR UPDATE SKIP LOCKED`
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** workers de expiración reclaman lotes de filas vencidas sin esperar por filas bloqueadas por otros workers; la transición condicional y la liberación de inventario se ejecutan en la misma transacción.
+- **Documento:** [ADR-012](adr/ADR-012-reservation-expiration-skip-locked.md).
+
 ## Pendientes de decidir
 
-- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta.
+- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
