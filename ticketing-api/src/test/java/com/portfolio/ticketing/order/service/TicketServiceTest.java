@@ -6,8 +6,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.portfolio.ticketing.order.api.TicketResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.Ticket;
+import com.portfolio.ticketing.order.domain.TicketStatus;
 import com.portfolio.ticketing.order.repository.TicketRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -49,6 +51,28 @@ class TicketServiceTest {
     ticketService.issueForOrder(order);
 
     verify(ticketRepository, never()).saveAll(any());
+  }
+
+  @Test
+  void should_returnOnlyValidTicketsOwnedByUser() {
+    TicketService ticketService = new TicketService(ticketRepository);
+    Order order = order();
+    Ticket ticket = new Ticket(order.getItems().getFirst(), "ticket-code");
+    when(ticketRepository.findByOrderItem_Order_UserIdAndStatus(
+            order.getUserId(), TicketStatus.VALID))
+        .thenReturn(List.of(ticket));
+
+    List<TicketResponse> responses = ticketService.listValidForUser(order.getUserId());
+
+    assertThat(responses)
+        .singleElement()
+        .satisfies(response -> {
+          assertThat(response.code()).isEqualTo("ticket-code");
+          assertThat(response.orderId()).isEqualTo(order.getId());
+          assertThat(response.ticketTypeId())
+              .isEqualTo(order.getItems().getFirst().getTicketTypeId());
+          assertThat(response.status()).isEqualTo(TicketStatus.VALID);
+        });
   }
 
   private static Order order() {

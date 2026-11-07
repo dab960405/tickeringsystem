@@ -79,7 +79,8 @@ public class SecurityConfig {
                 .hasAnyRole("ORGANIZER", "ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/v1/events/**", "/api/v1/ticket-types/**")
                 .hasAnyRole("ORGANIZER", "ADMIN")
-                .requestMatchers("/api/v1/reservations/**", "/api/v1/orders/**")
+                .requestMatchers(
+                    "/api/v1/reservations/**", "/api/v1/orders/**", "/api/v1/me/tickets")
                 .hasRole("USER")
                 .anyRequest()
                 .authenticated())
