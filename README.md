@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El objetivo técnico es demostrar diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y, en fases posteriores, caché y mensajería asíncrona.
 
-> **Estado actual:** Fases 1, 2 y 3 completadas. La Fase 3 (reservas, órdenes, pagos y tickets) quedó verificada en GitHub Actions CI, [run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), asociado al commit `6a588fa`. La suite reportó 13 tests de integración `*IT` aprobados y `ReservationConcurrencyIT` con `Tests run: 20, Failures: 0`. La Fase 4 es la siguiente.
+> **Estado actual:** Fases 1, 2 y 3 completadas. La Fase 3 quedó verificada en GitHub Actions CI, [run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762). **Fase 4 en curso:** primer incremento de caché Redis para metadatos del catálogo; la disponibilidad de inventario continúa consultándose en PostgreSQL.
 
 ## Documentación
 
@@ -15,6 +15,7 @@ Plataforma de venta de entradas para eventos, construida como proyecto de portaf
 - [ADR-010: actualización atómica del inventario](docs/adr/ADR-010-atomic-inventory-update.md)
 - [ADR-011: idempotencia de órdenes y webhooks](docs/adr/ADR-011-order-and-webhook-idempotency.md)
 - [ADR-012: expiración con SKIP LOCKED](docs/adr/ADR-012-reservation-expiration-skip-locked.md)
+- [ADR-013: caché Redis del catálogo sin inventario](docs/adr/ADR-013-redis-catalog-cache.md)
 
 ## Arquitectura y módulos
 
@@ -84,7 +85,7 @@ El test valida el descuento mediante un `UPDATE` condicional atómico en Postgre
 - [x] Fase 1: dominio base, migraciones Flyway V1–V10, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting.
 - [x] Fase 3: reservas y órdenes. Inventario concurrente, expiración, idempotencia, webhook HMAC, pagos, cancelación y tickets. **Verificada y cerrada** con 13 tests `*IT` aprobados y `ReservationConcurrencyIT` (20 ejecuciones, 0 fallos) en [GitHub Actions CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), commit `6a588fa`.
-- [ ] Fase 4: caché Redis de catálogo, TTL, invalidación y degradación cuando Redis no esté disponible.
+- [ ] Fase 4 (en curso): caché Redis de metadatos del catálogo con TTL configurable, invalidación transaccional y degradación ante fallos. La disponibilidad de inventario no se cachea.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.

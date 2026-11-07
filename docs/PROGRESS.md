@@ -4,7 +4,7 @@
 
 ## Fase actual
 
-**Fase 3 (reservas y órdenes): COMPLETADA.** Los criterios de aceptación funcionales y de integración quedaron verificados en GitHub Actions CI, run #62, sobre el commit `6a588fa`. La siguiente fase es la Fase 4.
+**Fase 4 (caché Redis del catálogo): EN CURSO.** La Fase 3 permanece completada y verificada en GitHub Actions CI, run #62. El primer incremento separa metadatos cacheables de disponibilidad dinámica y añade TTL configurable, invalidación transaccional y tolerancia a fallos de Redis.
 
 | Criterio o alcance de Fase 3 | Estado |
 | --- | --- |
@@ -16,6 +16,15 @@
 | Webhook HMAC, confirmación/cancelación, generación de tickets y caso de reserva expirada sin stock | Implementados; integración aprobada en CI run #62 |
 | Cancelación de órdenes y consulta `GET /me/tickets` | Implementadas; integración aprobada en CI run #62 |
 | Publicación outbox y consumo Kafka | Pendiente; alcance de Fase 5 |
+
+## Fase 4 — Incremento 1: caché de metadatos del catálogo
+
+- Caché-aside Redis para metadatos de tipos de entrada, con TTL configurable (`TICKET_TYPES_CACHE_TTL`, por defecto 5 minutos).
+- `availableQuantity` queda fuera de Redis y se consulta siempre desde PostgreSQL para evitar servir inventario obsoleto.
+- Las mutaciones del catálogo invalidan la caché; `RedisCacheManager.transactionAware()` difiere la invalidación hasta el commit.
+- Los errores de acceso a Redis (`DataAccessException`) se registran y se omiten para que la lectura continúe contra PostgreSQL.
+- Añadida prueba de integración `TicketTypeCatalogCacheIT` con Redis real para comprobar hit y expiración TTL. Pendiente de ejecución en CI.
+- Pendiente validar invalidación desde el flujo de escritura y fallo/recuperación de Redis mediante pruebas de integración específicas.
 
 ## Deuda de documentación de Fases 1–3
 
@@ -36,9 +45,9 @@
 
 ## Próximos pasos
 
-1. Iniciar la Fase 4: caché Redis del catálogo, TTL, invalidación y degradación cuando Redis no esté disponible.
-2. Mantener la regla de publicar incrementos pequeños en `dev` y actualizar README/PROGRESS/ERD/ADRs con evidencia real.
-3. No iniciar la Fase 5 hasta cerrar y verificar la Fase 4.
+1. Ejecutar CI para el primer incremento y corregir cualquier fallo antes de continuar.
+2. Añadir pruebas de invalidación después del commit y degradación cuando Redis esté inaccesible.
+3. Mantener commits pequeños en `dev` y no iniciar la Fase 5 hasta cerrar y verificar la Fase 4.
 
 ## Decisiones registradas
 
@@ -46,6 +55,7 @@
 - ADR-010: actualización atómica condicional del inventario.
 - ADR-011: idempotencia de órdenes y webhooks.
 - ADR-012: expiración concurrente con `FOR UPDATE SKIP LOCKED`.
+- ADR-013: caché Redis de metadatos del catálogo, TTL, invalidación transaccional y disponibilidad dinámica fuera de caché.
 - La región de AWS sigue pendiente de decisión explícita; no se crean recursos cloud sin autorización.
 
 ## Comandos de verificación

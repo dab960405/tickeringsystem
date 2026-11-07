@@ -100,6 +100,14 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Decisión:** workers de expiración reclaman lotes de filas vencidas sin esperar por filas bloqueadas por otros workers; la transición condicional y la liberación de inventario se ejecutan en la misma transacción.
 - **Documento:** [ADR-012](adr/ADR-012-reservation-expiration-skip-locked.md).
 
+## ADR-013: Caché Redis de metadatos del catálogo
+
+- **Fecha:** 2026-11-07 · **Fase:** 4
+- **Contexto:** las consultas del catálogo repiten lecturas de metadatos relativamente estables, pero la disponibilidad cambia con cada reserva y liberación de inventario. Cachear la respuesta completa podría exponer stock obsoleto.
+- **Alternativas:** cachear la respuesta completa; cachear entidades JPA; cachear solo metadatos serializables y consultar inventario en cada petición.
+- **Decisión:** aplicar cache-aside sobre records DTO que contienen solo metadatos del tipo de entrada. `availableQuantity` se obtiene siempre desde PostgreSQL mediante una proyección liviana. TTL configurable (`TICKET_TYPES_CACHE_TTL`, por defecto 5 minutos). Las escrituras del catálogo invalidan las entradas y el `RedisCacheManager` es transaccional para diferir la invalidación hasta el commit. Los fallos Redis de tipo `DataAccessException` se registran y se omiten, permitiendo fallback a PostgreSQL.
+- **Consecuencias:** el catálogo reduce lecturas de metadatos sin cachear inventario crítico. La invalidación actual es global para el cache del catálogo porque el servicio de escritura de actualización recibe el ID del tipo y no el ID del evento; se acepta el alcance amplio por simplicidad y corrección. Se requiere validar en CI la serialización, expiración, invalidación y degradación ante indisponibilidad de Redis.
+
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.

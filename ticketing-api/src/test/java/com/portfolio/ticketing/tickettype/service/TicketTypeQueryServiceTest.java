@@ -1,13 +1,13 @@
 package com.portfolio.ticketing.tickettype.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.tickettype.api.TicketTypeResponse;
-import com.portfolio.ticketing.tickettype.domain.TicketType;
+import com.portfolio.ticketing.tickettype.repository.TicketTypeAvailabilityProjection;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
-import com.portfolio.ticketing.venue.domain.Venue;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -24,36 +24,42 @@ class TicketTypeQueryServiceTest {
   private static final UUID EVENT_ID = UUID.randomUUID();
 
   @Mock private TicketTypeRepository ticketTypeRepository;
+  @Mock private TicketTypeCatalogCacheService catalogCacheService;
   @InjectMocks private TicketTypeQueryService ticketTypeQueryService;
 
   @Test
-  void should_mapTicketTypes_when_listingForEvent() {
-    Event event =
-        new Event(
-            UUID.randomUUID(),
-            new Venue("Arena", "Lima", "Main St 1", 500),
-            "Show",
-            null,
-            "MUSIC",
-            Instant.parse("2030-01-10T20:00:00Z"),
-            Instant.parse("2030-01-10T23:00:00Z"));
-    TicketType general =
-        new TicketType(
-            event,
+  void should_combineCachedCatalogWithLiveAvailability_when_listingForEvent() {
+    UUID ticketTypeId = UUID.randomUUID();
+    TicketTypeCatalogEntry general =
+        new TicketTypeCatalogEntry(
+            ticketTypeId,
             "General",
             new BigDecimal("40.00"),
+            "USD",
             100,
             Instant.parse("2030-01-01T00:00:00Z"),
             Instant.parse("2030-01-10T00:00:00Z"),
             4);
-    when(ticketTypeRepository.findByEventIdOrderByPriceAsc(EVENT_ID)).thenReturn(List.of(general));
+    TicketTypeAvailabilityProjection availability = mock(TicketTypeAvailabilityProjection.class);
+    when(availability.getId()).thenReturn(ticketTypeId);
+    when(availability.getAvailableQuantity()).thenReturn(73);
+    when(catalogCacheService.listForEvent(EVENT_ID)).thenReturn(List.of(general));
+    when(ticketTypeRepository.findAvailabilityByEventId(EVENT_ID))
+        .thenReturn(List.of(availability));
 
     List<TicketTypeResponse> result = ticketTypeQueryService.listForEvent(EVENT_ID);
 
     assertThat(result)
         .singleElement()
         .extracting(TicketTypeResponse::name, TicketTypeResponse::availableQuantity)
-        .containsExactly("General", 100);
+        .containsExactly("General", 73);
+  }
+
+  @Test
+  void should_notQueryInventory_when_catalogIsEmpty() {
+    when(catalogCacheService.listForEvent(EVENT_ID)).thenReturn(List.of());
+
+    assertThat(ticketTypeQueryService.listForEvent(EVENT_ID)).isEmpty();
   }
 
   @Test

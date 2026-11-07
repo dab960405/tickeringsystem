@@ -28,9 +28,10 @@ flowchart TB
       common -. soporte transversal .-> payment
     end
     postgres[(PostgreSQL · Flyway)]
-    redis[(Redis · refresh tokens y rate limit)]
+    redis[(Redis · refresh tokens, rate limit y metadatos de catálogo)]
     client --> security
     catalog --> postgres
+    catalog -. cache-aside de metadatos .-> redis
     reservation --> postgres
     order --> postgres
     payment --> postgres
@@ -121,7 +122,7 @@ sequenceDiagram
 
 ## Persistencia
 
-El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza actualmente para refresh tokens y rate limiting de autenticación; la caché de catálogo y su estrategia de degradación son alcance de la Fase 4.
+El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de autenticación y caché-aside de metadatos del catálogo. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. La caché tiene TTL configurable, invalidación diferida hasta el commit y un manejador de errores Redis que permite continuar con PostgreSQL.
 
 ## Límites conocidos
 
