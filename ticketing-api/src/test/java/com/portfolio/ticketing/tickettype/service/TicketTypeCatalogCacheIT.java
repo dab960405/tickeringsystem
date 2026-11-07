@@ -3,6 +3,7 @@ package com.portfolio.ticketing.tickettype.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.venue.domain.Venue;
