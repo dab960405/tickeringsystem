@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El objetivo técnico es demostrar diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y, en fases posteriores, caché y mensajería asíncrona.
 
-> **Estado actual:** Fases 1 y 2 completadas. La Fase 3 (reservas, órdenes, pagos y tickets) está implementada en `dev`, pero permanece **en curso** hasta ejecutar y validar todos los tests de integración que requieren Docker. La Fase 4 todavía no ha comenzado.
+> **Estado actual:** Fases 1, 2 y 3 completadas. La Fase 3 (reservas, órdenes, pagos y tickets) quedó verificada en GitHub Actions CI, [run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), asociado al commit `6a588fa`. La suite reportó 13 tests de integración `*IT` aprobados y `ReservationConcurrencyIT` con `Tests run: 20, Failures: 0`. La Fase 4 es la siguiente.
 
 ## Documentación
 
@@ -76,14 +76,14 @@ La prueba [`ReservationConcurrencyIT`](ticketing-api/src/test/java/com/portfolio
 - Ejecuta el escenario **20 veces** mediante `@RepeatedTest(20)`.
 - El resultado esperado en cada repetición es: **10 reservas exitosas**, **90 conflictos por stock insuficiente**, inventario disponible en **0** y **10 unidades** contabilizadas en reservas activas.
 
-El test valida el descuento mediante un `UPDATE` condicional atómico en PostgreSQL, no mediante una lectura seguida de una escritura. La prueba es de integración y usa la base real provista por Testcontainers; por eso debe ejecutarse en un runner con Docker. La existencia de la prueba y sus aserciones no significa que las 20 repeticiones estén verificadas en un entorno sin Docker: consulta [PROGRESS.md](docs/PROGRESS.md) para el último resultado ejecutado.
+El test valida el descuento mediante un `UPDATE` condicional atómico en PostgreSQL, no mediante una lectura seguida de una escritura. La ejecución [CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), sobre el commit `6a588fa`, confirmó `Tests run: 20, Failures: 0` para `ReservationConcurrencyIT`; los 13 tests de integración `*IT` también finalizaron correctamente. La prueba usa PostgreSQL real mediante Testcontainers.
 
 ## Hoja de ruta
 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V10, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting.
-- [ ] Fase 3: reservas y órdenes. Código implementado: inventario concurrente, expiración, idempotencia, webhook HMAC, pagos, cancelación y tickets. **Cierre pendiente** de la verificación Docker de los tests `*IT`.
+- [x] Fase 3: reservas y órdenes. Inventario concurrente, expiración, idempotencia, webhook HMAC, pagos, cancelación y tickets. **Verificada y cerrada** con 13 tests `*IT` aprobados y `ReservationConcurrencyIT` (20 ejecuciones, 0 fallos) en [GitHub Actions CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), commit `6a588fa`.
 - [ ] Fase 4: caché Redis de catálogo, TTL, invalidación y degradación cuando Redis no esté disponible.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
