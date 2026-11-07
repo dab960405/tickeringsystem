@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
+import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.order.service.OrderService;
@@ -44,6 +45,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Autowired private ReservationExpirationService expirationService;
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
+  @Autowired private OrderCancellationService orderCancellationService;
   @Autowired private TicketTypeRepository ticketTypeRepository;
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
@@ -117,6 +119,38 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "EXPIRED", 0, 0));
+  }
+
+  @Test
+  void should_releaseReservationStock_when_pendingOrderIsCancelled() {
+    OrderFixture fixture = createOrder(1);
+
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("CANCELLED", "PENDING", "CANCELLED", 0, 1));
+  }
+
+  @Test
+  void should_cancelTicketsAndRefundPayment_when_paidOrderIsCancelledBeforeEvent() {
+    OrderFixture fixture = createOrder(1);
+    orderPaymentService.process(
+        new PaymentWebhookRequest(fixture.orderId(), PaymentStatus.SUCCEEDED, "provider-refund"));
+
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("CANCELLED");
   }
 
   private OrderFixture createOrder(int stock) {
