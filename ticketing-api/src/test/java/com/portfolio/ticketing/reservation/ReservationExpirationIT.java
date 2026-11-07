@@ -10,6 +10,7 @@ import com.portfolio.ticketing.reservation.service.ReservationExpirationService;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
+import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ class ReservationExpirationIT extends AbstractIntegrationTest {
   @Autowired private ReservationExpirationService expirationService;
   @Autowired private ReservationRepository reservationRepository;
   @Autowired private TicketTypeRepository ticketTypeRepository;
+  @Autowired private TicketTypeInventoryService inventoryService;
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -65,7 +67,7 @@ class ReservationExpirationIT extends AbstractIntegrationTest {
     Reservation reservation =
         reservationRepository.saveAndFlush(
             new Reservation(userId, ticketType, 2, now.minusSeconds(60)));
-    ticketTypeRepository.reserveStock(ticketType.getId(), 2);
+    inventoryService.reserve(ticketType.getId(), 2);
 
     expirationService.expireOverdue();
     expirationService.expireOverdue();
