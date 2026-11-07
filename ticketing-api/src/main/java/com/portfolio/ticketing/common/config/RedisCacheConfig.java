@@ -24,11 +24,19 @@ public class RedisCacheConfig implements CachingConfigurer {
 
   private static final Logger log = LoggerFactory.getLogger(RedisCacheConfig.class);
 
-  @Bean
-  @Override
-  public CacheManager cacheManager(
+  private final RedisConnectionFactory connectionFactory;
+  private final Duration ticketTypesTtl;
+
+  public RedisCacheConfig(
       RedisConnectionFactory connectionFactory,
       @Value("${ticketing.cache.ticket-types.ttl:5m}") Duration ticketTypesTtl) {
+    this.connectionFactory = connectionFactory;
+    this.ticketTypesTtl = ticketTypesTtl;
+  }
+
+  @Bean
+  @Override
+  public CacheManager cacheManager() {
     RedisCacheConfiguration defaults =
         RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(ticketTypesTtl)

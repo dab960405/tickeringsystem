@@ -6,6 +6,7 @@ import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.venue.domain.Venue;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -13,8 +14,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=2s")
 class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
@@ -23,7 +25,8 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
   private static final Instant SALE_END = Instant.parse("2030-01-10T00:00:00Z");
 
   @Autowired private TicketTypeCatalogCacheService catalogCacheService;
-  @Autowired private TestEntityManager entityManager;
+  @Autowired private EntityManager entityManager;
+  @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbcTemplate;
 
   private UUID eventId;
@@ -37,25 +40,31 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
                 + " VALUES (?, 'hash', 'Organizer', 'ORGANIZER') RETURNING id",
             UUID.class,
             "cache-test-" + UUID.randomUUID() + "@example.com");
-    Venue venue = entityManager.persist(new Venue("Cache Arena", "Lima", "Main St 1", 500));
-    Event event =
-        entityManager.persist(
-            new Event(
-                organizerId,
-                venue,
-                "Cache test event",
-                null,
-                "MUSIC",
-                Instant.parse("2030-01-10T20:00:00Z"),
-                Instant.parse("2030-01-10T23:00:00Z")));
-    TicketType ticketType =
-        entityManager.persist(
-            new TicketType(
-                event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4));
-    entityManager.flush();
-    entityManager.clear();
-    eventId = event.getId();
-    ticketTypeId = ticketType.getId();
+
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(
+            status -> {
+              Venue venue =
+                  new Venue("Cache Arena", "Lima", "Main St 1", 500);
+              entityManager.persist(venue);
+              Event event =
+                  new Event(
+                      organizerId,
+                      venue,
+                      "Cache test event",
+                      null,
+                      "MUSIC",
+                      Instant.parse("2030-01-10T20:00:00Z"),
+                      Instant.parse("2030-01-10T23:00:00Z"));
+              entityManager.persist(event);
+              TicketType ticketType =
+                  new TicketType(
+                      event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
+              entityManager.persist(ticketType);
+              entityManager.flush();
+              eventId = event.getId();
+              ticketTypeId = ticketType.getId();
+            });
   }
 
   @Test
