@@ -36,6 +36,10 @@ public class TicketService {
     ticketRepository.saveAll(tickets);
   }
 
+  public void cancelForOrder(UUID orderId) {
+    ticketRepository.findByOrderItem_Order_Id(orderId).forEach(Ticket::cancel);
+  }
+
   @PreAuthorize("hasRole('USER')")
   @Transactional(readOnly = true)
   public List<TicketResponse> listValidForUser(UUID userId) {

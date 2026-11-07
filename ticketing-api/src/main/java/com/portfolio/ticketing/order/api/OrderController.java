@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.order.api;
 
 import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,9 +33,12 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class OrderController {
 
   private final OrderService orderService;
+  private final OrderCancellationService orderCancellationService;
 
-  public OrderController(OrderService orderService) {
+  public OrderController(
+      OrderService orderService, OrderCancellationService orderCancellationService) {
     this.orderService = orderService;
+    this.orderCancellationService = orderCancellationService;
   }
 
   @PostMapping
@@ -74,6 +78,19 @@ public class OrderController {
       @AuthenticationPrincipal Jwt jwt,
       @ParameterObject @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
     return orderService.list(UUID.fromString(jwt.getSubject()), pageable);
+  }
+
+  @PostMapping("/{id}/cancel")
+  @SecurityRequirement(name = "bearerAuth")
+  @Operation(summary = "Cancel a pending order or refund a paid order before the event")
+  @ApiResponse(responseCode = "200", description = "Order cancelled or refunded")
+  @ApiResponse(responseCode = "401", description = "Authentication required")
+  @ApiResponse(responseCode = "403", description = "USER role required")
+  @ApiResponse(responseCode = "404", description = "Order not found")
+  @ApiResponse(responseCode = "409", description = "Order is already in a final state")
+  @ApiResponse(responseCode = "422", description = "The event has already started")
+  public OrderResponse cancel(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+    return orderCancellationService.cancel(id, UUID.fromString(jwt.getSubject()));
   }
 
   @GetMapping("/{id}")

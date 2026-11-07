@@ -54,6 +54,18 @@ class TicketServiceTest {
   }
 
   @Test
+  void should_cancelValidTickets_when_orderIsRefunded() {
+    TicketService ticketService = new TicketService(ticketRepository);
+    Order order = order();
+    Ticket ticket = new Ticket(order.getItems().getFirst(), "ticket-code");
+    when(ticketRepository.findByOrderItem_Order_Id(order.getId())).thenReturn(List.of(ticket));
+
+    ticketService.cancelForOrder(order.getId());
+
+    assertThat(ticket.getStatus()).isEqualTo(TicketStatus.CANCELLED);
+  }
+
+  @Test
   void should_returnOnlyValidTicketsOwnedByUser() {
     TicketService ticketService = new TicketService(ticketRepository);
     Order order = order();

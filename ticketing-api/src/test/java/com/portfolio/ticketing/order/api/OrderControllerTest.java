@@ -15,6 +15,7 @@ import com.portfolio.ticketing.auth.config.SecurityConfig;
 import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.api.PageResponse;
 import com.portfolio.ticketing.order.domain.OrderStatus;
+import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderService;
 import java.math.BigDecimal;
@@ -50,6 +51,7 @@ class OrderControllerTest {
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private OrderService orderService;
+  @MockitoBean private OrderCancellationService orderCancellationService;
 
   private static RequestPostProcessor userJwt() {
     return jwt()
@@ -169,6 +171,16 @@ class OrderControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(ORDER_ID.toString()))
         .andExpect(jsonPath("$.totalElements").value(1));
+  }
+
+  @Test
+  void should_returnUpdatedOrder_when_orderIsCancelled() throws Exception {
+    when(orderCancellationService.cancel(ORDER_ID, USER_ID)).thenReturn(response());
+
+    mockMvc
+        .perform(post("/api/v1/orders/" + ORDER_ID + "/cancel").with(userJwt()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(ORDER_ID.toString()));
   }
 
   @Test
