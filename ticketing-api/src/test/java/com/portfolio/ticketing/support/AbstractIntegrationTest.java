@@ -1,10 +1,5 @@
 package com.portfolio.ticketing.support;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestWatcher;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -19,7 +14,6 @@ import org.testcontainers.utility.DockerImageName;
  * the dev seed data out of integration tests.
  */
 @ActiveProfiles("test")
-@ExtendWith(AbstractIntegrationTest.CiFailureAnnotation.class)
 public abstract class AbstractIntegrationTest {
 
   @ServiceConnection
@@ -38,19 +32,5 @@ public abstract class AbstractIntegrationTest {
   static void redisProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.data.redis.host", REDIS::getHost);
     registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
-  }
-
-  static class CiFailureAnnotation implements TestWatcher {
-    @Override
-    public void testFailed(ExtensionContext context, Throwable cause) {
-      StringWriter stackTrace = new StringWriter();
-      cause.printStackTrace(new PrintWriter(stackTrace));
-      String message = escape(context.getDisplayName() + "\n" + stackTrace);
-      System.out.printf("::error file=%s::%s%n", context.getRequiredTestClass().getName(), message);
-    }
-
-    private static String escape(String value) {
-      return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A");
-    }
   }
 }
