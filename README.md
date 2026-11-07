@@ -2,39 +2,39 @@
 
 [![CI](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml/badge.svg)](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml)
 
-Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El foco está en resolver bien la concurrencia sobre el stock, las reservas temporales, las transacciones, la caché, la mensajería asíncrona y la seguridad.
+Plataforma de venta de entradas para eventos, construida como proyecto de portafolio con Java 21 y Spring Boot. El objetivo técnico es demostrar diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y, en fases posteriores, caché y mensajería asíncrona.
 
-> Estado: **Fase 2 (seguridad)** completada y verificada en GitHub Actions. La próxima fase es **Fase 3 (reservas y órdenes)**. Las funcionalidades se añaden fase a fase (ver `docs/decisions.md` y la sección "Hoja de ruta").
+> **Estado actual:** Fases 1 y 2 completadas. La Fase 3 (reservas, órdenes, pagos y tickets) está implementada en `dev`, pero permanece **en curso** hasta ejecutar y validar todos los tests de integración que requieren Docker. La Fase 4 todavía no ha comenzado.
 
-## Arquitectura (objetivo)
+## Documentación
 
-```mermaid
-flowchart LR
-    client[Cliente / Swagger UI] --> api[ticketing-api<br/>monolito modular]
-    api --> pg[(PostgreSQL)]
-    api --> redis[(Redis)]
-    api -- outbox --> kafka{{Kafka KRaft}}
-    kafka --> notif[notification-service]
-    notif --> mongo[(MongoDB)]
-```
+- [Progreso y evidencia de verificación](docs/PROGRESS.md)
+- [Arquitectura y flujo de negocio](docs/architecture.md)
+- [Diagrama ERD basado en migraciones Flyway](docs/erd.md)
+- [Registro de decisiones](docs/decisions.md)
+- [ADR-010: actualización atómica del inventario](docs/adr/ADR-010-atomic-inventory-update.md)
+- [ADR-011: idempotencia de órdenes y webhooks](docs/adr/ADR-011-order-and-webhook-idempotency.md)
+- [ADR-012: expiración con SKIP LOCKED](docs/adr/ADR-012-reservation-expiration-skip-locked.md)
 
-## Estructura del repositorio
+## Arquitectura y módulos
+
+La API es un monolito modular Spring Boot. Los límites de dominio se organizan por paquete dentro de `ticketing-api`; `common-events` contiene contratos compartidos y `notification-service` es el servicio separado previsto para la pista de eventos asíncronos.
 
 | Módulo | Descripción |
 | --- | --- |
 | `common-events` | Contratos de eventos compartidos (records), p. ej. `EventEnvelope` |
-| `ticketing-api` | Servicio principal (puerto 8080) |
-| `notification-service` | Consumidor de eventos y notificaciones simuladas (puerto 8081) |
-| `docs/` | ADRs y documentación técnica |
+| `ticketing-api` | API principal (puerto 8080): auth, catálogo, reservas, órdenes, pagos y tickets |
+| `notification-service` | Consumidor separado previsto (puerto 8081); integración Kafka pendiente de Fase 5 |
+| `docs/` | Arquitectura, ERD, progreso y ADRs |
 
 ## Stack
 
-Java 21 · Maven 3.9 (Maven Wrapper) · Spring Boot 3.5 · PostgreSQL 17 · Redis 7 · Apache Kafka 4 (KRaft) · MongoDB 7 · JUnit 5 · JaCoCo · Spotless · Docker Compose.
+Java 21 · Maven 3.9 (Maven Wrapper) · Spring Boot 3.5 · PostgreSQL 17 · Redis 7 · Apache Kafka 4 (KRaft) · MongoDB 7 · Flyway · Spring Security · JUnit 5 · Testcontainers · JaCoCo · Spotless · Docker Compose.
 
 ## Requisitos previos
 
 - JDK 21 (por ejemplo Eclipse Temurin 21)
-- Docker con Docker Compose v2
+- Docker con Docker Compose v2 para infraestructura y tests de integración
 - No hace falta instalar Maven: se usa `./mvnw`
 
 ## Inicio rápido
@@ -43,14 +43,14 @@ Java 21 · Maven 3.9 (Maven Wrapper) · Spring Boot 3.5 · PostgreSQL 17 · Redi
 # 1. Variables de entorno locales (edita los valores de ejemplo)
 cp .env.example .env
 
-# 2. Levantar solo las dependencias (Postgres, Redis, Kafka y Mongo)
+# 2. Levantar dependencias (Postgres, Redis, Kafka y Mongo)
 docker compose --profile infra up -d
 docker compose ps        # todos los servicios deben aparecer como "healthy"
 
-# 3. Compilar y ejecutar todos los tests
+# 3. Compilar y ejecutar todos los tests (incluye *IT; requiere Docker)
 ./mvnw clean verify
 
-# 4. Arrancar la API desde la terminal (o desde el IDE)
+# 4. Arrancar la API
 ./mvnw -pl ticketing-api -am spring-boot:run
 curl http://localhost:8080/actuator/health
 ```
@@ -61,24 +61,46 @@ Para detener y borrar los volúmenes: `docker compose --profile infra down -v`.
 
 | Comando | Qué hace |
 | --- | --- |
-| `./mvnw clean verify` | Compila, ejecuta tests unitarios (`*Test`) e integración (`*IT`), cobertura y formato |
-| `./mvnw test` | Solo tests unitarios |
-| `./mvnw -pl ticketing-api -am package` | Empaqueta únicamente la API y sus dependencias |
+| `./mvnw clean verify` | Build completo: tests unitarios e integración, cobertura y formato; los *IT necesitan Docker |
+| `./mvnw clean verify -DskipITs` | Verificación sin ejecutar los tests Failsafe de integración |
+| `./mvnw test` | Tests unitarios/slice |
+| `./mvnw -pl ticketing-api -am package` | Empaqueta la API y sus dependencias |
 | `./mvnw spotless:apply` | Formatea el código (google-java-format) |
+
+## Concurrencia
+
+La prueba [`ReservationConcurrencyIT`](ticketing-api/src/test/java/com/portfolio/ticketing/reservation/ReservationConcurrencyIT.java) modela una venta simultánea de las últimas entradas:
+
+- Crea un tipo de entrada con **10 unidades disponibles**.
+- Lanza **100 virtual threads** que esperan en una barrera (`CountDownLatch`) y compiten por reservar una unidad cada uno.
+- Ejecuta el escenario **20 veces** mediante `@RepeatedTest(20)`.
+- El resultado esperado en cada repetición es: **10 reservas exitosas**, **90 conflictos por stock insuficiente**, inventario disponible en **0** y **10 unidades** contabilizadas en reservas activas.
+
+El test valida el descuento mediante un `UPDATE` condicional atómico en PostgreSQL, no mediante una lectura seguida de una escritura. La prueba es de integración y usa la base real provista por Testcontainers; por eso debe ejecutarse en un runner con Docker. La existencia de la prueba y sus aserciones no significa que las 20 repeticiones estén verificadas en un entorno sin Docker: consulta [PROGRESS.md](docs/PROGRESS.md) para el último resultado ejecutado.
 
 ## Hoja de ruta
 
-- [ ] Fase 0: Esqueleto (Maven multi-módulo, Compose `infra`, `.env.example`). Falta verificar Compose en local
-- [x] CI adelantado: `ci.yml` con `./mvnw -B clean verify` (ADR-005)
-- [x] Fase 1: Dominio base (Flyway, entidades, CRUD, errores, Swagger)
-- [x] Fase 2: Seguridad (JWT, roles, propiedad, rate limiting). CI verde en `727330c`
-- [ ] Fase 3: Reservas y órdenes (concurrencia, idempotencia, webhook, expiración)
-- [ ] Fase 4: Redis (caché, TTL, degradación)
-- [ ] Fase 5: Mensajería (outbox, Kafka, notification-service)
-- [ ] Fase 6: Calidad e infraestructura (Dockerfiles, Compose `full`, Grafana, N+1)
-- [ ] Fase 7: CI/CD y despliegue en AWS
-- [ ] Fase 8: Pulido
+- [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
+- [x] Fase 1: dominio base, migraciones Flyway V1–V10, entidades/repositorios, CRUD, errores y OpenAPI.
+- [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting.
+- [ ] Fase 3: reservas y órdenes. Código implementado: inventario concurrente, expiración, idempotencia, webhook HMAC, pagos, cancelación y tickets. **Cierre pendiente** de la verificación Docker de los tests `*IT`.
+- [ ] Fase 4: caché Redis de catálogo, TTL, invalidación y degradación cuando Redis no esté disponible.
+- [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
+- [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
+- [ ] Fase 7: CI/CD y despliegue en AWS.
+- [ ] Fase 8: pulido, documentación de operación y mejoras finales.
+
+## Criterio permanente de cierre de fase
+
+Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige:
+
+1. README y hoja de ruta actualizados con estado real.
+2. ERD actualizado cuando cambie el esquema o sus relaciones.
+3. ADRs nuevos para las decisiones técnicas importantes, documentando contexto, alternativas, decisión y consecuencias; los ADRs históricos no se reescriben.
+4. Evidencia de validación de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
+
+La regla aplica a todas las fases siguientes y se debe cumplir antes de iniciar la fase posterior.
 
 ## Decisiones técnicas
 
-Ver [`docs/decisions.md`](docs/decisions.md).
+Consulta el [registro ADR](docs/decisions.md). El ERD y el flujo de módulos están en [docs/erd.md](docs/erd.md) y [docs/architecture.md](docs/architecture.md).
