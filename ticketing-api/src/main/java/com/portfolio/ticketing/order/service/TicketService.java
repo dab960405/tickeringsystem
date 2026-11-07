@@ -5,6 +5,7 @@ import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.OrderItem;
 import com.portfolio.ticketing.order.domain.Ticket;
 import com.portfolio.ticketing.order.domain.TicketStatus;
+import com.portfolio.ticketing.order.repository.OrderItemRepository;
 import com.portfolio.ticketing.order.repository.TicketRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class TicketService {
 
   private final TicketRepository ticketRepository;
+  private final OrderItemRepository orderItemRepository;
 
-  public TicketService(TicketRepository ticketRepository) {
+  public TicketService(TicketRepository ticketRepository, OrderItemRepository orderItemRepository) {
     this.ticketRepository = ticketRepository;
+    this.orderItemRepository = orderItemRepository;
   }
 
   public void issueForOrder(Order order) {
@@ -28,7 +31,7 @@ public class TicketService {
       return;
     }
     List<Ticket> tickets = new ArrayList<>();
-    for (OrderItem item : order.getItems()) {
+    for (OrderItem item : orderItemRepository.findByOrder_Id(order.getId())) {
       for (int index = 0; index < item.getQuantity(); index++) {
         tickets.add(new Ticket(item, UUID.randomUUID().toString()));
       }

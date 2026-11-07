@@ -10,6 +10,7 @@ import com.portfolio.ticketing.order.api.TicketResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.Ticket;
 import com.portfolio.ticketing.order.domain.TicketStatus;
+import com.portfolio.ticketing.order.repository.OrderItemRepository;
 import com.portfolio.ticketing.order.repository.TicketRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,12 +26,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TicketServiceTest {
 
   @Mock private TicketRepository ticketRepository;
+  @Mock private OrderItemRepository orderItemRepository;
 
   @Test
   void should_issueOneTicketPerReservedUnit() {
-    TicketService ticketService = new TicketService(ticketRepository);
+    TicketService ticketService = new TicketService(ticketRepository, orderItemRepository);
     Order order = order();
     when(ticketRepository.existsByOrderItem_Order_Id(order.getId())).thenReturn(false);
+    when(orderItemRepository.findByOrder_Id(order.getId())).thenReturn(order.getItems());
 
     ticketService.issueForOrder(order);
 
@@ -44,7 +47,7 @@ class TicketServiceTest {
 
   @Test
   void should_notIssueTicketsTwice_forSameOrder() {
-    TicketService ticketService = new TicketService(ticketRepository);
+    TicketService ticketService = new TicketService(ticketRepository, orderItemRepository);
     Order order = order();
     when(ticketRepository.existsByOrderItem_Order_Id(order.getId())).thenReturn(true);
 
@@ -55,7 +58,7 @@ class TicketServiceTest {
 
   @Test
   void should_cancelValidTickets_when_orderIsRefunded() {
-    TicketService ticketService = new TicketService(ticketRepository);
+    TicketService ticketService = new TicketService(ticketRepository, orderItemRepository);
     Order order = order();
     Ticket ticket = new Ticket(order.getItems().getFirst(), "ticket-code");
     when(ticketRepository.findByOrderItem_Order_Id(order.getId())).thenReturn(List.of(ticket));
@@ -67,7 +70,7 @@ class TicketServiceTest {
 
   @Test
   void should_returnOnlyValidTicketsOwnedByUser() {
-    TicketService ticketService = new TicketService(ticketRepository);
+    TicketService ticketService = new TicketService(ticketRepository, orderItemRepository);
     Order order = order();
     Ticket ticket = new Ticket(order.getItems().getFirst(), "ticket-code");
     when(ticketRepository.findByOrderItem_Order_UserIdAndStatus(
