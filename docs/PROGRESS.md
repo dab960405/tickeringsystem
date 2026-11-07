@@ -4,35 +4,36 @@
 
 ## Fase actual
 
-**Fase 3 (reservas y órdenes): EN CURSO.** Las fases 0, 1 y 2 quedaron completadas según la documentación y la CI publicada anteriormente (`727330c`). La rama remota `dev` ya contenía trabajo adicional respecto a `main`; se retomó desde `e03a9f8` sin sobrescribirlo.
+**Fase 3 (reservas y órdenes): EN CURSO.** Las fases 0, 1 y 2 están completadas según sus criterios documentados. La rama `dev` contiene trabajo posterior a `main`; la retoma se hizo desde `origin/dev` sin sobrescribirlo.
 
-| Criterio de Fase 3 | Estado |
+| Criterio o alcance de Fase 3 | Estado |
 | --- | --- |
-| Máquina de estados de la orden y transiciones parametrizadas | Implementada en `OrderStatus`, con tests de transiciones válidas e inválidas |
+| Máquina de estados de la orden y transiciones parametrizadas | Implementada en `OrderStatus`, con 50 tests de transiciones válidas e inválidas |
 | Reserva con `UPDATE` atómico condicional, ventana de venta y TTL configurable | Implementada, con tests unitarios y de API |
-| Expiración con lote, `FOR UPDATE SKIP LOCKED` y devolución de stock exactamente una vez | Implementada en `ReservationExpirationService`; existe `ReservationExpirationIT` |
-| Test de concurrencia de 100 hilos repetido 20 veces | Pendiente |
-| Órdenes desde reservas activas e idempotencia con `Idempotency-Key` | Pendiente |
-| Webhook HMAC, confirmación/cancelación y generación de tickets | Pendiente |
-| Eventos de dominio mediante outbox para estas operaciones | Pendiente |
+| Expiración con lote, `FOR UPDATE SKIP LOCKED` y devolución de stock exactamente una vez | Implementada en `ReservationExpirationService`; existe `ReservationExpirationIT`, pendiente de ejecutarse con Docker |
+| Test de concurrencia de 100 hilos repetido 20 veces | **Pendiente** |
+| Órdenes desde reservas activas, precio copiado e idempotencia con `Idempotency-Key` | Implementadas en `OrderService` y `OrderController`, con tests unitarios y de API; falta prueba de integración |
+| Webhook HMAC, confirmación/cancelación, generación de tickets y caso de reserva expirada sin stock | Implementados en `OrderPaymentService` y `PaymentWebhookService`, con tests unitarios y de API; falta prueba de integración |
+| Cancelación de órdenes y consulta `GET /me/tickets` | **Pendiente** |
+| Eventos mediante outbox | Pendiente; su implementación completa corresponde a la Fase 5 |
 
 ## Última implementación publicada
 
-- `e03a9f8` `feat: expire reservations with locked stock restoration`.
-- La rama local está basada en `origin/dev`; no se creó ningún recurso de AWS ni se modificaron ADRs anteriores.
+- `8f30485` `feat: process signed payment webhooks`.
+- Último commit confirmado en `origin/dev` al retomar: `8f30485`.
+- No se creó ningún recurso de AWS ni se modificaron ADRs anteriores.
 
-## Última verificación y publicación
+## Última verificación
 
-- `./mvnw -B verify -DskipITs`: **BUILD SUCCESS** con Temurin 21.0.13; 213 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service` (219 totales), 0 fallos; JaCoCo y Spotless correctos.
-- `./mvnw -B clean verify`: compilación y 219 tests unitarios/slices correctos; los 11 `*IT` fallaron al iniciar Testcontainers porque este entorno no tiene Docker (`Could not find a valid Docker environment`). No se desactivó ningún test.
-- Último commit disponible en `origin/dev` al iniciar esta sesión: `e03a9f8b524e0eafb72364d60d1acccc234fd0c7`.
-- El estado de GitHub Actions para `e03a9f8` no se ha comprobado en esta sesión.
+- `./mvnw -B clean verify -DskipITs`: **BUILD SUCCESS** con Temurin 21.0.13; 282 tests de `ticketing-api`, 5 de `common-events` y 1 de `notification-service` (**288 totales**, 0 fallos). JaCoCo y Spotless correctos.
+- `./mvnw -B clean verify`: el primer intento no pudo iniciar porque el entorno no tenía Java ni `JAVA_HOME`. Se instaló Temurin 21.0.13 temporalmente fuera del repositorio. El build completo con `*IT` sigue sin poder ejecutarse aquí porque Docker no está instalado.
+- GitHub Actions: la consulta con `gh run list` devolvió HTTP 403 (`Resource not accessible by integration`); no se afirma el estado de CI sin evidencia.
 
 ## Próximos 3 pasos
 
-1. Añadir entidades y repositorios de `order`, `order_items`, `payments` y `tickets`, reutilizando las migraciones existentes.
-2. Implementar creación de órdenes desde reservas activas con precio copiado e idempotencia por usuario y payload.
-3. Implementar webhook HMAC idempotente, generación de tickets y pruebas de concurrencia del flujo de reservas.
+1. Añadir `ReservationConcurrencyIT`: 100 virtual threads, 10 entradas, exactamente 10 reservas y 90 conflictos, repetido 20 veces.
+2. Añadir pruebas de integración para idempotencia de órdenes, webhook repetido, generación única de tickets y pago con reserva expirada.
+3. Implementar cancelación de órdenes y `GET /me/tickets` con sus tests y reglas de propiedad.
 
 ## Decisiones registradas
 
@@ -56,17 +57,17 @@ docker compose ps                        # todos deben aparecer healthy
 
 ## Tests ejecutados y resultados reales
 
-- `./mvnw -B verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 219 tests, 0 fallos.
-- `./mvnw -B clean verify`: 11 tests de integración con errores de inicialización por ausencia de Docker; no se ejecutó ninguna lógica de Testcontainers.
-- No se ejecutaron todavía los nuevos tests de órdenes ni el test de concurrencia de 100 hilos.
+- `./mvnw -B clean verify -DskipITs` con Temurin 21.0.13: **BUILD SUCCESS**; 288 tests, 0 fallos.
+- Tests `*IT`: no ejecutados en esta sesión por ausencia de Docker; no se desactivó ni borró ninguno en el código.
+- El test de concurrencia de 100 hilos todavía no existe y no se afirma su resultado.
 
 ## Problemas conocidos
 
 - El entorno de la IA no tiene Docker: Testcontainers y Compose deben verificarse en GitHub Actions o en una máquina local con Docker.
-- Java no estaba instalado al iniciar esta retoma; se descargó Temurin 21.0.13 fuera del repositorio. No se añadieron binarios ni secretos al proyecto.
+- El token disponible para GitHub CLI no tiene permiso para leer ejecuciones de Actions.
 - El job `docker-build` de CI llega en la Fase 6; todavía no hay Dockerfiles.
-- La Fase 3 todavía no tiene implementación de órdenes, pagos ni tickets.
+- La mensajería outbox/Kafka y `notification-service` corresponden a la Fase 5.
 
 ## Cambios locales sin publicar
 
-Esta actualización documental se publicará como el siguiente commit `docs:` en `dev`.
+Ninguno.
