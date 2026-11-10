@@ -55,6 +55,7 @@ class GlobalExceptionHandlerTest {
             "duplicate", () -> new DuplicateResourceException("Already exists"),
             "rule", () -> new BusinessRuleViolationException("Rule broken"),
             "denied", () -> new AccessDeniedException("Denied"),
+            "token-store", () -> new TokenStoreUnavailableException(new IllegalStateException()),
             "unexpected", () -> new IllegalStateException("secret internal detail"));
 
     @GetMapping("/test/fail/{kind}")
@@ -85,6 +86,15 @@ class GlobalExceptionHandlerTest {
         .perform(get("/test/fail/" + kind))
         .andExpect(status().is(expectedStatus))
         .andExpect(jsonPath("$.status").value(expectedStatus));
+  }
+
+  @Test
+  void should_return503_when_tokenStoreIsUnavailable() throws Exception {
+    mockMvc
+        .perform(get("/test/fail/token-store"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(jsonPath("$.type").value(
+            "https://ticketing.portfolio.com/problems/token-store-unavailable"));
   }
 
   @Test

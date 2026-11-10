@@ -1,11 +1,13 @@
 package com.portfolio.ticketing.auth.service;
 
+import com.portfolio.ticketing.common.exception.TokenStoreUnavailableException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.UUID;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -21,15 +23,27 @@ public class RefreshTokenStore {
   }
 
   public void save(String jti, UUID userId, Duration ttl) {
-    redisTemplate.opsForValue().set(key(jti), userId.toString(), ttl);
+    try {
+      redisTemplate.opsForValue().set(key(jti), userId.toString(), ttl);
+    } catch (DataAccessException exception) {
+      throw new TokenStoreUnavailableException(exception);
+    }
   }
 
   public boolean isActive(String jti, UUID userId) {
-    return userId.toString().equals(redisTemplate.opsForValue().get(key(jti)));
+    try {
+      return userId.toString().equals(redisTemplate.opsForValue().get(key(jti)));
+    } catch (DataAccessException exception) {
+      throw new TokenStoreUnavailableException(exception);
+    }
   }
 
   public void revoke(String jti) {
-    redisTemplate.delete(key(jti));
+    try {
+      redisTemplate.delete(key(jti));
+    } catch (DataAccessException exception) {
+      throw new TokenStoreUnavailableException(exception);
+    }
   }
 
   static String key(String jti) {

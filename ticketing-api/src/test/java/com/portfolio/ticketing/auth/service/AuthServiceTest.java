@@ -2,11 +2,13 @@ package com.portfolio.ticketing.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.auth.api.TokenResponse;
 import com.portfolio.ticketing.common.exception.AuthenticationFailedException;
+import com.portfolio.ticketing.common.exception.TokenStoreUnavailableException;
 import com.portfolio.ticketing.user.domain.User;
 import com.portfolio.ticketing.user.domain.UserRole;
 import com.portfolio.ticketing.user.service.UserService;
@@ -39,6 +41,19 @@ class AuthServiceTest {
 
     assertThat(response).isEqualTo(expected);
     verify(loginRateLimiter).check("127.0.0.1", "user@example.com");
+  }
+
+  @Test
+  void should_propagateUnavailableTokenStore_when_loginCannotPersistRefreshToken() {
+    User user = new User("user@example.com", "hash", "User", UserRole.USER);
+    when(userService.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+    when(passwordEncoder.matches("Password123", "hash")).thenReturn(true);
+    doThrow(new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
+        .when(tokenService)
+        .issueTokens(user);
+
+    assertThatThrownBy(() -> authService.login("user@example.com", "Password123", "127.0.0.1"))
+        .isInstanceOf(TokenStoreUnavailableException.class);
   }
 
   @Test

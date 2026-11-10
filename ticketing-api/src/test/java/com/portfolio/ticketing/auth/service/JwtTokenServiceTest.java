@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.portfolio.ticketing.auth.api.TokenResponse;
 import com.portfolio.ticketing.auth.config.AuthProperties;
 import com.portfolio.ticketing.common.exception.AuthenticationFailedException;
+import com.portfolio.ticketing.common.exception.TokenStoreUnavailableException;
 import com.portfolio.ticketing.user.domain.User;
 import com.portfolio.ticketing.user.domain.UserRole;
 import com.portfolio.ticketing.user.service.UserService;
@@ -75,6 +77,37 @@ class JwtTokenServiceTest {
     assertThat(response.tokenType()).isEqualTo("Bearer");
     assertThat(response.expiresIn()).isEqualTo(900);
     verify(refreshTokenStore).save(any(String.class), eq(USER_ID), eq(Duration.ofDays(7)));
+  }
+
+  @Test
+  void should_notReturnTokens_when_refreshTokenPersistenceFails() {
+    doThrow(new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
+        .when(refreshTokenStore)
+        .save(any(String.class), eq(USER_ID), eq(Duration.ofDays(7)));
+
+    assertThatThrownBy(() -> tokenService.issueTokens(user))
+        .isInstanceOf(TokenStoreUnavailableException.class);
+  }
+
+  @Test
+  void should_failRefresh_when_sessionStoreIsUnavailable() {
+    when(refreshJwtDecoder.decode("refresh-token")).thenReturn(refreshJwt("jti-1", "refresh"));
+    when(refreshTokenStore.isActive("jti-1", USER_ID))
+        .thenThrow(new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")));
+
+    assertThatThrownBy(() -> tokenService.refresh("refresh-token"))
+        .isInstanceOf(TokenStoreUnavailableException.class);
+  }
+
+  @Test
+  void should_failLogout_when_sessionStoreIsUnavailable() {
+    when(refreshJwtDecoder.decode("refresh-token")).thenReturn(refreshJwt("jti-1", "refresh"));
+    doThrow(new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")))
+        .when(refreshTokenStore)
+        .revoke("jti-1");
+
+    assertThatThrownBy(() -> tokenService.logout("refresh-token"))
+        .isInstanceOf(TokenStoreUnavailableException.class);
   }
 
   @Test

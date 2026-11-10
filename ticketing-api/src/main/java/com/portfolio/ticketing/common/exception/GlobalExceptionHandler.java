@@ -56,6 +56,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return problem(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), "rate-limit-exceeded");
   }
 
+  @ExceptionHandler(TokenStoreUnavailableException.class)
+  ProblemDetail handleTokenStoreUnavailable(TokenStoreUnavailableException exception) {
+    return problem(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "Authentication session storage is temporarily unavailable",
+        "token-store-unavailable");
+  }
+
   @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
   ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException exception) {
     return problem(

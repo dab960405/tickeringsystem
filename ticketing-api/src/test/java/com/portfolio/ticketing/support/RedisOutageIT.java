@@ -3,9 +3,12 @@ package com.portfolio.ticketing.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.ticketing.auth.api.TokenResponse;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
@@ -82,6 +85,8 @@ class RedisOutageIT {
   @Autowired private PlatformTransactionManager transactionManager;
 
   @Autowired private MockMvc mockMvc;
+
+  @Autowired private ObjectMapper objectMapper;
 
   private UUID eventId;
   private UUID ticketTypeId;
@@ -220,6 +225,93 @@ class RedisOutageIT {
             .getContentAsString();
 
     assertThat(recoveredEventResponse).isEqualTo(expectedEventResponse);
+  }
+
+  @Test
+  void should_failClosedForAuthenticationSessionsDuringRedisOutage() throws Exception {
+    String email = "redis-auth-" + UUID.randomUUID() + "@example.com";
+    String password = "Password123";
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"email\":\""
+                        + email
+                        + "\",\"password\":\""
+                        + password
+                        + "\",\"fullName\":\"Redis Auth User\"}"))
+        .andExpect(status().isCreated());
+
+    String loginBody =
+        "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
+    String tokenResponse =
+        mockMvc
+            .perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    TokenResponse tokens = objectMapper.readValue(tokenResponse, TokenResponse.class);
+
+    pauseRedis();
+    try {
+      mockMvc
+          .perform(
+              post("/api/v1/auth/refresh")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+          .andExpect(status().isServiceUnavailable());
+
+      mockMvc
+          .perform(
+              post("/api/v1/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(loginBody))
+          .andExpect(status().isServiceUnavailable());
+
+      mockMvc
+          .perform(
+              post("/api/v1/auth/login")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      "{\"email\":\""
+                          + email
+                          + "\",\"password\":\"Invalid123\"}"))
+          .andExpect(status().isUnauthorized());
+
+      mockMvc
+          .perform(
+              post("/api/v1/auth/logout")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+          .andExpect(status().isServiceUnavailable());
+    } finally {
+      unpauseRedisIfNecessary();
+    }
+
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .pollInterval(Duration.ofMillis(250))
+        .ignoreExceptions()
+        .untilAsserted(
+            () ->
+                mockMvc
+                    .perform(
+                        post("/api/v1/auth/refresh")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(
+                                "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+                    .andExpect(status().isOk()));
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/logout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+        .andExpect(status().isNoContent());
   }
 
   @Test
