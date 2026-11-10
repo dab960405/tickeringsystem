@@ -268,19 +268,14 @@ class RedisOutageIT {
 
       mockMvc
           .perform(
-              post("/api/v1/auth/login")
-                  .contentType(MediaType.APPLICATION_JSON)
-                  .content(loginBody))
+              post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
           .andExpect(status().isServiceUnavailable());
 
       mockMvc
           .perform(
               post("/api/v1/auth/login")
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content(
-                      "{\"email\":\""
-                          + email
-                          + "\",\"password\":\"Invalid123\"}"))
+                  .content("{\"email\":\"" + email + "\",\"password\":\"Invalid123\"}"))
           .andExpect(status().isUnauthorized());
 
       mockMvc
@@ -293,7 +288,8 @@ class RedisOutageIT {
       unpauseRedisIfNecessary();
     }
 
-    // Timed-out Redis commands may still execute after Redis resumes, so the old token is not checked.
+    // Timed-out Redis commands may still execute after Redis resumes, so the old token is not
+    // checked.
     String recoveredEmail = "redis-auth-recovered-" + UUID.randomUUID() + "@example.com";
     mockMvc
         .perform(
