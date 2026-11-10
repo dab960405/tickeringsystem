@@ -4,7 +4,7 @@
 
 ## Fase actual
 
-**Fase 4 (caché Redis del catálogo): EN CURSO.** La Fase 3 permanece completada y verificada en GitHub Actions CI, run #62. El primer incremento separa metadatos cacheables de disponibilidad dinámica y añade TTL configurable, invalidación transaccional y tolerancia a fallos de Redis. La serialización del catálogo quedó corregida y verificada en CI run #70.
+**Fase 4 (caché Redis del catálogo): EN CURSO.** La Fase 3 permanece completada y verificada en GitHub Actions CI, run #62. El primer incremento separa metadatos cacheables de disponibilidad dinámica y añade TTL configurable, invalidación transaccional y tolerancia a fallos de Redis. La serialización del catálogo quedó corregida: CI run #70 (`3054acf`) falló por formato; la corrección quedó verificada en CI run #71 (`93092b9`).
 
 | Criterio o alcance de Fase 3 | Estado |
 | --- | --- |
@@ -26,7 +26,7 @@
 - El serializador usa un `ObjectMapper` con `JavaTimeModule`, fechas ISO y `JavaType` para `List<TicketTypeCatalogEntry>`; no activa `default typing` polimórfico.
 - `TicketTypeCatalogCacheIT` comprueba con Redis real el hit y la expiración TTL, comparando el record completo tras la lectura cacheada, incluidos `Instant` y la escala de `BigDecimal`.
 - `RedisCacheConfigTest` cubre la degradación ante `SerializationException` en GET, PUT, EVICT y CLEAR.
-- Corrección publicada en `2a1bc3b`, `dcc132f`, `3054acf` y `93092b9`; CI run #70 terminó en success.
+- Corrección publicada en `2a1bc3b`, `dcc132f`, `3054acf` y `93092b9`; CI run #70 (`3054acf`) terminó en **failure** por violaciones de Spotless y CI run #71 (`93092b9`) terminó en **success**.
 - Pendiente validar invalidación desde el flujo de escritura y fallo/recuperación de Redis mediante pruebas de integración específicas.
 
 ## Deuda de documentación de Fases 1–3
@@ -41,7 +41,9 @@
 
 ## Evidencia de verificación — GitHub Actions
 
-- [CI run #70](https://github.com/dab960405/tickeringsystem/actions/runs/42747004968), commit `93092b9`, rama `dev`: **completed / success**. El job `Build and test`, incluidos `TicketTypeCatalogCacheIT`, Testcontainers y Spotless, terminó en **success**.
+- [CI run #70](https://github.com/dab960405/tickeringsystem/actions/runs/42746676925), commit `3054acf604e01fd8b4d18b1c909741e560b10274`, rama `dev`: **completed / failure**. El job `Build and test` falló en `Build, test and verify coverage` por violaciones de Spotless.
+- [CI run #71](https://github.com/dab960405/tickeringsystem/actions/runs/42747004968), commit `93092b9a7696e0b1d0cb31868e3a567d0c121a6d`, rama `dev`: **completed / success**. El job `Build and test`, incluidos los pasos de tests y Spotless, terminó en **success**.
+- [CI run #78](https://github.com/dab960405/tickeringsystem/actions/runs/42751644539), commit `1ac051df739306ff51dea99a31c0294f44ca47e0`, rama `dev`: **completed / success**. Es el último run verde conocido verificado.
 - Verificación local de la misma corrección: **295 tests unitarios de `ticketing-api` y 5 de `common-events`**, sin fallos; `spotless:check` en verde. Los `*IT` se verificaron en CI porque el entorno asistido no dispone de Docker.
 - [CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), commit `6a588faa32cd88b2510d4acb028fc5a3af8cd379`, rama `dev`: **completed / success**. El job `Build and test` terminó en **success**.
 - Los logs de la ejecución reportan **13 tests de integración `*IT` aprobados**.
