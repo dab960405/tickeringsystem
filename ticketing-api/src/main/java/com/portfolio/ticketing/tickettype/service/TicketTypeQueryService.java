@@ -6,7 +6,6 @@ import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

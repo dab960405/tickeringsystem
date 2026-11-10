@@ -3,8 +3,8 @@ package com.portfolio.ticketing.tickettype.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.ticketing.event.domain.Event;
-import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
+import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.venue.domain.Venue;
 import jakarta.persistence.EntityManager;
@@ -43,29 +43,27 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
             "cache-test-" + UUID.randomUUID() + "@example.com");
 
     new TransactionTemplate(transactionManager)
-        .executeWithoutResult(
-            status -> {
-              Venue venue =
-                  new Venue("Cache Arena", "Lima", "Main St 1", 500);
-              entityManager.persist(venue);
-              Event event =
-                  new Event(
-                      organizerId,
-                      venue,
-                      "Cache test event",
-                      null,
-                      "MUSIC",
-                      Instant.parse("2030-01-10T20:00:00Z"),
-                      Instant.parse("2030-01-10T23:00:00Z"));
-              entityManager.persist(event);
-              TicketType ticketType =
-                  new TicketType(
-                      event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
-              entityManager.persist(ticketType);
-              entityManager.flush();
-              eventId = event.getId();
-              ticketTypeId = ticketType.getId();
-            });
+        .executeWithoutResult(status -> {
+          Venue venue = new Venue("Cache Arena", "Lima", "Main St 1", 500);
+          entityManager.persist(venue);
+          Event event =
+              new Event(
+                  organizerId,
+                  venue,
+                  "Cache test event",
+                  null,
+                  "MUSIC",
+                  Instant.parse("2030-01-10T20:00:00Z"),
+                  Instant.parse("2030-01-10T23:00:00Z"));
+          entityManager.persist(event);
+          TicketType ticketType =
+              new TicketType(
+                  event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
+          entityManager.persist(ticketType);
+          entityManager.flush();
+          eventId = event.getId();
+          ticketTypeId = ticketType.getId();
+        });
   }
 
   @Test

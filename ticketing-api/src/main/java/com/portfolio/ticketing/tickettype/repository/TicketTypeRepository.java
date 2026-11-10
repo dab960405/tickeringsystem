@@ -19,8 +19,7 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
       WHERE t.event.id = :eventId
       ORDER BY t.price ASC
       """)
-  List<TicketTypeAvailabilityProjection> findAvailabilityByEventId(
-      @Param("eventId") UUID eventId);
+  List<TicketTypeAvailabilityProjection> findAvailabilityByEventId(@Param("eventId") UUID eventId);
 
   boolean existsByEventId(UUID eventId);
 
