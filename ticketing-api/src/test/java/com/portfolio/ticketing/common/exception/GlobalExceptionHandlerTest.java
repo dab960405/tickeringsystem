@@ -93,8 +93,9 @@ class GlobalExceptionHandlerTest {
     mockMvc
         .perform(get("/test/fail/token-store"))
         .andExpect(status().isServiceUnavailable())
-        .andExpect(jsonPath("$.type").value(
-            "https://ticketing.portfolio.com/problems/token-store-unavailable"));
+        .andExpect(
+            jsonPath("$.type")
+                .value("https://ticketing.portfolio.com/problems/token-store-unavailable"));
   }
 
   @Test

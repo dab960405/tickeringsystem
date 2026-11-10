@@ -93,7 +93,8 @@ class JwtTokenServiceTest {
   void should_failRefresh_when_sessionStoreIsUnavailable() {
     when(refreshJwtDecoder.decode("refresh-token")).thenReturn(refreshJwt("jti-1", "refresh"));
     when(refreshTokenStore.isActive("jti-1", USER_ID))
-        .thenThrow(new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")));
+        .thenThrow(
+            new TokenStoreUnavailableException(new IllegalStateException("Redis unavailable")));
 
     assertThatThrownBy(() -> tokenService.refresh("refresh-token"))
         .isInstanceOf(TokenStoreUnavailableException.class);

@@ -29,11 +29,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.http.MediaType;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -244,11 +244,13 @@ class RedisOutageIT {
                         + "\",\"fullName\":\"Redis Auth User\"}"))
         .andExpect(status().isCreated());
 
-    String loginBody =
-        "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
+    String loginBody = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
     String tokenResponse =
         mockMvc
-            .perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(loginBody))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -261,8 +263,7 @@ class RedisOutageIT {
           .perform(
               post("/api/v1/auth/refresh")
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content(
-                      "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+                  .content("{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
           .andExpect(status().isServiceUnavailable());
 
       mockMvc
@@ -286,32 +287,61 @@ class RedisOutageIT {
           .perform(
               post("/api/v1/auth/logout")
                   .contentType(MediaType.APPLICATION_JSON)
-                  .content(
-                      "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+                  .content("{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
           .andExpect(status().isServiceUnavailable());
     } finally {
       unpauseRedisIfNecessary();
     }
 
+    // Timed-out Redis commands may still execute after Redis resumes, so the old token is not checked.
+    String recoveredEmail = "redis-auth-recovered-" + UUID.randomUUID() + "@example.com";
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"email\":\""
+                        + recoveredEmail
+                        + "\",\"password\":\""
+                        + password
+                        + "\",\"fullName\":\"Recovered Redis Auth User\"}"))
+        .andExpect(status().isCreated());
+
+    String recoveredLoginBody =
+        "{\"email\":\"" + recoveredEmail + "\",\"password\":\"" + password + "\"}";
+    java.util.concurrent.atomic.AtomicReference<TokenResponse> recoveredTokens =
+        new java.util.concurrent.atomic.AtomicReference<>();
     await()
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(250))
         .ignoreExceptions()
-        .untilAsserted(
-            () ->
-                mockMvc
-                    .perform(
-                        post("/api/v1/auth/refresh")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(
-                                "{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
-                    .andExpect(status().isOk()));
+        .untilAsserted(() -> {
+          String recoveredResponse =
+              mockMvc
+                  .perform(
+                      post("/api/v1/auth/login")
+                          .contentType(MediaType.APPLICATION_JSON)
+                          .content(recoveredLoginBody))
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString();
+          recoveredTokens.set(objectMapper.readValue(recoveredResponse, TokenResponse.class));
+        });
+
+    String recoveredRefreshToken = recoveredTokens.get().refreshToken();
+    mockMvc
+        .perform(
+            post("/api/v1/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + recoveredRefreshToken + "\"}"))
+        .andExpect(status().isOk());
 
     mockMvc
         .perform(
             post("/api/v1/auth/logout")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"refreshToken\":\"" + tokens.refreshToken() + "\"}"))
+                .content("{\"refreshToken\":\"" + recoveredRefreshToken + "\"}"))
         .andExpect(status().isNoContent());
   }
 
