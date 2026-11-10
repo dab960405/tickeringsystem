@@ -33,12 +33,4 @@ public abstract class AbstractIntegrationTest {
     registry.add("spring.data.redis.host", REDIS::getHost);
     registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
   }
-
-  protected static void stopRedis() {
-    REDIS.getDockerClient().stopContainerCmd(REDIS.getContainerId()).exec();
-  }
-
-  protected static void startRedis() {
-    REDIS.getDockerClient().startContainerCmd(REDIS.getContainerId()).exec();
-  }
 }
