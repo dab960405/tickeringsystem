@@ -20,8 +20,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -29,7 +32,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=2s")
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = {
+      "ticketing.cache.ticket-types.ttl=2s",
+      "spring.data.redis.timeout=200ms",
+      "spring.data.redis.connect-timeout=200ms"
+    })
 class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
 
   private static final Instant SALE_START = Instant.parse("2030-01-01T00:00:00Z");
@@ -41,6 +50,7 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private CacheManager cacheManager;
+  @Autowired private TestRestTemplate restTemplate;
 
   private UUID organizerId;
   private UUID eventId;
@@ -74,6 +84,7 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
                   event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
           entityManager.persist(ticketType);
           entityManager.flush();
+          event.publish();
           eventId = event.getId();
           ticketTypeId = ticketType.getId();
         });
@@ -154,6 +165,41 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
     assertThat(catalogCacheService.listForEvent(eventId))
         .extracting(TicketTypeCatalogEntry::name)
         .containsExactly("Updated");
+  }
+
+  @Test
+  void should_servePostgresqlAndRecoverCache_whenRedisRestarts() {
+    catalogCacheService.listForEvent(eventId);
+    assertThat(catalogCache().get(eventId)).isNotNull();
+
+    stopRedis();
+    try {
+      jdbcTemplate.update("UPDATE ticket_types SET name = 'Offline' WHERE id = ?", ticketTypeId);
+
+      ResponseEntity<String> response =
+          restTemplate.getForEntity("/api/v1/events/{id}", String.class, eventId);
+
+      assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(response.getBody()).contains("\"name\":\"Offline\"");
+    } finally {
+      startRedis();
+    }
+
+    await()
+        .atMost(Duration.ofSeconds(15))
+        .pollInterval(Duration.ofMillis(200))
+        .ignoreExceptions()
+        .untilAsserted(() -> {
+          assertThat(catalogCacheService.listForEvent(eventId))
+              .extracting(TicketTypeCatalogEntry::name)
+              .containsExactly("Offline");
+          assertThat(catalogCache().get(eventId)).isNotNull();
+        });
+
+    jdbcTemplate.update("UPDATE ticket_types SET name = 'Not cached' WHERE id = ?", ticketTypeId);
+    assertThat(catalogCacheService.listForEvent(eventId))
+        .extracting(TicketTypeCatalogEntry::name)
+        .containsExactly("Offline");
   }
 
   private Cache catalogCache() {
