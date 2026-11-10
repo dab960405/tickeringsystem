@@ -1,6 +1,12 @@
 package com.portfolio.ticketing.common.config;
 
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import java.time.Duration;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +21,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 @Configuration
@@ -37,13 +43,23 @@ public class RedisCacheConfig implements CachingConfigurer {
   @Bean
   @Override
   public CacheManager cacheManager() {
+    ObjectMapper objectMapper =
+        new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    JavaType catalogType =
+        objectMapper
+            .getTypeFactory()
+            .constructCollectionType(List.class, TicketTypeCatalogEntry.class);
+    Jackson2JsonRedisSerializer<List<TicketTypeCatalogEntry>> serializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, catalogType);
+
     RedisCacheConfiguration defaults =
         RedisCacheConfiguration.defaultCacheConfig()
             .entryTtl(ticketTypesTtl)
             .disableCachingNullValues()
             .serializeValuesWith(
-                RedisSerializationContext.SerializationPair.fromSerializer(
-                    new GenericJackson2JsonRedisSerializer()));
+                RedisSerializationContext.SerializationPair.fromSerializer(serializer));
 
     return RedisCacheManager.builder(connectionFactory)
         .cacheDefaults(defaults)
