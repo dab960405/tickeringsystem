@@ -1,10 +1,10 @@
 # Progreso del proyecto
 
-Última actualización: 2026-11-07 · Rama de trabajo: `dev`
+Última actualización: 2026-11-09 · Rama de trabajo: `dev`
 
 ## Fase actual
 
-**Fase 4 (caché Redis del catálogo): EN CURSO.** La Fase 3 permanece completada y verificada en GitHub Actions CI, run #62. El primer incremento separa metadatos cacheables de disponibilidad dinámica y añade TTL configurable, invalidación transaccional y tolerancia a fallos de Redis.
+**Fase 4 (caché Redis del catálogo): EN CURSO.** La Fase 3 permanece completada y verificada en GitHub Actions CI, run #62. El primer incremento separa metadatos cacheables de disponibilidad dinámica y añade TTL configurable, invalidación transaccional y tolerancia a fallos de Redis. La serialización del catálogo quedó corregida y verificada en CI run #70.
 
 | Criterio o alcance de Fase 3 | Estado |
 | --- | --- |
@@ -22,8 +22,11 @@
 - Caché-aside Redis para metadatos de tipos de entrada, con TTL configurable (`TICKET_TYPES_CACHE_TTL`, por defecto 5 minutos).
 - `availableQuantity` queda fuera de Redis y se consulta siempre desde PostgreSQL para evitar servir inventario obsoleto.
 - Las mutaciones del catálogo invalidan la caché; `RedisCacheManager.transactionAware()` difiere la invalidación hasta el commit.
-- Los errores de acceso a Redis (`DataAccessException`) se registran y se omiten para que la lectura continúe contra PostgreSQL.
-- Añadida prueba de integración `TicketTypeCatalogCacheIT` con Redis real para comprobar hit y expiración TTL. Pendiente de ejecución en CI.
+- Los errores de acceso a Redis (`DataAccessException`) y de serialización (`SerializationException`) se registran con nivel WARN y se omiten para que la lectura continúe contra PostgreSQL.
+- El serializador usa un `ObjectMapper` con `JavaTimeModule`, fechas ISO y `JavaType` para `List<TicketTypeCatalogEntry>`; no activa `default typing` polimórfico.
+- `TicketTypeCatalogCacheIT` comprueba con Redis real el hit y la expiración TTL, comparando el record completo tras la lectura cacheada, incluidos `Instant` y la escala de `BigDecimal`.
+- `RedisCacheConfigTest` cubre la degradación ante `SerializationException` en GET, PUT, EVICT y CLEAR.
+- Corrección publicada en `2a1bc3b`, `dcc132f`, `3054acf` y `93092b9`; CI run #70 terminó en success.
 - Pendiente validar invalidación desde el flujo de escritura y fallo/recuperación de Redis mediante pruebas de integración específicas.
 
 ## Deuda de documentación de Fases 1–3
@@ -38,6 +41,8 @@
 
 ## Evidencia de verificación — GitHub Actions
 
+- [CI run #70](https://github.com/dab960405/tickeringsystem/actions/runs/42747004968), commit `93092b9`, rama `dev`: **completed / success**. El job `Build and test`, incluidos `TicketTypeCatalogCacheIT`, Testcontainers y Spotless, terminó en **success**.
+- Verificación local de la misma corrección: **295 tests unitarios de `ticketing-api` y 5 de `common-events`**, sin fallos; `spotless:check` en verde. Los `*IT` se verificaron en CI porque el entorno asistido no dispone de Docker.
 - [CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762), commit `6a588faa32cd88b2510d4acb028fc5a3af8cd379`, rama `dev`: **completed / success**. El job `Build and test` terminó en **success**.
 - Los logs de la ejecución reportan **13 tests de integración `*IT` aprobados**.
 - `ReservationConcurrencyIT`: **Tests run: 20, Failures: 0**. Se ejecutaron las 20 repeticiones contra PostgreSQL real mediante Testcontainers.
@@ -45,8 +50,8 @@
 
 ## Próximos pasos
 
-1. Ejecutar CI para el primer incremento y corregir cualquier fallo antes de continuar.
-2. Añadir pruebas de invalidación después del commit y degradación cuando Redis esté inaccesible.
+1. Añadir pruebas de invalidación después del commit y degradación cuando Redis esté inaccesible.
+2. Completar la caché de eventos, claves de reserva y rate limiting de login con sus pruebas.
 3. Mantener commits pequeños en `dev` y no iniciar la Fase 5 hasta cerrar y verificar la Fase 4.
 
 ## Decisiones registradas
