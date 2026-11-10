@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.portfolio.ticketing.event.domain.Event;
-import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeCatalogCacheService;
@@ -29,6 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -125,13 +125,7 @@ class RedisOutageIT {
 
               TicketType ticketType =
                   new TicketType(
-                      event,
-                      "General",
-                      new BigDecimal("40.00"),
-                      100,
-                      SALE_START,
-                      SALE_END,
-                      4);
+                      event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
               entityManager.persist(ticketType);
 
               event.publish();
@@ -148,8 +142,7 @@ class RedisOutageIT {
   }
 
   @Test
-  void should_fallBackToPostgresDuringRedisOutageAndRecoverAfterRedisReturns()
-      throws Exception {
+  void should_fallBackToPostgresDuringRedisOutageAndRecoverAfterRedisReturns() throws Exception {
     List<TicketTypeCatalogEntry> expectedCatalog = catalogCacheService.listForEvent(eventId);
     assertThat(expectedCatalog).hasSize(1);
     assertThat(expectedCatalog.getFirst().name()).isEqualTo("General");
@@ -164,18 +157,20 @@ class RedisOutageIT {
             .getResponse()
             .getContentAsString();
 
+    String cacheKey = catalogCacheKey();
+    redisTemplate.delete(cacheKey);
+    assertThat(redisTemplate.hasKey(cacheKey)).isFalse();
+
     pauseRedis();
 
     try {
       long catalogStartedAt = System.nanoTime();
-      List<TicketTypeCatalogEntry> catalogDuringOutage =
-          catalogCacheService.listForEvent(eventId);
+      List<TicketTypeCatalogEntry> catalogDuringOutage = catalogCacheService.listForEvent(eventId);
       long catalogLatencyMillis = elapsedMillis(catalogStartedAt);
 
       assertThat(catalogDuringOutage).isEqualTo(expectedCatalog);
-      log.info(
-          "Redis paused: ticket-type catalog fallback completed in {} ms",
-          catalogLatencyMillis);
+      assertThat(catalogLatencyMillis).isGreaterThanOrEqualTo(400);
+      log.info("Redis paused: ticket-type catalog fallback completed in {} ms", catalogLatencyMillis);
 
       long eventStartedAt = System.nanoTime();
       MvcResult eventDuringOutage =
@@ -189,28 +184,30 @@ class RedisOutageIT {
 
       assertThat(eventDuringOutage.getResponse().getContentAsString())
           .isEqualTo(expectedEventResponse);
-      log.info(
-          "Redis paused: public event GET fallback completed in {} ms", eventLatencyMillis);
+      assertThat(eventLatencyMillis).isGreaterThanOrEqualTo(400);
+      log.info("Redis paused: public event GET fallback completed in {} ms", eventLatencyMillis);
     } finally {
       unpauseRedisIfNecessary();
     }
 
-    String cacheKey = catalogCacheKey();
     await()
         .atMost(Duration.ofSeconds(20))
         .pollInterval(Duration.ofMillis(500))
         .untilAsserted(
             () -> {
+              redisTemplate.delete(cacheKey);
               catalogCacheService.listForEvent(eventId);
               assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
             });
 
-    // Bypass Spring's cache invalidation to distinguish a Redis hit from a fresh PostgreSQL read.
+    // Change PostgreSQL directly: the following read must return the value repopulated in Redis.
     jdbcTemplate.update(
         "UPDATE ticket_types SET name = ? WHERE id = ?", "Database-only change", ticketTypeId);
 
     List<TicketTypeCatalogEntry> recoveredCatalog = catalogCacheService.listForEvent(eventId);
-    assertThat(recoveredCatalog).extracting(TicketTypeCatalogEntry::name).containsExactly("General");
+    assertThat(recoveredCatalog)
+        .extracting(TicketTypeCatalogEntry::name)
+        .containsExactly("General");
 
     String recoveredEventResponse =
         mockMvc
@@ -227,11 +224,9 @@ class RedisOutageIT {
 
   @Test
   void should_useDedicatedRedisContainerInSpringContext() {
-    assertThat(redisConnectionFactory)
-        .isInstanceOf(org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory.class);
-    var lettuceConnectionFactory =
-        (org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory)
-            redisConnectionFactory;
+    assertThat(redisConnectionFactory).isInstanceOf(LettuceConnectionFactory.class);
+    LettuceConnectionFactory lettuceConnectionFactory =
+        (LettuceConnectionFactory) redisConnectionFactory;
 
     assertThat(lettuceConnectionFactory.getPort())
         .isEqualTo(REDIS.getMappedPort(6379))
@@ -240,9 +235,8 @@ class RedisOutageIT {
 
   @Test
   void should_configureShortCommandTimeoutOnLettuceClient() {
-    var lettuceConnectionFactory =
-        (org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory)
-            redisConnectionFactory;
+    LettuceConnectionFactory lettuceConnectionFactory =
+        (LettuceConnectionFactory) redisConnectionFactory;
 
     assertThat(lettuceConnectionFactory.getClientConfiguration().getCommandTimeout())
         .isEqualTo(Duration.ofMillis(500));
