@@ -1,5 +1,6 @@
 package com.portfolio.ticketing.tickettype.service;
 
+import com.portfolio.ticketing.common.config.RedisCacheConfig;
 import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import java.util.List;
@@ -20,7 +21,10 @@ public class TicketTypeCatalogCacheService {
     this.ticketTypeRepository = ticketTypeRepository;
   }
 
-  @Cacheable(cacheNames = CACHE_NAME, key = "#eventId")
+  @Cacheable(
+      cacheNames = CACHE_NAME,
+      key = "#eventId",
+      cacheManager = RedisCacheConfig.CATALOG_READ_CACHE_MANAGER)
   public List<TicketTypeCatalogEntry> listForEvent(UUID eventId) {
     return ticketTypeRepository.findByEventIdOrderByPriceAsc(eventId).stream()
         .map(TicketTypeCatalogEntry::from)

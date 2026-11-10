@@ -17,6 +17,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
@@ -28,6 +29,8 @@ import org.springframework.data.redis.serializer.SerializationException;
 @Configuration
 @EnableCaching
 public class RedisCacheConfig implements CachingConfigurer {
+
+  public static final String CATALOG_READ_CACHE_MANAGER = "catalogReadCacheManager";
 
   private static final Logger log = LoggerFactory.getLogger(RedisCacheConfig.class);
 
@@ -42,8 +45,19 @@ public class RedisCacheConfig implements CachingConfigurer {
   }
 
   @Bean
+  @Primary
   @Override
   public CacheManager cacheManager() {
+    return buildCacheManager(true);
+  }
+
+  // Keep reads inside the cache interceptor so Redis failures reach CacheErrorHandler.
+  @Bean
+  public CacheManager catalogReadCacheManager() {
+    return buildCacheManager(false);
+  }
+
+  private CacheManager buildCacheManager(boolean transactionAware) {
     ObjectMapper objectMapper =
         new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -62,10 +76,12 @@ public class RedisCacheConfig implements CachingConfigurer {
             .serializeValuesWith(
                 RedisSerializationContext.SerializationPair.fromSerializer(serializer));
 
-    return RedisCacheManager.builder(connectionFactory)
-        .cacheDefaults(defaults)
-        .transactionAware()
-        .build();
+    RedisCacheManager.RedisCacheManagerBuilder builder =
+        RedisCacheManager.builder(connectionFactory).cacheDefaults(defaults);
+    if (transactionAware) {
+      builder.transactionAware();
+    }
+    return builder.build();
   }
 
   @Bean
