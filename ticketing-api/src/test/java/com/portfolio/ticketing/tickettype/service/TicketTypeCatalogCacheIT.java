@@ -70,15 +70,26 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
 
   @Test
   void should_serveCachedCatalogAndReloadAfterTtlExpires() throws InterruptedException {
-    assertThat(catalogCacheService.listForEvent(eventId))
-        .extracting(TicketTypeCatalogEntry::name)
-        .containsExactly("General");
+    TicketTypeCatalogEntry expected =
+        new TicketTypeCatalogEntry(
+            ticketTypeId,
+            "General",
+            new BigDecimal("40.00"),
+            TicketType.DEFAULT_CURRENCY,
+            100,
+            SALE_START,
+            SALE_END,
+            4);
+
+    var initialCatalog = catalogCacheService.listForEvent(eventId);
+    assertThat(initialCatalog).hasSize(1);
+    assertThat(initialCatalog.getFirst()).isEqualTo(expected);
 
     jdbcTemplate.update("UPDATE ticket_types SET name = 'Updated' WHERE id = ?", ticketTypeId);
 
-    assertThat(catalogCacheService.listForEvent(eventId))
-        .extracting(TicketTypeCatalogEntry::name)
-        .containsExactly("General");
+    var cachedCatalog = catalogCacheService.listForEvent(eventId);
+    assertThat(cachedCatalog).hasSize(1);
+    assertThat(cachedCatalog.getFirst()).isEqualTo(expected);
 
     Thread.sleep(2500);
 
