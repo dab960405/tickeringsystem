@@ -31,8 +31,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class RedisOutageIT {
 
-  @Container
-  @ServiceConnection
+  @Container @ServiceConnection
   static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(DockerImageName.parse("postgres:17.11-alpine"));
 
