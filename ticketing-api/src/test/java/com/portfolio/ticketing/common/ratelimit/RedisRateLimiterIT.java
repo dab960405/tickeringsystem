@@ -28,7 +28,7 @@ class RedisRateLimiterIT extends AbstractIntegrationTest {
   void should_repairMissingTtl_when_keyAlreadyExists() {
     String subject = "ttl-repair-" + UUID.randomUUID();
     String key = "rate:login:" + subject;
-    redisTemplate.opsForValue().set(key, "4");
+    redisTemplate.opsForValue().set(key, "0");
 
     rateLimiter.check("login", subject);
 
