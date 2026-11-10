@@ -23,6 +23,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.SerializationException;
 
 @Configuration
 @EnableCaching
@@ -96,7 +97,7 @@ public class RedisCacheConfig implements CachingConfigurer {
 
   private static void handleRedisFailure(
       String operation, RuntimeException exception, Cache cache, Object key) {
-    if (exception instanceof DataAccessException) {
+    if (exception instanceof DataAccessException || exception instanceof SerializationException) {
       log.warn(
           "Redis cache {} failed for cache '{}' and key '{}'; continuing without cache",
           operation,
