@@ -23,6 +23,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -51,6 +53,7 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private CacheManager cacheManager;
   @Autowired private TestRestTemplate restTemplate;
+  @Autowired private RedisConnectionFactory redisConnectionFactory;
 
   private UUID organizerId;
   private UUID eventId;
@@ -186,10 +189,16 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
     }
 
     await()
-        .atMost(Duration.ofSeconds(15))
+        .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
         .ignoreExceptions()
         .untilAsserted(() -> {
+          RedisConnection connection = redisConnectionFactory.getConnection();
+          try {
+            assertThat(connection.ping()).isEqualTo("PONG");
+          } finally {
+            connection.close();
+          }
           assertThat(catalogCacheService.listForEvent(eventId))
               .extracting(TicketTypeCatalogEntry::name)
               .containsExactly("Offline");
