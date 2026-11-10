@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.auth.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.portfolio.ticketing.common.ratelimit.RateLimitProperties;
 import java.util.Base64;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -37,7 +38,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(AuthProperties.class)
+@EnableConfigurationProperties({AuthProperties.class, RateLimitProperties.class})
 public class SecurityConfig {
 
   @Bean

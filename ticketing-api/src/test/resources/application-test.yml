@@ -3,13 +3,15 @@ spring:
     locations: classpath:db/migration
 
 ticketing:
+  rate-limits:
+    scopes:
+      login:
+        max-attempts: 5
+        window-seconds: 60
   security:
     jwt:
       secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       access-ttl-minutes: 15
       refresh-ttl-days: 7
-    login:
-      max-attempts: 5
-      window-seconds: 60
   payment:
     webhook-secret: test-webhook-secret-for-integration-tests

@@ -62,14 +62,16 @@ ticketing:
   cache:
     ticket-types:
       ttl: ${TICKET_TYPES_CACHE_TTL:5m}
+  rate-limits:
+    scopes:
+      login:
+        max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+        window-seconds: ${LOGIN_WINDOW_SECONDS:60}
   security:
     jwt:
       secret: ${JWT_SECRET:}
       access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
       refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
-    login:
-      max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
-      window-seconds: ${LOGIN_WINDOW_SECONDS:60}
   reservation:
     ttl-minutes: ${RESERVATION_TTL_MINUTES:10}
   payment:
