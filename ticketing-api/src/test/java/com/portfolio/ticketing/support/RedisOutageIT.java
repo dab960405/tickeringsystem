@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -40,6 +40,10 @@ class RedisOutageIT {
   static final GenericContainer<?> REDIS =
       new GenericContainer<>(DockerImageName.parse("redis:7.4.12-alpine")).withExposedPorts(6379);
 
+  @Autowired private RedisConnectionFactory redisConnectionFactory;
+
+  @Autowired private StringRedisTemplate redisTemplate;
+
   @DynamicPropertySource
   static void redisProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.data.redis.host", REDIS::getHost);
@@ -49,8 +53,7 @@ class RedisOutageIT {
   }
 
   @Test
-  void should_useDedicatedRedisContainerInSpringContext(
-      RedisConnectionFactory redisConnectionFactory) {
+  void should_useDedicatedRedisContainerInSpringContext() {
     assertThat(redisConnectionFactory).isInstanceOf(LettuceConnectionFactory.class);
     LettuceConnectionFactory lettuceConnectionFactory =
         (LettuceConnectionFactory) redisConnectionFactory;
@@ -61,15 +64,16 @@ class RedisOutageIT {
   }
 
   @Test
-  void should_configureShortRedisTimeouts(Environment environment) {
-    assertThat(environment.getProperty("spring.data.redis.timeout", Duration.class))
-        .isEqualTo(Duration.ofMillis(500));
-    assertThat(environment.getProperty("spring.data.redis.connect-timeout", Duration.class))
+  void should_configureShortCommandTimeoutOnLettuceClient() {
+    LettuceConnectionFactory lettuceConnectionFactory =
+        (LettuceConnectionFactory) redisConnectionFactory;
+
+    assertThat(lettuceConnectionFactory.getClientConfiguration().getCommandTimeout())
         .isEqualTo(Duration.ofMillis(500));
   }
 
   @Test
-  void should_roundTripValueThroughContextRedis(StringRedisTemplate redisTemplate) {
+  void should_roundTripValueThroughContextRedis() {
     String key = "ticketing:redis-outage-it:" + UUID.randomUUID();
     try {
       redisTemplate.opsForValue().set(key, "connected");
