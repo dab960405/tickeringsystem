@@ -2,9 +2,15 @@ package com.portfolio.ticketing.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.core.env.Environment;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -38,10 +44,38 @@ class RedisOutageIT {
   static void redisProperties(DynamicPropertyRegistry registry) {
     registry.add("spring.data.redis.host", REDIS::getHost);
     registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+    registry.add("spring.data.redis.timeout", () -> "500ms");
+    registry.add("spring.data.redis.connect-timeout", () -> "500ms");
   }
 
   @Test
-  void should_startDedicatedRedisContainer() {
-    assertThat(REDIS.isRunning()).isTrue();
+  void should_useDedicatedRedisContainerInSpringContext(
+      RedisConnectionFactory redisConnectionFactory) {
+    assertThat(redisConnectionFactory).isInstanceOf(LettuceConnectionFactory.class);
+    LettuceConnectionFactory lettuceConnectionFactory =
+        (LettuceConnectionFactory) redisConnectionFactory;
+
+    assertThat(lettuceConnectionFactory.getPort())
+        .isEqualTo(REDIS.getMappedPort(6379))
+        .isNotEqualTo(AbstractIntegrationTest.REDIS.getMappedPort(6379));
+  }
+
+  @Test
+  void should_configureShortRedisTimeouts(Environment environment) {
+    assertThat(environment.getProperty("spring.data.redis.timeout", Duration.class))
+        .isEqualTo(Duration.ofMillis(500));
+    assertThat(environment.getProperty("spring.data.redis.connect-timeout", Duration.class))
+        .isEqualTo(Duration.ofMillis(500));
+  }
+
+  @Test
+  void should_roundTripValueThroughContextRedis(StringRedisTemplate redisTemplate) {
+    String key = "ticketing:redis-outage-it:" + UUID.randomUUID();
+    try {
+      redisTemplate.opsForValue().set(key, "connected");
+      assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("connected");
+    } finally {
+      redisTemplate.delete(key);
+    }
   }
 }
