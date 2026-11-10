@@ -13,14 +13,9 @@ import org.springframework.validation.annotation.Validated;
 public class AuthProperties {
 
   @Valid private final Jwt jwt = new Jwt();
-  @Valid private final Login login = new Login();
 
   public Jwt getJwt() {
     return jwt;
-  }
-
-  public Login getLogin() {
-    return login;
   }
 
   public static class Jwt {
@@ -68,31 +63,6 @@ public class AuthProperties {
       } catch (IllegalArgumentException exception) {
         return false;
       }
-    }
-  }
-
-  public static class Login {
-
-    @Min(1)
-    private int maxAttempts = 5;
-
-    @Min(1)
-    private long windowSeconds = 60;
-
-    public int getMaxAttempts() {
-      return maxAttempts;
-    }
-
-    public void setMaxAttempts(int maxAttempts) {
-      this.maxAttempts = maxAttempts;
-    }
-
-    public long getWindowSeconds() {
-      return windowSeconds;
-    }
-
-    public void setWindowSeconds(long windowSeconds) {
-      this.windowSeconds = windowSeconds;
     }
   }
 }

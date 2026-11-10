@@ -1,8 +1,6 @@
-package com.portfolio.ticketing.auth.service;
+package com.portfolio.ticketing.common.ratelimit;
 
 import com.portfolio.ticketing.common.exception.RateLimitExceededException;
-import com.portfolio.ticketing.common.ratelimit.RateLimitProperties;
-import com.portfolio.ticketing.common.ratelimit.RateLimiter;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

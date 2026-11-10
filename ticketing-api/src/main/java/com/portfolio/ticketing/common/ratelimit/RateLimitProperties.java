@@ -1,12 +1,20 @@
 package com.portfolio.ticketing.common.ratelimit;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
+@Validated
 @ConfigurationProperties(prefix = "ticketing.rate-limits")
 public class RateLimitProperties {
 
+  @Valid
+  @NotEmpty(message = "At least one rate-limit scope must be configured")
   private Map<String, Policy> scopes = new LinkedHashMap<>();
 
   public Map<String, Policy> getScopes() {
@@ -15,6 +23,11 @@ public class RateLimitProperties {
 
   public void setScopes(Map<String, Policy> scopes) {
     this.scopes = scopes;
+  }
+
+  @AssertTrue(message = "Rate-limit policy 'login' must be configured")
+  public boolean isLoginPolicyConfigured() {
+    return scopes != null && scopes.containsKey("login");
   }
 
   public Policy policyFor(String scope) {
@@ -27,7 +40,10 @@ public class RateLimitProperties {
 
   public static class Policy {
 
+    @Min(value = 1, message = "max-attempts must be greater than or equal to 1")
     private int maxAttempts = 5;
+
+    @Min(value = 1, message = "window-seconds must be greater than or equal to 1")
     private long windowSeconds = 60;
 
     public int getMaxAttempts() {
