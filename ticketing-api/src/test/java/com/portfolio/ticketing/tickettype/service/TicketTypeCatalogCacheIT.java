@@ -183,7 +183,9 @@ class TicketTypeCatalogCacheIT extends AbstractIntegrationTest {
           restTemplate.getForEntity("/api/v1/events/{id}", String.class, eventId);
 
       assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-      assertThat(response.getBody()).contains("\"name\":\"Offline\"");
+      assertThat(catalogCacheService.listForEvent(eventId))
+          .extracting(TicketTypeCatalogEntry::name)
+          .containsExactly("Offline");
     } finally {
       startRedis();
     }
