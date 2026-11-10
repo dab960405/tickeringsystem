@@ -107,33 +107,32 @@ class RedisOutageIT {
             "redis-outage-" + UUID.randomUUID() + "@example.com");
 
     new TransactionTemplate(transactionManager)
-        .executeWithoutResult(
-            status -> {
-              Venue venue = new Venue("Outage Arena", "Popayan", "Main St 1", 500);
-              entityManager.persist(venue);
+        .executeWithoutResult(status -> {
+          Venue venue = new Venue("Outage Arena", "Popayan", "Main St 1", 500);
+          entityManager.persist(venue);
 
-              Event event =
-                  new Event(
-                      organizerId,
-                      venue,
-                      "Redis outage event",
-                      "Event used by the Redis outage integration test",
-                      "MUSIC",
-                      Instant.parse("2030-01-10T20:00:00Z"),
-                      Instant.parse("2030-01-10T23:00:00Z"));
-              entityManager.persist(event);
+          Event event =
+              new Event(
+                  organizerId,
+                  venue,
+                  "Redis outage event",
+                  "Event used by the Redis outage integration test",
+                  "MUSIC",
+                  Instant.parse("2030-01-10T20:00:00Z"),
+                  Instant.parse("2030-01-10T23:00:00Z"));
+          entityManager.persist(event);
 
-              TicketType ticketType =
-                  new TicketType(
-                      event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
-              entityManager.persist(ticketType);
+          TicketType ticketType =
+              new TicketType(
+                  event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
+          entityManager.persist(ticketType);
 
-              event.publish();
-              entityManager.flush();
+          event.publish();
+          entityManager.flush();
 
-              eventId = event.getId();
-              ticketTypeId = ticketType.getId();
-            });
+          eventId = event.getId();
+          ticketTypeId = ticketType.getId();
+        });
   }
 
   @AfterEach
@@ -170,7 +169,8 @@ class RedisOutageIT {
 
       assertThat(catalogDuringOutage).isEqualTo(expectedCatalog);
       assertThat(catalogLatencyMillis).isGreaterThanOrEqualTo(400);
-      log.info("Redis paused: ticket-type catalog fallback completed in {} ms", catalogLatencyMillis);
+      log.info(
+          "Redis paused: ticket-type catalog fallback completed in {} ms", catalogLatencyMillis);
 
       long eventStartedAt = System.nanoTime();
       MvcResult eventDuringOutage =
@@ -193,12 +193,12 @@ class RedisOutageIT {
     await()
         .atMost(Duration.ofSeconds(20))
         .pollInterval(Duration.ofMillis(500))
-        .untilAsserted(
-            () -> {
-              redisTemplate.delete(cacheKey);
-              catalogCacheService.listForEvent(eventId);
-              assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
-            });
+        .ignoreExceptions()
+        .untilAsserted(() -> {
+          redisTemplate.delete(cacheKey);
+          catalogCacheService.listForEvent(eventId);
+          assertThat(redisTemplate.hasKey(cacheKey)).isTrue();
+        });
 
     // Change PostgreSQL directly: the following read must return the value repopulated in Redis.
     jdbcTemplate.update(
