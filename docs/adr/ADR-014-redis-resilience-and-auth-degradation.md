@@ -31,7 +31,7 @@ Se adopta la degradación diferenciada:
 - Redis almacena exclusivamente metadatos serializables del catálogo mediante cache-aside; la disponibilidad de inventario se consulta siempre en PostgreSQL.
 - Los fallos Redis de acceso a datos y serialización en las operaciones de caché se registran y se omiten mediante `CacheErrorHandler`; la lectura continúa contra PostgreSQL.
 - Las invalidaciones fallidas no se reintentan. Una entrada previamente cacheada puede permanecer obsoleta hasta que expire su TTL.
-- El TTL de producción se configura con `TICKET_TYPES_CACHE_TTL` y tiene un valor predeterminado de cinco minutos. El test de invalidación fallida usa un TTL aislado de 20 segundos para verificar la expiración.
+- El TTL de runtime se configura con `TICKET_TYPES_CACHE_TTL` y tiene un valor predeterminado de cinco minutos. La anotación de clase `@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=20s")` de `RedisOutageIT` aplica el TTL de 20 segundos a **todos los tests de esa clase**, no únicamente al test de invalidación fallida; es una configuración aislada de pruebas.
 
 La prueba `should_serveStaleCatalogUntilTtlAfterFailedInvalidation` verifica que, si Redis está pausado durante una actualización, la API actualiza PostgreSQL y responde correctamente, pero la entrada cacheada anterior sigue visible hasta que vence el TTL. Después de la expiración, la lectura devuelve el valor actualizado.
 
@@ -59,8 +59,10 @@ La prueba `should_failClosedForAuthenticationSessionsDuringRedisOutage` cubre el
 ### Timeouts y latencia observada
 
 - La API configura un timeout de comando Redis de 500 ms. En el contexto de `RedisOutageIT`, el timeout de conexión también se fija en 500 ms; `should_configureShortCommandTimeoutOnLettuceClient` verifica el timeout de comando efectivo de Lettuce.
-- En la ejecución de pruebas de indisponibilidad se observaron aproximadamente 1.014 ms para el fallback del catálogo y 1.023 ms para el GET público del evento.
-- Estas latencias reflejan el coste de esperar los timeouts de las operaciones de caché que fallan durante la caída; el fallback mantiene la respuesta funcional, pero no elimina la latencia de espera.
+- En la ejecución de pruebas de indisponibilidad se observaron aproximadamente **1.014 ms para el fallback del catálogo** y **1.023 ms para el GET público del evento**.
+- En ambos flujos, la petición espera aproximadamente **500 ms al intentar leer desde Redis** y otros **500 ms al intentar escribir/actualizar la caché** antes de completar el fallback. La suma observada es aproximadamente 1.014 ms y 1.023 ms, respectivamente; la diferencia restante corresponde a procesamiento y overhead de la petición.
+- Estas latencias reflejan el coste de esperar las operaciones Redis que fallan durante la caída; el fallback mantiene la respuesta funcional, pero no elimina la latencia de espera.
+- Un HTTP 503 causado por timeout no demuestra que Redis no haya aplicado el comando: si el comando alcanzó Redis antes de perderse la respuesta, podría completarse después de que Redis se reanude.
 
 ### Fuente de verdad transaccional
 
@@ -82,9 +84,11 @@ En `RedisOutageIT` se ejecutaron 7 tests, todos correctos. Entre ellos se verifi
 - El fail-open del catálogo solo aplica a los fallos Redis contemplados por el manejador; errores ajenos a acceso/serialización no deben ocultarse.
 - La recuperación de Redis no implica reconstruir o invalidar automáticamente toda entrada obsoleta; la expiración TTL permite recuperar el catálogo.
 
-## Trabajo diferido
+## Trabajo diferido — desviaciones aceptadas respecto a la especificación
 
-1. **Caché de `GET /events/{id}`:** no se incorpora porque la respuesta pública contiene información relacionada con el catálogo y su disponibilidad; se evita ampliar el conjunto de datos cacheados antes de definir una estrategia de consistencia e invalidación específica.
-2. **Claves Redis `reservation:{id}`:** no se incorporan. Las reservas y su estado transaccional permanecen en PostgreSQL; Redis no debe convertirse en una segunda fuente de verdad para el ciclo de vida de una reserva.
-3. **Rate limiting de reservas y órdenes:** permanece fuera del alcance de esta fase. El rate limiting implementado se limita al login; ampliar políticas requiere definir límites, sujetos y respuestas por operación.
+Los tres puntos siguientes son **DESVIACIONES respecto a la especificación original**, en particular sus secciones 9, 10 y 11 y el alcance previsto para la Fase 4. Se aceptan explícitamente para esta fase; no se consideran requisitos implementados ni criterios completados. La decisión limita el alcance para mantener PostgreSQL como fuente de verdad transaccional y evitar introducir nuevas rutas de consistencia distribuida sin una política de invalidación, expiración y recuperación definida.
+
+1. **DESVIACIÓN — Caché de `GET /events/{id}`:** la especificación contempla ampliar la caché a la consulta pública del evento. Se difiere porque esa respuesta combina datos del evento y del catálogo; antes de cachearla se necesita definir una estrategia de consistencia e invalidación que no exponga metadatos obsoletos. En esta fase se limita la caché a metadatos de tipos de entrada.
+2. **DESVIACIÓN — Claves Redis `reservation:{id}`:** la especificación contempla almacenar información de reservas en Redis. Se difiere para no duplicar en Redis el estado transaccional que ya administra PostgreSQL ni crear una segunda fuente de verdad para el ciclo de vida de una reserva. Las reservas continúan persistidas y gobernadas por PostgreSQL.
+3. **DESVIACIÓN — Rate limiting de reservas y órdenes:** la especificación prevé extender la limitación de solicitudes más allá del login. Se difiere porque esta fase implementa únicamente el rate limiting de login; las políticas para reservas y órdenes requieren definir límites, sujetos de aplicación y respuestas específicas por operación.
 

@@ -108,10 +108,6 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Decisión:** aplicar cache-aside sobre records DTO que contienen solo metadatos del tipo de entrada. `availableQuantity` se obtiene siempre desde PostgreSQL mediante una proyección liviana. TTL configurable (`TICKET_TYPES_CACHE_TTL`, por defecto 5 minutos). Las escrituras del catálogo invalidan las entradas y el `RedisCacheManager` es transaccional para diferir la invalidación hasta el commit. Los fallos Redis de tipo `DataAccessException` se registran y se omiten, permitiendo fallback a PostgreSQL.
 - **Consecuencias:** el catálogo reduce lecturas de metadatos sin cachear inventario crítico. La invalidación actual es global para el cache del catálogo porque el servicio de escritura de actualización recibe el ID del tipo y no el ID del evento; se acepta el alcance amplio por simplicidad y corrección. Se requiere validar en CI la serialización, expiración, invalidación y degradación ante indisponibilidad de Redis.
 
-## Pendientes de decidir
-
-- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
-
 ## ADR-014: Resiliencia ante indisponibilidad de Redis y degradación de autenticación
 
 - **Fecha:** 2026-11-10 · **Fase:** 4
@@ -119,4 +115,8 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Límites:** los fallos de invalidación pueden dejar metadatos obsoletos hasta el TTL; durante una caída Redis se omite temporalmente el rate limiting de login, mientras que las operaciones que requieren estado de refresh token no se aceptan.
 - **Evidencia:** run CI #107 en `24d6a514f1f8a4d467b1c457d12a478e24f75c36`: 313 tests unitarios y 57 de integración, sin fallos ni errores. Latencias observadas durante Redis outage: ~1.014 ms para catálogo y ~1.023 ms para GET público de evento.
 - **Documento:** [ADR-014](adr/ADR-014-redis-resilience-and-auth-degradation.md).
+
+## Pendientes de decidir
+
+- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
 

@@ -64,8 +64,10 @@ Content-Type: application/json
 
 ### 6. Webhook de pago
 # Copia el id de la orden en orderId.
-# X-Signature debe ser el HMAC-SHA256 hexadecimal del CUERPO RAW EXACTO enviado.
-# El REST Client de VS Code no calcula esta firma. Consulta docs/LOCAL_RUN.md para generarla.
+# X-Signature debe ser el HMAC-SHA256 hexadecimal del CUERPO RAW EXACTO enviado (bytes idénticos, sin reformatear).
+# El REST Client de VS Code no calcula esta firma. Define PAYLOAD con el JSON exacto del cuerpo y genera la firma:
+# printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
+# Copia el digest hexadecimal como @webhookSignature; si cambia el cuerpo raw, vuelve a firmarlo.
 POST {{baseUrl}}/api/v1/payments/webhook
 X-Signature: {{webhookSignature}}
 Content-Type: application/json
