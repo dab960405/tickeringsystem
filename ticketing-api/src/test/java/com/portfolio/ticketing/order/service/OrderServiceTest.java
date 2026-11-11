@@ -102,6 +102,21 @@ class OrderServiceTest {
   }
 
   @Test
+  void should_rejectAnotherOrder_when_reservationAlreadyHasAnOrder() {
+    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID))
+        .thenReturn(reservation());
+    when(orderRepository.existsByReservationId(RESERVATION_ID)).thenReturn(true);
+
+    assertThatThrownBy(
+            () -> orderService.create(USER_ID, "checkout-456", new OrderRequest(RESERVATION_ID)))
+        .isInstanceOf(DuplicateResourceException.class)
+        .hasMessage("An order already exists for this reservation");
+
+    verify(orderRepository, never()).save(any());
+    verify(paymentService, never()).createPending(any(), any());
+  }
+
+  @Test
   void should_rejectBlankIdempotencyKey_beforeReadingResources() {
     assertThatThrownBy(() -> orderService.create(USER_ID, " ", new OrderRequest(RESERVATION_ID)))
         .isInstanceOf(BusinessRuleViolationException.class);

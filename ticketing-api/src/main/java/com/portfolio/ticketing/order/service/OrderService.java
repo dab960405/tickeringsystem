@@ -51,6 +51,10 @@ public class OrderService {
     }
 
     Reservation reservation = reservationService.findActiveForUser(request.reservationId(), userId);
+    if (orderRepository.existsByReservationId(reservation.getId())) {
+      throw new DuplicateResourceException("An order already exists for this reservation");
+    }
+
     Order order = new Order(userId, reservation.getId(), idempotencyKey);
     order.addItem(
         reservation.getTicketType().getId(),

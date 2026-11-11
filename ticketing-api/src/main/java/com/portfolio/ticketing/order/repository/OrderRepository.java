@@ -13,5 +13,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
   Optional<Order> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 
+  boolean existsByReservationId(UUID reservationId);
+
   Page<Order> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 }

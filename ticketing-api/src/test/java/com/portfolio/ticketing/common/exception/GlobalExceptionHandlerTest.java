@@ -5,8 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.portfolio.ticketing.auth.config.SecurityConfig;
-import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
@@ -19,6 +17,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -56,6 +55,8 @@ class GlobalExceptionHandlerTest {
             "rule", () -> new BusinessRuleViolationException("Rule broken"),
             "denied", () -> new AccessDeniedException("Denied"),
             "token-store", () -> new TokenStoreUnavailableException(new IllegalStateException()),
+            "data-integrity",
+                () -> new DataIntegrityViolationException("Unique constraint violated"),
             "unexpected", () -> new IllegalStateException("secret internal detail"));
 
     @GetMapping("/test/fail/{kind}")
@@ -73,6 +74,7 @@ class GlobalExceptionHandlerTest {
         Arguments.of("stock", 409),
         Arguments.of("transition", 409),
         Arguments.of("duplicate", 409),
+        Arguments.of("data-integrity", 409),
         Arguments.of("rule", 422),
         Arguments.of("denied", 403),
         Arguments.of("unexpected", 500));
