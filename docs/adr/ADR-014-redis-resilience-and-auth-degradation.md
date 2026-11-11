@@ -14,7 +14,7 @@ Redis participa en tres responsabilidades con perfiles de riesgo diferentes:
 
 Una caída de Redis no debe convertir una optimización de lectura en una caída de la API ni permitir que se acepten sesiones cuya revocación no puede comprobarse. La validación de access tokens debe seguir siendo independiente de Redis.
 
-La configuración de la API usa timeouts de comando y conexión de Redis de 500 ms. Las pruebas de integración de indisponibilidad usan un contenedor Redis dedicado, separado del contenedor compartido por el resto de las pruebas, y pausan el contenedor para simular la caída.
+En runtime, `application.yml` configura `spring.data.redis.timeout=500ms` como timeout de comando. El contexto aislado de `RedisOutageIT` configura además `spring.data.redis.connect-timeout=500ms`. Las pruebas de integración de indisponibilidad usan un contenedor Redis dedicado, separado del contenedor compartido por el resto de las pruebas, y pausan el contenedor para simular la caída.
 
 ## Alternativas consideradas
 
@@ -58,7 +58,7 @@ La prueba `should_failClosedForAuthenticationSessionsDuringRedisOutage` cubre el
 
 ### Timeouts y latencia observada
 
-- Los timeouts de comando y conexión configurados para Redis son de 500 ms.
+- La API configura un timeout de comando Redis de 500 ms. En el contexto de `RedisOutageIT`, el timeout de conexión también se fija en 500 ms; `should_configureShortCommandTimeoutOnLettuceClient` verifica el timeout de comando efectivo de Lettuce.
 - En la ejecución de pruebas de indisponibilidad se observaron aproximadamente 1.014 ms para el fallback del catálogo y 1.023 ms para el GET público del evento.
 - Estas latencias reflejan el coste de esperar los timeouts de las operaciones de caché que fallan durante la caída; el fallback mantiene la respuesta funcional, pero no elimina la latencia de espera.
 
@@ -76,7 +76,7 @@ En `RedisOutageIT` se ejecutaron 7 tests, todos correctos. Entre ellos se verifi
 ## Consecuencias y límites
 
 - El catálogo conserva disponibilidad durante una caída de Redis, pero una actualización puede no reflejarse inmediatamente en una entrada cacheada: el límite de obsolescencia está determinado por el TTL restante.
-- Los timeouts de 500 ms limitan la espera por operación Redis, pero una petición que realiza más de una operación cacheada puede acumular latencia.
+- El timeout de comando de 500 ms limita la espera por operación Redis; el timeout de conexión de 500 ms se configura específicamente en el contexto de prueba de indisponibilidad. Una petición que realiza más de una operación cacheada puede acumular latencia.
 - El rate limiting de login queda temporalmente desactivado cuando Redis no está disponible; esto aumenta la exposición a intentos de fuerza bruta durante la incidencia.
 - La autenticación que depende del estado de refresh token queda indisponible con HTTP 503 mientras Redis no pueda responder. Los access tokens ya emitidos continúan siendo validables hasta su expiración.
 - El fail-open del catálogo solo aplica a los fallos Redis contemplados por el manejador; errores ajenos a acceso/serialización no deben ocultarse.
