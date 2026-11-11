@@ -1,0 +1,90 @@
+# Este flujo no se ejecuta en CI
+# Requiere la extensión REST Client de VS Code.
+# Precondición: configura un evento PUBLICADO y un tipo de entrada cuya ventana de venta esté abierta,
+# con inventario disponible. Sustituye eventId y ticketTypeId por sus UUID reales.
+# Ejecuta las solicitudes en orden. Copia accessToken y refreshToken de la respuesta de login.
+# Mantén el access token para las operaciones protegidas; ejecuta logout al final.
+
+@baseUrl = http://localhost:8080
+@email = smoke.user@example.com
+@password = ChangeMe123
+@fullName = Smoke Test User
+@accessToken = REPLACE_WITH_ACCESS_TOKEN
+@refreshToken = REPLACE_WITH_REFRESH_TOKEN
+@eventId = REPLACE_WITH_PUBLISHED_EVENT_UUID
+@ticketTypeId = REPLACE_WITH_TICKET_TYPE_UUID
+@reservationId = REPLACE_WITH_RESERVATION_UUID
+@orderId = REPLACE_WITH_ORDER_UUID
+@webhookSignature = REPLACE_WITH_HMAC_SHA256_HEX
+
+### 1. Registro
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "fullName": "{{fullName}}"
+}
+
+### 2. Login
+# Copia accessToken y refreshToken de la respuesta y actualiza las variables al inicio del archivo.
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 3. Consultar catálogo público del evento
+# Usa un evento publicado. La respuesta incluye ticketTypes y sus IDs.
+GET {{baseUrl}}/api/v1/events/{{eventId}}
+
+### 4. Crear una reserva
+POST {{baseUrl}}/api/v1/reservations
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "ticketTypeId": "{{ticketTypeId}}",
+  "quantity": 1
+}
+
+### 5. Crear una orden con clave de idempotencia
+# Copia el id de la respuesta de reserva en reservationId.
+POST {{baseUrl}}/api/v1/orders
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: smoke-order-0001
+Content-Type: application/json
+
+{
+  "reservationId": "{{reservationId}}"
+}
+
+### 6. Webhook de pago
+# Copia el id de la orden en orderId.
+# X-Signature debe ser el HMAC-SHA256 hexadecimal del CUERPO RAW EXACTO enviado.
+# El REST Client de VS Code no calcula esta firma. Consulta docs/LOCAL_RUN.md para generarla.
+POST {{baseUrl}}/api/v1/payments/webhook
+X-Signature: {{webhookSignature}}
+Content-Type: application/json
+
+{"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001"}
+
+### 7. Refresh del token
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### 8. Logout (último paso)
+# Revoca el refresh token; no ejecutes esta solicitud antes de las operaciones protegidas.
+POST {{baseUrl}}/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
