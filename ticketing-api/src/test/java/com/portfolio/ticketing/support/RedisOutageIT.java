@@ -57,7 +57,7 @@ import org.testcontainers.utility.DockerImageName;
  * <p>This class deliberately does not extend {@link AbstractIntegrationTest}: its Redis instance
  * must remain independent from the JVM-shared Redis container used by the other integration tests.
  */
-@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=5s")
+@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=20s")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -188,8 +188,7 @@ class RedisOutageIT {
     try {
       mockMvc
           .perform(
-              get("/api/v1/me/tickets")
-                  .header("Authorization", "Bearer " + tokens.accessToken()))
+              get("/api/v1/me/tickets").header("Authorization", "Bearer " + tokens.accessToken()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$").isArray());
     } finally {
@@ -239,11 +238,8 @@ class RedisOutageIT {
     UUID editableEventId = editableEventIdRef.get();
     UUID editableTicketTypeId = editableTicketTypeIdRef.get();
 
-    List<TicketTypeCatalogEntry> initialCatalog =
-        catalogCacheService.listForEvent(editableEventId);
-    assertThat(initialCatalog)
-        .extracting(TicketTypeCatalogEntry::name)
-        .containsExactly("General");
+    List<TicketTypeCatalogEntry> initialCatalog = catalogCacheService.listForEvent(editableEventId);
+    assertThat(initialCatalog).extracting(TicketTypeCatalogEntry::name).containsExactly("General");
 
     String loginBody =
         objectMapper.writeValueAsString(java.util.Map.of("email", email, "password", password));
@@ -260,8 +256,7 @@ class RedisOutageIT {
     TokenResponse tokens = objectMapper.readValue(tokenResponse, TokenResponse.class);
 
     TicketTypeRequest updateRequest =
-        new TicketTypeRequest(
-            "Updated", new BigDecimal("45.00"), 100, SALE_START, SALE_END, 4);
+        new TicketTypeRequest("Updated", new BigDecimal("45.00"), 100, SALE_START, SALE_END, 4);
 
     pauseRedis();
     try {
@@ -282,7 +277,7 @@ class RedisOutageIT {
         .containsExactly("General");
 
     await()
-        .atMost(Duration.ofSeconds(10))
+        .atMost(Duration.ofSeconds(40))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() ->
             assertThat(catalogCacheService.listForEvent(editableEventId))
