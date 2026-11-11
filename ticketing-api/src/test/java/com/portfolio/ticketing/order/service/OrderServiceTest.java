@@ -103,8 +103,8 @@ class OrderServiceTest {
 
   @Test
   void should_rejectAnotherOrder_when_reservationAlreadyHasAnOrder() {
-    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID))
-        .thenReturn(reservation());
+    Reservation reservation = reservation();
+    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(orderRepository.existsByReservationId(RESERVATION_ID)).thenReturn(true);
 
     assertThatThrownBy(
