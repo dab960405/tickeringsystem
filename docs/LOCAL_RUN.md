@@ -127,6 +127,19 @@ La documentación OpenAPI está disponible en:
 
 Los timeouts Redis de la API están configurados en `application.yml` a 500 ms para comandos. La prueba específica de indisponibilidad también verifica el timeout de comando de Lettuce y el timeout de conexión de 500 ms configurado en su contexto.
 
+## Firma HMAC del webhook en flow.http
+
+La solicitud `POST /api/v1/payments/webhook` requiere que `X-Signature` contenga el HMAC-SHA256 hexadecimal del cuerpo raw exacto. La extensión REST Client de VS Code **no puede calcular esta firma**; debes generarla fuera del archivo HTTP y copiar el digest hexadecimal en la variable `@webhookSignature` de `docs/flow.http`.
+
+Con `PAYMENT_WEBHOOK_SECRET` exportado desde `.env`, sustituye el UUID de ejemplo por el `orderId` devuelto al crear la orden. El contenido de `PAYLOAD` debe coincidir byte por byte con el cuerpo JSON de la solicitud HTTP (sin espacios adicionales ni salto de línea final):
+
+```bash
+PAYLOAD='{"orderId":"REPLACE_WITH_ORDER_UUID","status":"SUCCEEDED","providerReference":"smoke-provider-0001"}'
+printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
+```
+
+Copia únicamente el valor hexadecimal que aparece después de `(stdin)=` y úsalo como `@webhookSignature`. Si cambias cualquier carácter, espacio, orden de propiedades o salto de línea del cuerpo, vuelve a generar la firma sobre el cuerpo exacto que enviarás. La firma no es el secreto; no publiques `PAYMENT_WEBHOOK_SECRET`.
+
 ## Alcance de verificación
 
 Los comandos anteriores describen el flujo previsto por los archivos de configuración y build del repositorio. **Los pasos con Docker Compose no se verificaron en el entorno de desarrollo asistido**. Verifica el estado real de los contenedores y la respuesta de Actuator en tu equipo antes de considerar operativo el entorno local.
