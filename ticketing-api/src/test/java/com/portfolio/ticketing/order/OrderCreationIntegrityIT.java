@@ -92,8 +92,7 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
   @Test
   void should_neverReturn500_when_sameKeyAndReservationAreCreatedConcurrently() throws Exception {
     OrderFixture fixture = createReservation();
-    List<MvcResult> results =
-        runConcurrently(fixture, "checkout-same-race", "checkout-same-race");
+    List<MvcResult> results = runConcurrently(fixture, "checkout-same-race", "checkout-same-race");
 
     assertThat(statuses(results)).contains(201);
     assertThat(statuses(results))
@@ -219,10 +218,7 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
   }
 
   private int problemStatus(MvcResult result) throws Exception {
-    return objectMapper
-        .readTree(result.getResponse().getContentAsString())
-        .path("status")
-        .asInt();
+    return objectMapper.readTree(result.getResponse().getContentAsString()).path("status").asInt();
   }
 
   private int countOrders(UUID reservationId) {

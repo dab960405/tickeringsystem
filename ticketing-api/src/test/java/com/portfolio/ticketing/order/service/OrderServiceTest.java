@@ -103,7 +103,8 @@ class OrderServiceTest {
 
   @Test
   void should_rejectAnotherOrder_when_reservationAlreadyHasAnOrder() {
-    Reservation reservation = reservation();
+    Reservation reservation = org.mockito.Mockito.mock(Reservation.class);
+    when(reservation.getId()).thenReturn(RESERVATION_ID);
     when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(orderRepository.existsByReservationId(RESERVATION_ID)).thenReturn(true);
 
