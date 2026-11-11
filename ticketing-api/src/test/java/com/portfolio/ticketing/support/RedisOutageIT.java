@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.auth.api.TokenResponse;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
+import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeCatalogCacheService;
 import com.portfolio.ticketing.venue.domain.Venue;
@@ -35,6 +37,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -54,7 +57,7 @@ import org.testcontainers.utility.DockerImageName;
  * <p>This class deliberately does not extend {@link AbstractIntegrationTest}: its Redis instance
  * must remain independent from the JVM-shared Redis container used by the other integration tests.
  */
-@SpringBootTest
+@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=5s")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -88,6 +91,8 @@ class RedisOutageIT {
   @Autowired private MockMvc mockMvc;
 
   @Autowired private ObjectMapper objectMapper;
+
+  @Autowired private PasswordEncoder passwordEncoder;
 
   private UUID eventId;
   private UUID ticketTypeId;
@@ -144,6 +149,145 @@ class RedisOutageIT {
   @AfterEach
   void restoreRedisIfNecessary() {
     unpauseRedisIfNecessary();
+  }
+
+  @Test
+  void should_acceptValidAccessTokenDuringRedisOutage() throws Exception {
+    String email = "redis-access-" + UUID.randomUUID() + "@example.com";
+    String password = "Password123";
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        java.util.Map.of(
+                            "email",
+                            email,
+                            "password",
+                            password,
+                            "fullName",
+                            "Redis Access User"))))
+        .andExpect(status().isCreated());
+
+    String loginBody =
+        objectMapper.writeValueAsString(java.util.Map.of("email", email, "password", password));
+    String tokenResponse =
+        mockMvc
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(loginBody))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    TokenResponse tokens = objectMapper.readValue(tokenResponse, TokenResponse.class);
+
+    pauseRedis();
+    try {
+      mockMvc
+          .perform(
+              get("/api/v1/me/tickets")
+                  .header("Authorization", "Bearer " + tokens.accessToken()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$").isArray());
+    } finally {
+      unpauseRedisIfNecessary();
+    }
+  }
+
+  @Test
+  void should_serveStaleCatalogUntilTtlAfterFailedInvalidation() throws Exception {
+    String email = "redis-cache-organizer-" + UUID.randomUUID() + "@example.com";
+    String password = "Password123";
+    UUID cacheOrganizerId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (email, password_hash, full_name, role) "
+                + "VALUES (?, ?, ?, 'ORGANIZER') RETURNING id",
+            UUID.class,
+            email,
+            passwordEncoder.encode(password),
+            "Redis Cache Organizer");
+
+    java.util.concurrent.atomic.AtomicReference<UUID> editableEventIdRef =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    java.util.concurrent.atomic.AtomicReference<UUID> editableTicketTypeIdRef =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(status -> {
+          Venue venue = new Venue("Editable Outage Arena", "Popayan", "Main St 2", 500);
+          entityManager.persist(venue);
+          Event event =
+              new Event(
+                  cacheOrganizerId,
+                  venue,
+                  "Editable Redis outage event",
+                  "Event used to verify stale catalog after failed invalidation",
+                  "MUSIC",
+                  Instant.parse("2030-01-11T20:00:00Z"),
+                  Instant.parse("2030-01-11T23:00:00Z"));
+          entityManager.persist(event);
+          TicketType ticketType =
+              new TicketType(
+                  event, "General", new BigDecimal("40.00"), 100, SALE_START, SALE_END, 4);
+          entityManager.persist(ticketType);
+          entityManager.flush();
+          editableEventIdRef.set(event.getId());
+          editableTicketTypeIdRef.set(ticketType.getId());
+        });
+    UUID editableEventId = editableEventIdRef.get();
+    UUID editableTicketTypeId = editableTicketTypeIdRef.get();
+
+    List<TicketTypeCatalogEntry> initialCatalog =
+        catalogCacheService.listForEvent(editableEventId);
+    assertThat(initialCatalog)
+        .extracting(TicketTypeCatalogEntry::name)
+        .containsExactly("General");
+
+    String loginBody =
+        objectMapper.writeValueAsString(java.util.Map.of("email", email, "password", password));
+    String tokenResponse =
+        mockMvc
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(loginBody))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    TokenResponse tokens = objectMapper.readValue(tokenResponse, TokenResponse.class);
+
+    TicketTypeRequest updateRequest =
+        new TicketTypeRequest(
+            "Updated", new BigDecimal("45.00"), 100, SALE_START, SALE_END, 4);
+
+    pauseRedis();
+    try {
+      mockMvc
+          .perform(
+              put("/api/v1/ticket-types/{id}", editableTicketTypeId)
+                  .header("Authorization", "Bearer " + tokens.accessToken())
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(objectMapper.writeValueAsString(updateRequest)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.name").value("Updated"));
+    } finally {
+      unpauseRedisIfNecessary();
+    }
+
+    assertThat(catalogCacheService.listForEvent(editableEventId))
+        .extracting(TicketTypeCatalogEntry::name)
+        .containsExactly("General");
+
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .pollInterval(Duration.ofMillis(100))
+        .untilAsserted(() ->
+            assertThat(catalogCacheService.listForEvent(editableEventId))
+                .extracting(TicketTypeCatalogEntry::name)
+                .containsExactly("Updated"));
   }
 
   @Test
