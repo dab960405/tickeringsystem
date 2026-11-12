@@ -60,7 +60,7 @@ flowchart TB
 | `ticketing-api.event` | Ciclo de vida de eventos, organizador, fechas y recinto. |
 | `ticketing-api.tickettype` | Tipos de entrada, ventana de venta y operaciones atómicas sobre inventario. |
 | `ticketing-api.reservation` | Crear/cancelar reservas, TTL, confirmación durante el pago y expiración por lotes. |
-| `ticketing-api.order` | Idempotencia de creación, snapshot de precio, estado de orden, cancelación y emisión/consulta de tickets. |
+| `ticketing-api.order` | Creación idempotente, unicidad de orden por reserva, snapshot de precio, estado de orden, cancelación y emisión/consulta de tickets. |
 | `ticketing-api.payment` | Registro de pago y recepción de webhook autenticado mediante HMAC-SHA256. |
 | `notification-service` | Aplicación separada prevista para consumir eventos y gestionar notificaciones; integración Kafka pendiente de Fase 5. |
 
@@ -85,8 +85,10 @@ sequenceDiagram
         U->>API: Crear orden + Idempotency-Key
         API->>DB: Buscar (user_id, idempotency_key)
         alt Clave nueva
+            API->>API: OrderService.create verifica orden previa por reservation_id
             API->>DB: Validar reserva activa
             API->>DB: INSERT order + order_item (precio snapshot)
+            Note over API,DB: V11 impone UNIQUE(reservation_id), incluso para órdenes CANCELLED
             API->>DB: INSERT payment PENDING
             API-->>U: Orden pendiente de pago
             U->>GW: Completar pago (flujo simulado)
@@ -106,6 +108,8 @@ sequenceDiagram
             API-->>U: Devolver orden existente
         else Misma clave y reserva diferente
             API-->>U: Conflicto (409)
+        else Ya existe una orden para la reserva
+            API-->>U: Conflicto (409); crear una reserva nueva para otra compra
         end
     else Stock insuficiente
         API-->>U: Conflicto de inventario
@@ -116,7 +120,7 @@ sequenceDiagram
 
 1. **Reserva de inventario:** `TicketTypeRepository.reserveStock` ejecuta un único `UPDATE ticket_types` con predicado `available_quantity >= :quantity`. La base de datos serializa las escrituras concurrentes sobre la fila y el número de filas afectadas determina el resultado. No se hace primero un SELECT de stock para luego descontarlo.
 2. **Ventana de reserva:** la reserva guarda `expires_at` calculado con el TTL configurable. El job de expiración reclama lotes con `FOR UPDATE SKIP LOCKED`; dentro de la misma transacción cambia el estado y devuelve inventario solo si la transición condicional actualizó una fila.
-3. **Orden:** el precio unitario se copia a `order_items`; una modificación posterior del catálogo no cambia el importe de la orden ya creada. `(user_id, idempotency_key)` tiene una restricción única en PostgreSQL.
+3. **Orden:** el precio unitario se copia a `order_items`; una modificación posterior del catálogo no cambia el importe de la orden ya creada. `(user_id, idempotency_key)` tiene una restricción única en PostgreSQL. Adicionalmente, `OrderService.create` rechaza una orden previa para la reserva y V11 impone el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`. La restricción incluye órdenes canceladas; una reserva con orden cancelada no se reutiliza y una nueva compra requiere otra reserva. Las colisiones de integridad correspondientes se traducen a HTTP `409 Conflict`.
 4. **Pago:** el webhook verifica HMAC-SHA256 sobre el cuerpo recibido antes de procesar la transición. La orden y el pago se actualizan en una transacción; un pago exitoso confirma la reserva y emite un ticket por unidad del detalle.
 5. **Outbox y notificaciones:** la tabla `outbox_events` ya existe en el esquema, pero la escritura/publicación de eventos, Kafka y el consumidor `notification-service` aún no forman parte del flujo activo. Se implementarán en la Fase 5.
 
@@ -129,4 +133,5 @@ El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directament
 - El proveedor de pago es simulado; no hay integración con un gateway externo real.
 - La idempotencia de webhook se basa en las transiciones de estado y en `provider_reference`; todavía no existe una tabla de inbox/event IDs del proveedor.
 - La publicación del outbox y el flujo Kafka → notificaciones están pendientes de Fase 5.
+- El ciclo completo de cancelación de eventos y sus efectos sobre reservas, órdenes, pagos y tickets requiere hardening; no se debe inferir que está implementado por existir el ciclo de estados de cada entidad.
 - Los tests `*IT` que necesitan PostgreSQL/Redis mediante Testcontainers deben ejecutarse en un entorno con Docker. La documentación no sustituye esa verificación.

@@ -119,11 +119,10 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 ## ADR-015: Una orden por reserva
 
 - **Fecha:** 2026-11-12 · **Fase:** 3
-- **Decisión:** impedir más de una orden por reserva mediante el guard de `OrderService.create` y el índice único `ux_orders_reservation_id` de V11. Las colisiones de integridad se responden como HTTP 409.
-- **Consecuencia:** la unicidad incluye órdenes canceladas; una reserva liberada por `cancelPending` no se reutiliza.
+- **Decisión:** impedir más de una orden por reserva mediante el guard de `OrderService.create` y el índice único no parcial `ux_orders_reservation_id` de V11 sobre `orders(reservation_id)`. PostgreSQL aplica la unicidad también a órdenes canceladas; los conflictos de integridad correspondientes se responden como HTTP `409 Conflict`.
+- **Consecuencia:** una reserva solo puede originar cero o una orden. Una reserva asociada a una orden cancelada no se reutiliza; para una compra posterior se debe crear otra reserva.
 - **Documento:** [ADR-015](adr/ADR-015-one-order-per-reservation.md).
 
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
-

@@ -1,6 +1,6 @@
 # Modelo de datos (ERD)
 
-Fuente de verdad: migraciones Flyway `V1__create_users.sql` a `V10__create_outbox_events.sql` en `ticketing-api/src/main/resources/db/migration/`. Este diagrama refleja el esquema SQL, no un modelo conceptual futuro.
+Fuente de verdad: migraciones Flyway `V1__create_users.sql` a `V11__one_order_per_reservation.sql` en `ticketing-api/src/main/resources/db/migration/`. Este diagrama refleja el esquema SQL, no un modelo conceptual futuro.
 
 ```mermaid
 erDiagram
@@ -64,7 +64,7 @@ erDiagram
     ORDERS {
         UUID id PK
         UUID user_id FK
-        UUID reservation_id FK
+        UUID reservation_id FK_UK
         VARCHAR status
         NUMERIC total_amount
         CHAR currency
@@ -117,7 +117,7 @@ erDiagram
     USERS ||--o{ RESERVATIONS : creates
     TICKET_TYPES ||--o{ RESERVATIONS : reserved_as
     USERS ||--o{ ORDERS : places
-    RESERVATIONS ||--o{ ORDERS : originates
+    RESERVATIONS ||--o| ORDERS : originates
     ORDERS ||--|{ ORDER_ITEMS : contains
     TICKET_TYPES ||--o{ ORDER_ITEMS : prices
     ORDER_ITEMS ||--o{ TICKETS : issues
@@ -129,7 +129,8 @@ erDiagram
 - **Identidad:** `users.email` es único y debe almacenarse en minúsculas. Los roles permitidos son `USER`, `ORGANIZER` y `ADMIN`.
 - **Catálogo:** un evento pertenece a un organizador y a un recinto. Un tipo de entrada pertenece a un evento; `(event_id, name)` es único. `available_quantity` debe permanecer entre cero y `total_quantity`.
 - **Reserva:** cada reserva pertenece a un usuario y a un tipo de entrada. `quantity > 0`; los estados persistidos son `ACTIVE`, `CONFIRMED`, `EXPIRED` y `CANCELLED`. El índice parcial `ix_reservations_active_expires_at` acelera el barrido de reservas activas vencidas.
-- **Orden:** pertenece a un usuario y referencia la reserva que la originó. La idempotencia se limita por usuario mediante `UNIQUE(user_id, idempotency_key)`. El total no puede ser negativo.
+- **Orden:** cada orden pertenece a un usuario y referencia exactamente una reserva. `UNIQUE(user_id, idempotency_key)` limita la idempotencia por usuario. V11 crea el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`: una reserva puede tener cero o una orden. La restricción incluye órdenes canceladas; una reserva cuya orden fue cancelada no puede reutilizarse y requiere crear una reserva nueva.
+- **Creación de orden:** `OrderService.create` comprueba si existe una orden para la reserva antes de insertar. PostgreSQL protege la misma regla ante solicitudes concurrentes mediante el índice único; los conflictos de integridad se traducen a HTTP `409 Conflict`.
 - **Detalle y tickets:** cada `order_item` conserva cantidad, precio unitario y moneda al momento de la compra. Cada ticket pertenece a un detalle y su código es único.
 - **Pago:** `UNIQUE(order_id)` impone como máximo un pago por orden; `provider_reference` también es única (PostgreSQL permite múltiples valores NULL en esta restricción).
 - **Outbox:** `aggregate_id` es deliberadamente polimórfico y no tiene FK a una tabla concreta. El índice parcial `ix_outbox_events_unpublished` cubre filas cuyo `published_at` aún es NULL. La tabla está creada; el publicador y el consumo Kafka corresponden a la Fase 5.
@@ -148,3 +149,4 @@ erDiagram
 | V8 | `tickets` | tickets emitidos y código único |
 | V9 | `payments` | pago 1:1 con orden y referencia única |
 | V10 | `outbox_events` | registro durable para futura publicación asíncrona |
+| V11 | `orders` | índice único no parcial `ux_orders_reservation_id`; máximo una orden por reserva, incluso cancelada |
