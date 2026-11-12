@@ -114,10 +114,12 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Próximos pasos
 
-1. Revisar esta evidencia y confirmar explícitamente el cierre de Fase 4.
-2. Ejecutar el hardening pendiente del ciclo de cancelación de eventos bajo una tarea autorizada independiente.
-3. No iniciar Fase 5 hasta recibir confirmación del cierre de Fase 4.
-4. Mantener los demás diferidos visibles en el backlog.
+1. Ejecutar el hardening pendiente del ciclo de cancelación de eventos bajo una tarea autorizada independiente. Esta actualización documental no autoriza ni ejecuta esa implementación.
+2. Verificar los criterios de aceptación pendientes de las fases anteriores.
+3. Realizar la revisión formal de cierre de Fase 4.
+4. Esperar la confirmación explícita del cierre de Fase 4.
+5. No iniciar Fase 5 antes de completar y autorizar el cierre de Fase 4.
+6. Mantener los demás diferidos visibles en el backlog.
 
 ## Comandos de referencia
 

@@ -105,7 +105,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting.
-- [x] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets. **Pendiente:** hardening del ciclo de cancelación de eventos.
+- [ ] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets implementado. **Fase pendiente de completar:** ejecutar y verificar el hardening del ciclo de cancelación de eventos.
 - [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
