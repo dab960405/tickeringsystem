@@ -20,7 +20,7 @@ La restricción única es la última línea de defensa ante dos solicitudes conc
 
 ### Carrera concurrente con la misma clave y reserva
 
-En la carrera simultánea con la misma `Idempotency-Key` y la misma reserva, la evidencia del run #116 sugiere que una de las peticiones recibe `409` por la violación de `uq_orders_user_idempotency_key`, en lugar del `200` de reproducción. Esta conclusión se infiere del log de PostgreSQL (que registra la violación de unicidad); los códigos HTTP individuales de ambas peticiones no quedan registrados, por lo que no puede afirmarse que el log confirme directamente el `409`. El test de concurrencia acepta explícitamente `200` o `409` para esa petición concurrente. El cliente puede reintentar y obtener `200`; un reintento posterior a la finalización de la primera petición sí devuelve `200` de reproducción.
+En la carrera simultánea con la misma `Idempotency-Key` y la misma reserva, la evidencia del run #116 sugiere que una de las peticiones recibe `409` por la violación de `uq_orders_user_idempotency_key`, en lugar del `200` de reproducción. Esta conclusión se infiere del log del job de CI (que registra la violación de unicidad); los códigos HTTP individuales de ambas peticiones no quedan registrados, por lo que no puede afirmarse que el log confirme directamente el `409`. El test de concurrencia acepta explícitamente `200` o `409` para esa petición concurrente. El cliente puede reintentar y obtener `200`; un reintento posterior a la finalización de la primera petición sí devuelve `200` de reproducción.
 
 ## Decisión: webhooks de pago
 

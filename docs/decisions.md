@@ -116,6 +116,13 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Evidencia:** run CI #107 en `24d6a514f1f8a4d467b1c457d12a478e24f75c36`: 313 tests unitarios y 57 de integración, sin fallos ni errores. Latencias observadas durante Redis outage: ~1.014 ms para catálogo y ~1.023 ms para GET público de evento.
 - **Documento:** [ADR-014](adr/ADR-014-redis-resilience-and-auth-degradation.md).
 
+## ADR-015: Una orden por reserva
+
+- **Fecha:** 2026-11-12 · **Fase:** 3
+- **Decisión:** impedir más de una orden por reserva mediante el guard de `OrderService.create` y el índice único `ux_orders_reservation_id` de V11. Las colisiones de integridad se responden como HTTP 409.
+- **Consecuencia:** la unicidad incluye órdenes canceladas; una reserva liberada por `cancelPending` no se reutiliza.
+- **Documento:** [ADR-015](adr/ADR-015-one-order-per-reservation.md).
+
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
