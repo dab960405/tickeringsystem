@@ -129,8 +129,8 @@ class ReservationPaymentServiceTest {
   }
 
   private void stubLockedReservation(Reservation reservation) {
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
     lenient().when(reservationRepository.databaseNow()).thenReturn(NOW);

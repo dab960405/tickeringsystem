@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.reservation.domain.Reservation;
+import com.portfolio.ticketing.reservation.repository.ReservationExpirationCandidate;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
@@ -93,7 +94,10 @@ class ReservationExpirationServiceTest {
   }
 
   private void stubCandidates(Reservation reservation) {
-    when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of(reservation));
+    ReservationExpirationCandidate candidate = mock(ReservationExpirationCandidate.class);
+    when(candidate.getId()).thenReturn(RESERVATION_ID);
+    when(candidate.getTicketTypeId()).thenReturn(TICKET_TYPE_ID);
+    when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of(candidate));
     when(reservationRepository.findAllByIdForUpdate(List.of(RESERVATION_ID)))
         .thenReturn(List.of(reservation));
     when(reservationRepository.databaseNow()).thenReturn(NOW);

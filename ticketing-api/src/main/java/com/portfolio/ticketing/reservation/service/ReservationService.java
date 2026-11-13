@@ -58,8 +58,7 @@ public class ReservationService {
 
   @PreAuthorize("hasRole('USER')")
   public void cancel(UUID id, UUID userId) {
-    Reservation discovered = findOwned(id, userId);
-    UUID ticketTypeId = discovered.getTicketType().getId();
+    UUID ticketTypeId = discoverTicketTypeId(id, userId);
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
@@ -90,8 +89,7 @@ public class ReservationService {
 
   @Transactional
   public ReservationConfirmationResult confirmForPayment(UUID id, UUID userId) {
-    Reservation discovered = findOwned(id, userId);
-    UUID ticketTypeId = discovered.getTicketType().getId();
+    UUID ticketTypeId = discoverTicketTypeId(id, userId);
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
@@ -130,8 +128,7 @@ public class ReservationService {
 
   @Transactional
   public void releaseForPayment(UUID id, UUID userId) {
-    Reservation discovered = findOwned(id, userId);
-    UUID ticketTypeId = discovered.getTicketType().getId();
+    UUID ticketTypeId = discoverTicketTypeId(id, userId);
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
@@ -166,6 +163,12 @@ public class ReservationService {
     if (!reservation.getTicketType().getId().equals(expectedTicketTypeId)) {
       throw new BusinessRuleViolationException("Reservation inventory relationship changed");
     }
+  }
+
+  private UUID discoverTicketTypeId(UUID id, UUID userId) {
+    return reservationRepository
+        .findTicketTypeIdByIdAndUserId(id, userId)
+        .orElseThrow(() -> new ResourceNotFoundException("Reservation " + id + " not found"));
   }
 
   private Reservation findOwned(UUID id, UUID userId) {

@@ -16,16 +16,22 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
   Optional<Reservation> findByIdAndUserId(UUID id, UUID userId);
 
   @Query(
+      value = "SELECT ticket_type_id FROM reservations WHERE id = :id AND user_id = :userId",
+      nativeQuery = true)
+  Optional<UUID> findTicketTypeIdByIdAndUserId(@Param("id") UUID id, @Param("userId") UUID userId);
+
+  @Query(
       value =
           """
-          SELECT * FROM reservations
+          SELECT id, ticket_type_id AS ticketTypeId FROM reservations
           WHERE status = 'ACTIVE' AND inventory_disposition = 'HELD'
             AND expires_at <= :now
           ORDER BY expires_at, id
           LIMIT :limit
           """,
       nativeQuery = true)
-  List<Reservation> findExpiredCandidates(@Param("now") Instant now, @Param("limit") int limit);
+  List<ReservationExpirationCandidate> findExpiredCandidates(
+      @Param("now") Instant now, @Param("limit") int limit);
 
   @Query(
       value =

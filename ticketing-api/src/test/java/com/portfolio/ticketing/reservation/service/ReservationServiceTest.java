@@ -128,8 +128,8 @@ class ReservationServiceTest {
   @Test
   void should_releaseStock_when_ownerCancelsActiveReservation() {
     Reservation reservation = activeReservation();
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
     when(reservationRepository.cancelActive(RESERVATION_ID, USER_ID)).thenReturn(1);
@@ -141,7 +141,7 @@ class ReservationServiceTest {
 
   @Test
   void should_returnNotFound_when_reservationBelongsToAnotherUser() {
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
+    when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> reservationService.cancel(RESERVATION_ID, USER_ID))
@@ -153,8 +153,8 @@ class ReservationServiceTest {
   void should_rejectCancellation_when_reservationIsTerminal() {
     Reservation reservation = activeReservation();
     reservation.cancel();
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
 
