@@ -76,8 +76,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Test
   void should_issueTicketsExactlyOnce_when_successfulWebhookIsRepeated() {
     OrderFixture fixture = createOrder(2);
-    PaymentWebhookRequest webhook =
-        new PaymentWebhookRequest(fixture.orderId(), PaymentStatus.SUCCEEDED, "provider-success");
+    PaymentWebhookRequest webhook = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-success");
 
     orderPaymentService.process(webhook);
     orderPaymentService.process(webhook);
@@ -89,8 +88,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Test
   void should_releaseStockExactlyOnce_when_failedWebhookIsRepeated() {
     OrderFixture fixture = createOrder(1);
-    PaymentWebhookRequest webhook =
-        new PaymentWebhookRequest(fixture.orderId(), PaymentStatus.FAILED, null);
+    PaymentWebhookRequest webhook = webhook(fixture, PaymentStatus.FAILED, null);
 
     orderPaymentService.process(webhook);
     orderPaymentService.process(webhook);
@@ -100,7 +98,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_refundWithoutTickets_when_expiredReservationHasNoReplacementStock() {
+  void should_requireRefundWithoutTicketsOrRefundEvidence_when_expiredStockIsUnavailable() {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
         "UPDATE reservations SET expires_at = ? WHERE id = ?",
@@ -114,11 +112,14 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
             reservationService.create(
                 otherUserId, new ReservationRequest(fixture.ticketTypeId(), 1)));
 
-    orderPaymentService.process(
-        new PaymentWebhookRequest(fixture.orderId(), PaymentStatus.SUCCEEDED, "provider-late"));
+    orderPaymentService.process(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-late"));
 
     assertThat(paymentFlowResult(fixture))
-        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "EXPIRED", 0, 0));
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "EXPIRED", 0, 0));
+    assertThat(queryString("SELECT fulfillment_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("UNFULFILLABLE");
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUIRED");
   }
 
   @Test
@@ -134,14 +135,20 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_cancelTicketsAndRefundPayment_when_paidOrderIsCancelledBeforeEvent() {
+  void should_confirmRefundAndCancelTicketsOnlyAfterProviderEvidence() {
     OrderFixture fixture = createOrder(1);
-    orderPaymentService.process(
-        new PaymentWebhookRequest(fixture.orderId(), PaymentStatus.SUCCEEDED, "provider-refund"));
+    orderPaymentService.process(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture"));
 
     asUser(
         fixture.userId(),
         () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUESTED");
+
+    orderPaymentService.process(refundWebhook(fixture, PaymentStatus.REFUNDED, "provider-refund"));
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
@@ -151,6 +158,34 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
                     + " WHERE oi.order_id = ?",
                 fixture.orderId()))
         .isEqualTo("CANCELLED");
+  }
+
+  private static PaymentWebhookRequest webhook(
+      OrderFixture fixture, PaymentStatus status, String providerReference) {
+    return new PaymentWebhookRequest(
+        fixture.orderId(),
+        status,
+        providerReference,
+        UUID.randomUUID(),
+        "operation-" + UUID.randomUUID(),
+        status == PaymentStatus.SUCCEEDED
+            ? com.portfolio.ticketing.payment.domain.ProviderOperationKind.PAYMENT_CAPTURE
+            : com.portfolio.ticketing.payment.domain.ProviderOperationKind.PAYMENT_FAILURE,
+        new BigDecimal("40.00"),
+        "USD");
+  }
+
+  private static PaymentWebhookRequest refundWebhook(
+      OrderFixture fixture, PaymentStatus status, String providerReference) {
+    return new PaymentWebhookRequest(
+        fixture.orderId(),
+        status,
+        providerReference,
+        UUID.randomUUID(),
+        "refund-operation-" + UUID.randomUUID(),
+        com.portfolio.ticketing.payment.domain.ProviderOperationKind.PAYMENT_REFUND,
+        new BigDecimal("40.00"),
+        "USD");
   }
 
   private OrderFixture createOrder(int stock) {

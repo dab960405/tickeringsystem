@@ -14,7 +14,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.portfolio.ticketing.auth.config.SecurityConfig;
 import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.order.domain.FulfillmentStatus;
 import com.portfolio.ticketing.order.domain.OrderStatus;
+import com.portfolio.ticketing.order.domain.RefundStatus;
 import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderService;
@@ -64,6 +66,8 @@ class OrderControllerTest {
         ORDER_ID,
         RESERVATION_ID,
         OrderStatus.PENDING_PAYMENT,
+        FulfillmentStatus.PENDING,
+        RefundStatus.NONE,
         new BigDecimal("80.00"),
         "USD",
         List.of(

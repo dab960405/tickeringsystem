@@ -14,7 +14,7 @@
 
 Cada tabla tiene una restricción única correspondiente. Un evento referencia su operación; una aplicación referencia la operación y conserva `payload_digest` SHA-256. La recepción, la ejecución técnica y la aplicación semántica tienen evidencias separadas.
 
-Para el proveedor simulado, `provider_code=SIMULATED`, `merchant_account_id=default` e `identity_namespace=payments.v1` son configurables. El contrato del webhook exige `providerEventId`, `providerOperationId`, `providerReference`, importe y moneda para evidencia financiera. La firma HMAC autentica el cuerpo, pero no sustituye ninguna de estas identidades.
+Para el proveedor simulado, `provider_code=SIMULATED`, `merchant_account_id=default` e `identity_namespace=payments.v1` son configurables. El contrato del webhook exige `providerEventId`, `providerOperationId`, `operationKind`, `providerReference`, importe y moneda para evidencia financiera. La firma HMAC autentica el cuerpo, pero no sustituye ninguna de estas identidades. `PAYMENT_REFUND` admite `REFUNDED` para confirmar, `FAILED` para registrar el fallo y `PENDING` para dejar la operación en conciliación; ninguno de los dos últimos estados cambia el pago a `REFUNDED`.
 
 ## Catálogo y digest
 

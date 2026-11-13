@@ -105,6 +105,9 @@ public class ReservationService {
       confirmActive(id, userId, evaluationTime);
       return ReservationConfirmationResult.CONFIRMED;
     }
+    if (reservation.getStatus() == ReservationStatus.CANCELLED) {
+      return ReservationConfirmationResult.RECOVERY_NOT_ALLOWED;
+    }
     boolean requiresRecovery =
         reservation.getStatus() == ReservationStatus.EXPIRED
             && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED;
@@ -116,6 +119,9 @@ public class ReservationService {
     if (!requiresRecovery) {
       throw new InvalidStateTransitionException(
           "Reservation cannot be confirmed from " + reservation.getStatus());
+    }
+    if (!canRecover(reservation, evaluationTime)) {
+      return ReservationConfirmationResult.RECOVERY_NOT_ALLOWED;
     }
     if (!inventoryService.tryReserve(ticketTypeId, reservation.getQuantity())) {
       return ReservationConfirmationResult.OUT_OF_STOCK;
@@ -144,6 +150,12 @@ public class ReservationService {
     if (reservationRepository.cancelActive(id, userId) == 1) {
       inventoryService.release(ticketTypeId, reservation.getQuantity());
     }
+  }
+
+  private boolean canRecover(Reservation reservation, Instant evaluationTime) {
+    Instant recoveryDeadline = reservation.getExpiresAt().plus(properties.getRecoveryGrace());
+    Instant eventStartsAt = reservation.getTicketType().getEvent().getStartsAt();
+    return !evaluationTime.isAfter(recoveryDeadline) && eventStartsAt.isAfter(evaluationTime);
   }
 
   private void confirmActive(UUID id, UUID userId, Instant evaluationTime) {

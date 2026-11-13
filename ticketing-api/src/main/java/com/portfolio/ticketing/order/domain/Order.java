@@ -2,6 +2,7 @@ package com.portfolio.ticketing.order.domain;
 
 import com.portfolio.ticketing.common.domain.BaseEntity;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
+import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,6 +45,14 @@ public class Order extends BaseEntity {
   @Column(name = "idempotency_key", nullable = false, updatable = false, length = 100)
   private String idempotencyKey;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "fulfillment_status", nullable = false, length = 30)
+  private FulfillmentStatus fulfillmentStatus;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "refund_status", nullable = false, length = 30)
+  private RefundStatus refundStatus;
+
   @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<OrderItem> items = new ArrayList<>();
 
@@ -54,6 +63,8 @@ public class Order extends BaseEntity {
     this.reservationId = Objects.requireNonNull(reservationId, "reservationId");
     this.idempotencyKey = validateIdempotencyKey(idempotencyKey);
     this.status = OrderStatus.PENDING_PAYMENT;
+    this.fulfillmentStatus = FulfillmentStatus.PENDING;
+    this.refundStatus = RefundStatus.NONE;
     this.totalAmount = BigDecimal.ZERO.setScale(2);
     this.currency = DEFAULT_CURRENCY;
   }
@@ -80,12 +91,63 @@ public class Order extends BaseEntity {
     transitionTo(OrderStatus.EXPIRED);
   }
 
-  public void refund() {
-    transitionTo(OrderStatus.REFUNDED);
+  public void markFulfilled() {
+    if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.PENDING) {
+      throw new InvalidStateTransitionException("Only a pending paid order can be fulfilled");
+    }
+    fulfillmentStatus = FulfillmentStatus.FULFILLED;
+  }
+
+  public void markUnfulfillable() {
+    if (fulfillmentStatus == FulfillmentStatus.FULFILLED
+        || refundStatus == RefundStatus.CONFIRMED) {
+      throw new InvalidStateTransitionException("A fulfilled or refunded order is final");
+    }
+    fulfillmentStatus = FulfillmentStatus.UNFULFILLABLE;
+    refundStatus = RefundStatus.REQUIRED;
+  }
+
+  public void requestRefund() {
+    if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.FULFILLED) {
+      throw new InvalidStateTransitionException("Only a fulfilled paid order can request a refund");
+    }
+    if (refundStatus == RefundStatus.CONFIRMED) {
+      throw new InvalidStateTransitionException("Refund is already confirmed");
+    }
+    refundStatus = RefundStatus.REQUESTED;
+  }
+
+  public void confirmRefund() {
+    if ((status != OrderStatus.PAID && status != OrderStatus.CANCELLED)
+        || refundStatus == RefundStatus.CONFIRMED) {
+      throw new InvalidStateTransitionException("Order cannot confirm this refund");
+    }
+    refundStatus = RefundStatus.CONFIRMED;
+    if (status == OrderStatus.PAID) {
+      transitionTo(OrderStatus.REFUNDED);
+    }
+  }
+
+  public void markRefundFailed() {
+    requireRefundableOrder();
+    refundStatus = RefundStatus.FAILED;
+  }
+
+  public void markRefundPendingReconciliation() {
+    requireRefundableOrder();
+    refundStatus = RefundStatus.PENDING_RECONCILIATION;
   }
 
   public boolean isOwnedBy(UUID userId) {
     return this.userId.equals(userId);
+  }
+
+  private void requireRefundableOrder() {
+    if ((status != OrderStatus.PAID && status != OrderStatus.CANCELLED)
+        || refundStatus == RefundStatus.NONE
+        || refundStatus == RefundStatus.CONFIRMED) {
+      throw new InvalidStateTransitionException("Order has no refundable operation in progress");
+    }
   }
 
   private void transitionTo(OrderStatus target) {
@@ -110,6 +172,14 @@ public class Order extends BaseEntity {
 
   public OrderStatus getStatus() {
     return status;
+  }
+
+  public FulfillmentStatus getFulfillmentStatus() {
+    return fulfillmentStatus;
+  }
+
+  public RefundStatus getRefundStatus() {
+    return refundStatus;
   }
 
   public BigDecimal getTotalAmount() {

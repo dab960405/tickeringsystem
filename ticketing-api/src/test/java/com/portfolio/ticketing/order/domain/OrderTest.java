@@ -57,9 +57,12 @@ class OrderTest {
     Order order = newOrder();
 
     order.markPaid();
-    order.refund();
+    order.markFulfilled();
+    order.requestRefund();
+    order.confirmRefund();
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+    assertThat(order.getRefundStatus()).isEqualTo(RefundStatus.CONFIRMED);
   }
 
   @Test

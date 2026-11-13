@@ -26,9 +26,10 @@ En la carrera simultánea con la misma `Idempotency-Key` y la misma reserva, la 
 
 - El endpoint exige `X-Signature`, calculada como HMAC-SHA256 hexadecimal del **cuerpo HTTP original** con el secreto compartido.
 - La firma se compara en tiempo constante. Un cuerpo alterado o una firma inválida se rechaza antes de deserializar/procesar el evento.
-- La transición se aplica en una transacción sobre orden, pago y reserva. Un éxito válido confirma la reserva, marca orden/pago como pagados y emite tickets. Si la reserva expiró y no puede recuperarse el stock, se registra el pago recibido y el flujo lo marca reembolsado; no se emiten tickets.
-- La repetición de un callback de éxito para una orden ya pagada (o reembolsada por falta de stock) es no-op únicamente si conserva la misma `provider_reference`. Una referencia distinta produce conflicto.
-- La repetición de un callback fallido para una orden ya cancelada con pago fallido es no-op. Las transiciones fuera de estado pendiente se rechazan.
+- La transición se aplica en una transacción sobre orden, pago y reserva. Un éxito válido confirma la reserva, marca orden/pago como pagados y emite tickets. Si la reserva expiró y no puede recuperarse dentro de la política ADR-019, se registra la captura `SUCCEEDED`, la orden queda `UNFULFILLABLE` y el reembolso `REQUIRED`; no se emiten tickets ni se declara un reembolso ejecutado.
+- La repetición de un callback de éxito para una orden ya pagada es no-op únicamente si conserva la misma `provider_reference`. Una referencia distinta produce conflicto. Una captura que llega después de un reembolso confirmado se ignora y no revierte ese estado.
+- La repetición de un callback fallido para una orden ya cancelada con pago fallido es no-op. Un fallo tardío no sobrescribe una captura ni un reembolso confirmado.
+- Desde V13, el contrato exige `providerEventId`, `providerOperationId`, `operationKind`, `amount` y `currency`. El importe y la moneda deben coincidir exactamente con la orden y el pago. `PAYMENT_REFUND` con estado `REFUNDED` y una referencia válida es la única evidencia que confirma el reembolso; una cancelación local solo crea `refund_status=REQUESTED`.
 
 La base de datos refuerza la unicidad con `UNIQUE(orders.user_id, orders.idempotency_key)`, `UNIQUE(payments.order_id)` y `UNIQUE(payments.provider_reference)`.
 
@@ -36,6 +37,6 @@ La base de datos refuerza la unicidad con `UNIQUE(orders.user_id, orders.idempot
 
 - Los reintentos normales de creación de orden y los callbacks repetidos compatibles no duplican sus efectos de negocio.
 - La firma HMAC autentica integridad/origen, pero no es por sí misma un identificador de evento ni evita replay.
-- **Limitación conocida:** el contrato actual no recibe ni persiste un ID único de evento del proveedor. La deduplicación de webhook se apoya en el estado y la referencia del pago; callbacks fuera de orden o una repetición fallida después de un éxito pueden terminar en conflicto.
-- Si el gateway real ofrece `event_id`, una futura evolución debe añadir un inbox persistente con restricción única por proveedor/evento, política de retención y respuesta idempotente. No se simula que esa capacidad ya exista.
+- **Limitación en remediación:** el contrato ya recibe identificadores de evento y operación, pero la deduplicación persistente de tres identidades se completa en ADR-019/F4-05. Hasta esa entrega, la reproducción se apoya también en el estado y la referencia del pago.
+- La evolución exige inbox persistente con restricciones únicas por proveedor/evento, operación y aplicación semántica, digest y política de retención. No se declara resuelto H-80 solo por ampliar el DTO.
 - La emisión de tickets comprueba si existen tickets para los items de la orden antes de emitirlos; la transacción y las restricciones de datos siguen siendo necesarias para proteger la operación ante concurrencia.

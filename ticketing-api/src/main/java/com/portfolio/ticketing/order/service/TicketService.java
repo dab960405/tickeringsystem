@@ -40,7 +40,9 @@ public class TicketService {
   }
 
   public void cancelForOrder(UUID orderId) {
-    ticketRepository.findByOrderItem_Order_Id(orderId).forEach(Ticket::cancel);
+    ticketRepository.findByOrderItem_Order_Id(orderId).stream()
+        .filter(ticket -> ticket.getStatus() == TicketStatus.VALID)
+        .forEach(Ticket::cancel);
   }
 
   @PreAuthorize("hasRole('USER')")

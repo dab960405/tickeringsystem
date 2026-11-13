@@ -27,7 +27,13 @@ class PaymentWebhookServiceTest {
   private static final String SECRET = "test-webhook-secret";
   private static final UUID ORDER_ID = UUID.randomUUID();
   private static final String PAYLOAD =
-      "{\"orderId\":\"" + ORDER_ID + "\",\"status\":\"SUCCEEDED\",\"providerReference\":\"ref-1\"}";
+      "{\"orderId\":\""
+          + ORDER_ID
+          + "\",\"status\":\"SUCCEEDED\",\"providerReference\":\"ref-1\","
+          + "\"providerEventId\":\""
+          + UUID.randomUUID()
+          + "\",\"providerOperationId\":\"operation-1\","
+          + "\"operationKind\":\"PAYMENT_CAPTURE\",\"amount\":80.00,\"currency\":\"USD\"}";
 
   @Mock private OrderPaymentService orderPaymentService;
 

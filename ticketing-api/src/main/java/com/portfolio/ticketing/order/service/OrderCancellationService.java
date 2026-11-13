@@ -6,8 +6,6 @@ import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.order.api.OrderResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.repository.OrderRepository;
-import com.portfolio.ticketing.payment.domain.Payment;
-import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import java.time.Clock;
@@ -23,20 +21,12 @@ public class OrderCancellationService {
 
   private final OrderRepository orderRepository;
   private final ReservationService reservationService;
-  private final PaymentService paymentService;
-  private final TicketService ticketService;
   private final Clock clock;
 
   public OrderCancellationService(
-      OrderRepository orderRepository,
-      ReservationService reservationService,
-      PaymentService paymentService,
-      TicketService ticketService,
-      Clock clock) {
+      OrderRepository orderRepository, ReservationService reservationService, Clock clock) {
     this.orderRepository = orderRepository;
     this.reservationService = reservationService;
-    this.paymentService = paymentService;
-    this.ticketService = ticketService;
     this.clock = clock;
   }
 
@@ -68,11 +58,7 @@ public class OrderCancellationService {
       throw new BusinessRuleViolationException(
           "A paid order cannot be refunded after the event has started");
     }
-    Payment payment = paymentService.findRequiredByOrderId(order.getId());
-    ticketService.cancelForOrder(order.getId());
-    payment.refund();
-    order.refund();
-    paymentService.save(payment);
+    order.requestRefund();
     return OrderResponse.from(orderRepository.save(order));
   }
 }

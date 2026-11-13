@@ -74,5 +74,6 @@ ticketing:
       refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
   reservation:
     ttl-minutes: ${RESERVATION_TTL_MINUTES:10}
+    recovery-grace: ${RESERVATION_RECOVERY_GRACE:15m}
   payment:
     webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}

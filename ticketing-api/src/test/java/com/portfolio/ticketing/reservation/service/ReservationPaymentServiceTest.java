@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
+import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
@@ -88,6 +89,39 @@ class ReservationPaymentServiceTest {
   }
 
   @Test
+  void should_rejectRecovery_when_graceWindowHasElapsed() {
+    Reservation reservation = reservation(ReservationStatus.EXPIRED);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        reservation, "expiresAt", NOW.minusSeconds(901));
+    stubLockedReservation(reservation);
+
+    assertThat(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationConfirmationResult.RECOVERY_NOT_ALLOWED);
+    verify(inventoryService, never()).tryReserve(TICKET_TYPE_ID, 2);
+  }
+
+  @Test
+  void should_rejectRecovery_when_eventHasStarted() {
+    Reservation reservation = reservation(ReservationStatus.EXPIRED);
+    when(reservation.getTicketType().getEvent().getStartsAt()).thenReturn(NOW);
+    stubLockedReservation(reservation);
+
+    assertThat(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationConfirmationResult.RECOVERY_NOT_ALLOWED);
+    verify(inventoryService, never()).tryReserve(TICKET_TYPE_ID, 2);
+  }
+
+  @Test
+  void should_rejectRecovery_when_reservationWasCancelled() {
+    Reservation reservation = reservation(ReservationStatus.CANCELLED);
+    stubLockedReservation(reservation);
+
+    assertThat(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationConfirmationResult.RECOVERY_NOT_ALLOWED);
+    verify(inventoryService, never()).tryReserve(TICKET_TYPE_ID, 2);
+  }
+
+  @Test
   void should_beIdempotent_when_reservationWasAlreadyConfirmed() {
     Reservation reservation = reservation(ReservationStatus.CONFIRMED);
     stubLockedReservation(reservation);
@@ -138,7 +172,10 @@ class ReservationPaymentServiceTest {
 
   private static Reservation reservation(ReservationStatus status) {
     TicketType ticketType = org.mockito.Mockito.mock(TicketType.class);
+    Event event = org.mockito.Mockito.mock(Event.class);
     lenient().when(ticketType.getId()).thenReturn(TICKET_TYPE_ID);
+    lenient().when(ticketType.getEvent()).thenReturn(event);
+    lenient().when(event.getStartsAt()).thenReturn(NOW.plusSeconds(3600));
     Reservation reservation = new Reservation(USER_ID, ticketType, 2, NOW.plusSeconds(600));
     switch (status) {
       case ACTIVE -> {}

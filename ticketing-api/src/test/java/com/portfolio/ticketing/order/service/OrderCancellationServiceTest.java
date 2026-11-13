@@ -14,6 +14,7 @@ import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.order.api.OrderResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.OrderStatus;
+import com.portfolio.ticketing.order.domain.RefundStatus;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.payment.domain.Payment;
 import com.portfolio.ticketing.payment.domain.PaymentStatus;
@@ -56,11 +57,7 @@ class OrderCancellationServiceTest {
   void setUp() {
     cancellationService =
         new OrderCancellationService(
-            orderRepository,
-            reservationService,
-            paymentService,
-            ticketService,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            orderRepository, reservationService, Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
   @Test
@@ -77,23 +74,20 @@ class OrderCancellationServiceTest {
   }
 
   @Test
-  void should_refundPaymentAndCancelTickets_when_eventHasNotStarted() {
+  void should_requestRefundWithoutExecutingIt_when_eventHasNotStarted() {
     Order order = order(OrderStatus.PAID);
-    Payment payment = payment(PaymentStatus.SUCCEEDED);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
     when(orderRepository.save(order)).thenReturn(order);
     when(reservationService.findForOrder(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(reservation.getTicketType()).thenReturn(ticketType);
     when(ticketType.getEvent()).thenReturn(event);
     when(event.getStartsAt()).thenReturn(NOW.plusSeconds(3600));
-    when(paymentService.findRequiredByOrderId(ORDER_ID)).thenReturn(payment);
 
     OrderResponse response = cancellationService.cancel(ORDER_ID, USER_ID);
 
-    assertThat(response.status()).isEqualTo(OrderStatus.REFUNDED);
-    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
-    verify(ticketService).cancelForOrder(ORDER_ID);
-    verify(paymentService).save(payment);
+    assertThat(response.status()).isEqualTo(OrderStatus.PAID);
+    assertThat(response.refundStatus()).isEqualTo(RefundStatus.REQUESTED);
+    verifyNoInteractions(paymentService, ticketService);
   }
 
   @Test
@@ -139,6 +133,7 @@ class OrderCancellationServiceTest {
     ReflectionTestUtils.setField(order, "id", ORDER_ID);
     if (status == OrderStatus.PAID) {
       order.markPaid();
+      order.markFulfilled();
     } else if (status == OrderStatus.CANCELLED) {
       order.cancel();
     }

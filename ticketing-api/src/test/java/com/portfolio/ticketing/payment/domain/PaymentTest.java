@@ -45,9 +45,10 @@ class PaymentTest {
     Payment payment = newPayment();
     payment.markSucceeded("provider-123");
 
-    payment.refund();
+    payment.refund("refund-123");
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    assertThat(payment.getRefundProviderReference()).isEqualTo("refund-123");
   }
 
   @Test

@@ -11,12 +11,15 @@ import static org.mockito.Mockito.when;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
+import com.portfolio.ticketing.order.domain.FulfillmentStatus;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.OrderStatus;
+import com.portfolio.ticketing.order.domain.RefundStatus;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import com.portfolio.ticketing.payment.domain.Payment;
 import com.portfolio.ticketing.payment.domain.PaymentStatus;
+import com.portfolio.ticketing.payment.domain.ProviderOperationKind;
 import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
@@ -84,13 +87,15 @@ class OrderPaymentServiceTest {
   }
 
   @Test
-  void should_beIdempotent_when_refundedWebhookIsRepeated() {
+  void should_ignoreCapture_when_refundWasAlreadyConfirmed() {
     Order order = order();
     order.markPaid();
-    order.refund();
+    order.markFulfilled();
+    order.requestRefund();
+    order.confirmRefund();
     Payment payment = payment();
     payment.markSucceeded("provider-123");
-    payment.refund();
+    payment.refund("refund-123");
     stubOrderAndPayment(order, payment);
 
     orderPaymentService.process(successRequest());
@@ -98,6 +103,7 @@ class OrderPaymentServiceTest {
     verify(reservationService, never()).confirmForPayment(any(), any());
     verify(ticketService, never()).issueForOrder(any());
     verify(orderRepository, never()).save(any());
+    verify(paymentService, never()).save(any());
   }
 
   @Test
@@ -108,14 +114,12 @@ class OrderPaymentServiceTest {
     payment.markSucceeded("provider-123");
     stubOrderAndPayment(order, payment);
 
-    assertThatThrownBy(() ->
-            orderPaymentService.process(
-                new PaymentWebhookRequest(ORDER_ID, PaymentStatus.SUCCEEDED, "other-reference")))
+    assertThatThrownBy(() -> orderPaymentService.process(successRequest("other-reference")))
         .isInstanceOf(DuplicateResourceException.class);
   }
 
   @Test
-  void should_refund_when_paymentSucceedsButExpiredStockCannotBeRecovered() {
+  void should_requireRefundWithoutConfirmingIt_when_expiredStockCannotBeRecovered() {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
@@ -124,8 +128,10 @@ class OrderPaymentServiceTest {
 
     orderPaymentService.process(successRequest());
 
-    assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.UNFULFILLABLE);
+    assertThat(order.getRefundStatus()).isEqualTo(RefundStatus.REQUIRED);
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
     verify(ticketService, never()).issueForOrder(any());
     verify(orderRepository).save(order);
     verify(paymentService).save(payment);
@@ -137,7 +143,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
 
-    orderPaymentService.process(new PaymentWebhookRequest(ORDER_ID, PaymentStatus.FAILED, null));
+    orderPaymentService.process(failureRequest());
 
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
@@ -152,7 +158,7 @@ class OrderPaymentServiceTest {
     payment.markFailed();
     stubOrderAndPayment(order, payment);
 
-    orderPaymentService.process(new PaymentWebhookRequest(ORDER_ID, PaymentStatus.FAILED, null));
+    orderPaymentService.process(failureRequest());
 
     verify(reservationService, never()).releaseForPayment(any(), any());
     verify(orderRepository, never()).save(any());
@@ -162,9 +168,88 @@ class OrderPaymentServiceTest {
   void should_rejectUnsupportedWebhookStatus() {
     assertThatThrownBy(() ->
             orderPaymentService.process(
-                new PaymentWebhookRequest(ORDER_ID, PaymentStatus.PENDING, null)))
+                request(PaymentStatus.PENDING, ProviderOperationKind.PAYMENT_CAPTURE, null)))
         .isInstanceOf(BusinessRuleViolationException.class);
     verifyNoInteractions(orderRepository, paymentService, reservationService, ticketService);
+  }
+
+  @Test
+  void should_keepCancelledOrderAndRequireRefund_when_lateCaptureArrives() {
+    Order order = order();
+    order.cancel();
+    Payment payment = payment();
+    stubOrderAndPayment(order, payment);
+
+    orderPaymentService.process(successRequest());
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.UNFULFILLABLE);
+    assertThat(order.getRefundStatus()).isEqualTo(RefundStatus.REQUIRED);
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+    verify(reservationService, never()).confirmForPayment(any(), any());
+    verify(ticketService, never()).issueForOrder(any());
+  }
+
+  @Test
+  void should_confirmRefundOnlyWithProviderEvidence() {
+    Order order = order();
+    order.markPaid();
+    order.markFulfilled();
+    order.requestRefund();
+    Payment payment = payment();
+    payment.markSucceeded("provider-123");
+    stubOrderAndPayment(order, payment);
+
+    orderPaymentService.process(
+        request(PaymentStatus.REFUNDED, ProviderOperationKind.PAYMENT_REFUND, "refund-123"));
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+    assertThat(order.getRefundStatus()).isEqualTo(RefundStatus.CONFIRMED);
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    assertThat(payment.getRefundProviderReference()).isEqualTo("refund-123");
+    verify(ticketService).cancelForOrder(ORDER_ID);
+  }
+
+  @Test
+  void should_rejectCapture_when_amountDoesNotMatch() {
+    Order order = order();
+    Payment payment = payment();
+    stubOrderAndPayment(order, payment);
+    PaymentWebhookRequest request =
+        new PaymentWebhookRequest(
+            ORDER_ID,
+            PaymentStatus.SUCCEEDED,
+            "provider-123",
+            UUID.randomUUID(),
+            "operation-amount",
+            ProviderOperationKind.PAYMENT_CAPTURE,
+            new BigDecimal("81.00"),
+            "USD");
+
+    assertThatThrownBy(() -> orderPaymentService.process(request))
+        .isInstanceOf(BusinessRuleViolationException.class);
+    verify(reservationService, never()).confirmForPayment(any(), any());
+  }
+
+  @Test
+  void should_rejectCapture_when_currencyDoesNotMatch() {
+    Order order = order();
+    Payment payment = payment();
+    stubOrderAndPayment(order, payment);
+    PaymentWebhookRequest request =
+        new PaymentWebhookRequest(
+            ORDER_ID,
+            PaymentStatus.SUCCEEDED,
+            "provider-123",
+            UUID.randomUUID(),
+            "operation-currency",
+            ProviderOperationKind.PAYMENT_CAPTURE,
+            new BigDecimal("80.00"),
+            "EUR");
+
+    assertThatThrownBy(() -> orderPaymentService.process(request))
+        .isInstanceOf(BusinessRuleViolationException.class);
+    verify(reservationService, never()).confirmForPayment(any(), any());
   }
 
   @Test
@@ -181,7 +266,29 @@ class OrderPaymentServiceTest {
   }
 
   private static PaymentWebhookRequest successRequest() {
-    return new PaymentWebhookRequest(ORDER_ID, PaymentStatus.SUCCEEDED, "provider-123");
+    return successRequest("provider-123");
+  }
+
+  private static PaymentWebhookRequest successRequest(String providerReference) {
+    return request(
+        PaymentStatus.SUCCEEDED, ProviderOperationKind.PAYMENT_CAPTURE, providerReference);
+  }
+
+  private static PaymentWebhookRequest failureRequest() {
+    return request(PaymentStatus.FAILED, ProviderOperationKind.PAYMENT_FAILURE, null);
+  }
+
+  private static PaymentWebhookRequest request(
+      PaymentStatus status, ProviderOperationKind operationKind, String providerReference) {
+    return new PaymentWebhookRequest(
+        ORDER_ID,
+        status,
+        providerReference,
+        UUID.randomUUID(),
+        "operation-" + UUID.randomUUID(),
+        operationKind,
+        new BigDecimal("80.00"),
+        "USD");
   }
 
   private static Order order() {

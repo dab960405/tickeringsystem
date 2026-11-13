@@ -80,6 +80,7 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Contexto:** la especificación permite cancelar una orden `PENDING_PAYMENT` y reembolsar una orden `PAID` si el evento no empezó, pero no define un estado `CANCELLED` para pagos ni indica si un reembolso debe devolver stock.
 - **Decisión:** al cancelar una orden pendiente se libera la reserva activa y su stock; el pago permanece `PENDING` porque no existe un estado de cancelación y la orden final impide que un webhook posterior la confirme. Al reembolsar una orden pagada antes del evento, el pago pasa a `REFUNDED` y sus tickets a `CANCELLED`; la reserva queda `CONFIRMED` como historial y no se devuelve stock automáticamente, ya que no es un requisito explícito.
 - **Consecuencias:** las transiciones usan únicamente los estados definidos. Una devolución de stock posterior a reembolsos requeriría una regla de negocio y un ADR nuevos.
+- **Evolución Fase 4:** ADR-019 sustituye el reembolso local inmediato. La cancelación de una orden pagada solo solicita el reembolso; el pago y la orden pasan a `REFUNDED` únicamente con evidencia `PAYMENT_REFUND` válida del proveedor. Se conserva la decisión de no devolver stock automáticamente.
 
 ## ADR-010: UPDATE atómico condicional para el inventario
 

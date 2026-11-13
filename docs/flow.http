@@ -72,7 +72,7 @@ POST {{baseUrl}}/api/v1/payments/webhook
 X-Signature: {{webhookSignature}}
 Content-Type: application/json
 
-{"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001"}
+{"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":80.00,"currency":"USD"}
 
 ### 7. Refresh del token
 POST {{baseUrl}}/api/v1/auth/refresh

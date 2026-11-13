@@ -29,6 +29,9 @@ public class Payment extends BaseEntity {
   @Column(name = "provider_reference", unique = true, length = 100)
   private String providerReference;
 
+  @Column(name = "refund_provider_reference", unique = true, length = 100)
+  private String refundProviderReference;
+
   @Column(nullable = false, precision = 12, scale = 2)
   private BigDecimal amount;
 
@@ -61,8 +64,12 @@ public class Payment extends BaseEntity {
     status = status.transitionTo(PaymentStatus.FAILED);
   }
 
-  public void refund() {
+  public void refund(String refundProviderReference) {
+    if (refundProviderReference == null || refundProviderReference.isBlank()) {
+      throw new BusinessRuleViolationException("Provider evidence is required for a refund");
+    }
     status = status.transitionTo(PaymentStatus.REFUNDED);
+    this.refundProviderReference = refundProviderReference;
   }
 
   public UUID getOrderId() {
@@ -75,6 +82,10 @@ public class Payment extends BaseEntity {
 
   public String getProviderReference() {
     return providerReference;
+  }
+
+  public String getRefundProviderReference() {
+    return refundProviderReference;
   }
 
   public BigDecimal getAmount() {
