@@ -96,7 +96,7 @@ class ReservationExpirationServiceTest {
     when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of(reservation));
     when(reservationRepository.findAllByIdForUpdate(List.of(RESERVATION_ID)))
         .thenReturn(List.of(reservation));
-    when(reservationRepository.databaseNow()).thenReturn(NOW.atOffset(ZoneOffset.UTC));
+    when(reservationRepository.databaseNow()).thenReturn(NOW);
   }
 
   private static Reservation expiredReservation(Instant expiresAt) {

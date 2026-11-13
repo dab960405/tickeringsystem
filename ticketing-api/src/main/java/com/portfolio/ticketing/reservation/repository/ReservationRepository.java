@@ -2,7 +2,6 @@ package com.portfolio.ticketing.reservation.repository;
 
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -40,7 +39,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
   List<Reservation> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
 
   @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
-  OffsetDateTime databaseNow();
+  Instant databaseNow();
 
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query(

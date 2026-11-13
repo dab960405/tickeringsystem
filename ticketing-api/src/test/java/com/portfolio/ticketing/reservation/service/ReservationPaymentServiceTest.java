@@ -133,7 +133,7 @@ class ReservationPaymentServiceTest {
         .thenReturn(Optional.of(reservation));
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
-    lenient().when(reservationRepository.databaseNow()).thenReturn(NOW.atOffset(ZoneOffset.UTC));
+    lenient().when(reservationRepository.databaseNow()).thenReturn(NOW);
   }
 
   private static Reservation reservation(ReservationStatus status) {

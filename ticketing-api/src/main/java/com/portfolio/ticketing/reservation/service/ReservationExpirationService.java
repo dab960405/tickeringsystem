@@ -65,7 +65,7 @@ public class ReservationExpirationService {
             .collect(Collectors.toUnmodifiableMap(Reservation::getId, Function.identity()));
     List<Reservation> lockedReservations =
         reservationRepository.findAllByIdForUpdate(reservationIds);
-    Instant evaluationTime = reservationRepository.databaseNow().toInstant();
+    Instant evaluationTime = reservationRepository.databaseNow();
 
     for (Reservation reservation : lockedReservations) {
       Reservation candidate = candidatesById.get(reservation.getId());

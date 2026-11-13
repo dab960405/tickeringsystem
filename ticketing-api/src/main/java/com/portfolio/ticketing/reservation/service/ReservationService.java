@@ -95,7 +95,7 @@ public class ReservationService {
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
-    Instant evaluationTime = reservationRepository.databaseNow().toInstant();
+    Instant evaluationTime = reservationRepository.databaseNow();
 
     if (reservation.getStatus() == ReservationStatus.CONFIRMED
         && reservation.getInventoryDisposition() == ReservationInventoryDisposition.CONSUMED) {
