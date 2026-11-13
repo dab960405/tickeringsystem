@@ -1,5 +1,6 @@
 package com.portfolio.ticketing.reservation.api;
 
+import com.portfolio.ticketing.common.ratelimit.RateLimiter;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,10 +25,14 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @Tag(name = "Reservations", description = "Temporary ticket reservations for authenticated users")
 public class ReservationController {
 
-  private final ReservationService reservationService;
+  static final String RATE_LIMIT_SCOPE = "reservations";
 
-  public ReservationController(ReservationService reservationService) {
+  private final ReservationService reservationService;
+  private final RateLimiter rateLimiter;
+
+  public ReservationController(ReservationService reservationService, RateLimiter rateLimiter) {
     this.reservationService = reservationService;
+    this.rateLimiter = rateLimiter;
   }
 
   @PostMapping
@@ -40,10 +45,12 @@ public class ReservationController {
   @ApiResponse(responseCode = "404", description = "Ticket type not found")
   @ApiResponse(responseCode = "409", description = "Insufficient stock")
   @ApiResponse(responseCode = "422", description = "Event or sale window is not available")
+  @ApiResponse(responseCode = "429", description = "Too many reservations in the current window")
   public ResponseEntity<ReservationResponse> create(
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ReservationRequest request) {
-    ReservationResponse created =
-        reservationService.create(UUID.fromString(jwt.getSubject()), request);
+    UUID userId = UUID.fromString(jwt.getSubject());
+    rateLimiter.check(RATE_LIMIT_SCOPE, userId.toString());
+    ReservationResponse created = reservationService.create(userId, request);
     URI location =
         ServletUriComponentsBuilder.fromCurrentRequest()
             .path("/{id}")

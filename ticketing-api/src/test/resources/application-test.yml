@@ -8,6 +8,12 @@ ticketing:
       login:
         max-attempts: 5
         window-seconds: 60
+      reservations:
+        max-attempts: 20
+        window-seconds: 60
+      orders:
+        max-attempts: 10
+        window-seconds: 60
   security:
     jwt:
       secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=

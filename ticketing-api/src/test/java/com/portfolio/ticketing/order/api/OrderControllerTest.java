@@ -2,6 +2,8 @@ package com.portfolio.ticketing.order.api;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -14,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.portfolio.ticketing.auth.config.SecurityConfig;
 import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.common.exception.RateLimitExceededException;
+import com.portfolio.ticketing.common.ratelimit.RateLimiter;
 import com.portfolio.ticketing.order.domain.FulfillmentStatus;
 import com.portfolio.ticketing.order.domain.OrderStatus;
 import com.portfolio.ticketing.order.domain.RefundStatus;
@@ -54,6 +58,7 @@ class OrderControllerTest {
   @Autowired private MockMvc mockMvc;
   @MockitoBean private OrderService orderService;
   @MockitoBean private OrderCancellationService orderCancellationService;
+  @MockitoBean private RateLimiter rateLimiter;
 
   private static RequestPostProcessor userJwt() {
     return jwt()
@@ -92,6 +97,41 @@ class OrderControllerTest {
         .andExpect(header().string("Location", "http://localhost/api/v1/orders/" + ORDER_ID))
         .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
         .andExpect(jsonPath("$.totalAmount").value(80.0));
+  }
+
+  @Test
+  void should_applyPerUserRateLimit_beforeCreatingOrder() throws Exception {
+    when(orderService.create(eq(USER_ID), eq("checkout-123"), any(OrderRequest.class)))
+        .thenReturn(new OrderCreationResult(response(), true));
+
+    mockMvc
+        .perform(
+            post("/api/v1/orders")
+                .with(userJwt())
+                .header("Idempotency-Key", "checkout-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isCreated());
+
+    verify(rateLimiter).check("orders", USER_ID.toString());
+  }
+
+  @Test
+  void should_return429WithoutCreatingOrder_when_rateLimitIsExceeded() throws Exception {
+    doThrow(new RateLimitExceededException("Too many orders attempts"))
+        .when(rateLimiter)
+        .check("orders", USER_ID.toString());
+
+    mockMvc
+        .perform(
+            post("/api/v1/orders")
+                .with(userJwt())
+                .header("Idempotency-Key", "checkout-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isTooManyRequests());
+
+    verifyNoInteractions(orderService);
   }
 
   @Test

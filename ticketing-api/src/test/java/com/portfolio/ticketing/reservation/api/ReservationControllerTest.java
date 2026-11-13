@@ -16,7 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.portfolio.ticketing.auth.config.SecurityConfig;
 import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
 import com.portfolio.ticketing.common.exception.InsufficientStockException;
+import com.portfolio.ticketing.common.exception.RateLimitExceededException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
+import com.portfolio.ticketing.common.ratelimit.RateLimiter;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import java.time.Instant;
@@ -49,6 +51,7 @@ class ReservationControllerTest {
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private ReservationService reservationService;
+  @MockitoBean private RateLimiter rateLimiter;
 
   private static ReservationResponse response() {
     return new ReservationResponse(
@@ -77,6 +80,39 @@ class ReservationControllerTest {
             header().string("Location", "http://localhost/api/v1/reservations/" + RESERVATION_ID))
         .andExpect(jsonPath("$.status").value("ACTIVE"))
         .andExpect(jsonPath("$.quantity").value(2));
+  }
+
+  @Test
+  void should_applyPerUserRateLimit_beforeCreatingReservation() throws Exception {
+    when(reservationService.create(eq(USER_ID), any(ReservationRequest.class)))
+        .thenReturn(response());
+
+    mockMvc
+        .perform(
+            post("/api/v1/reservations")
+                .with(userJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isCreated());
+
+    verify(rateLimiter).check("reservations", USER_ID.toString());
+  }
+
+  @Test
+  void should_return429WithoutReserving_when_rateLimitIsExceeded() throws Exception {
+    doThrow(new RateLimitExceededException("Too many reservations attempts"))
+        .when(rateLimiter)
+        .check("reservations", USER_ID.toString());
+
+    mockMvc
+        .perform(
+            post("/api/v1/reservations")
+                .with(userJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY))
+        .andExpect(status().isTooManyRequests());
+
+    verifyNoInteractions(reservationService);
   }
 
   @Test

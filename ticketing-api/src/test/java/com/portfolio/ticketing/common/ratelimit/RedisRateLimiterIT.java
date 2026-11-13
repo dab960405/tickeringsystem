@@ -36,6 +36,26 @@ class RedisRateLimiterIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_enforceAdr020CreationLimitsPerUser_withIndependentCounters() {
+    String user = UUID.randomUUID().toString();
+
+    for (int attempt = 0; attempt < 20; attempt++) {
+      rateLimiter.check("reservations", user);
+    }
+    for (int attempt = 0; attempt < 10; attempt++) {
+      rateLimiter.check("orders", user);
+    }
+
+    assertThatThrownBy(() -> rateLimiter.check("reservations", user))
+        .isInstanceOf(RateLimitExceededException.class);
+    assertThatThrownBy(() -> rateLimiter.check("orders", user))
+        .isInstanceOf(RateLimitExceededException.class);
+    rateLimiter.check("reservations", UUID.randomUUID().toString());
+    assertThat(redisTemplate.getExpire("rate:reservations:" + user)).isBetween(1L, 60L);
+    assertThat(redisTemplate.getExpire("rate:orders:" + user)).isBetween(1L, 60L);
+  }
+
+  @Test
   void should_resetCounterAfterConfiguredWindow() {
     String subject = "window-reset-" + UUID.randomUUID();
     String key = "rate:login:" + subject;

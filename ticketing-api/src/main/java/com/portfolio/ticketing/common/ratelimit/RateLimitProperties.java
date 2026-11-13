@@ -5,6 +5,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -25,9 +26,12 @@ public class RateLimitProperties {
     this.scopes = scopes;
   }
 
-  @AssertTrue(message = "Rate-limit policy 'login' must be configured")
-  public boolean isLoginPolicyConfigured() {
-    return scopes != null && scopes.containsKey("login");
+  public static final List<String> REQUIRED_SCOPES = List.of("login", "reservations", "orders");
+
+  @AssertTrue(
+      message = "Rate-limit policies 'login', 'reservations' and 'orders' must be configured")
+  public boolean isRequiredPoliciesConfigured() {
+    return scopes != null && scopes.keySet().containsAll(REQUIRED_SCOPES);
   }
 
   public Policy policyFor(String scope) {

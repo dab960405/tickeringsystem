@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.order.api;
 
 import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.common.ratelimit.RateLimiter;
 import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderService;
@@ -32,13 +33,19 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @Tag(name = "Orders", description = "Orders created from active reservations")
 public class OrderController {
 
+  static final String RATE_LIMIT_SCOPE = "orders";
+
   private final OrderService orderService;
   private final OrderCancellationService orderCancellationService;
+  private final RateLimiter rateLimiter;
 
   public OrderController(
-      OrderService orderService, OrderCancellationService orderCancellationService) {
+      OrderService orderService,
+      OrderCancellationService orderCancellationService,
+      RateLimiter rateLimiter) {
     this.orderService = orderService;
     this.orderCancellationService = orderCancellationService;
+    this.rateLimiter = rateLimiter;
   }
 
   @PostMapping
@@ -54,12 +61,14 @@ public class OrderController {
   @ApiResponse(responseCode = "404", description = "Reservation not found")
   @ApiResponse(responseCode = "409", description = "Idempotency key used with another payload")
   @ApiResponse(responseCode = "422", description = "Reservation is not active")
+  @ApiResponse(responseCode = "429", description = "Too many order attempts in the current window")
   public ResponseEntity<OrderResponse> create(
       @AuthenticationPrincipal Jwt jwt,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @Valid @RequestBody OrderRequest request) {
-    OrderCreationResult result =
-        orderService.create(UUID.fromString(jwt.getSubject()), idempotencyKey, request);
+    UUID userId = UUID.fromString(jwt.getSubject());
+    rateLimiter.check(RATE_LIMIT_SCOPE, userId.toString());
+    OrderCreationResult result = orderService.create(userId, idempotencyKey, request);
     URI location =
         ServletUriComponentsBuilder.fromCurrentRequest()
             .path("/{id}")
