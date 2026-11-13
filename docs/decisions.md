@@ -123,6 +123,36 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Consecuencia:** una reserva solo puede originar cero o una orden. Una reserva asociada a una orden cancelada no se reutiliza; para una compra posterior se debe crear otra reserva.
 - **Documento:** [ADR-015](adr/ADR-015-one-order-per-reservation.md).
 
+## ADR-016: Orden global de locks y protocolo T → R
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** todas las escrituras relacionadas siguen el orden global documentado; inventario y reservas bloquean T antes que R, revalidan después de los locks y usan `clock_timestamp()` para decidir expiración.
+- **Documento:** [ADR-016](adr/ADR-016-global-lock-order.md).
+
+## ADR-017: Unidades comerciales estables y generaciones de emisión
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** cada unidad tiene UUID estable; generaciones y asociaciones relacionan unidad/orden/ticket con FK compuestas y unicidad por unidad/generación. La sustitución exige una generación nueva.
+- **Documento:** [ADR-017](adr/ADR-017-commercial-units-and-generations.md).
+
+## ADR-018: Ciclos de operación, leases, fencing y proyecciones
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT separan recepción, ejecución técnica, aplicación y proyección. Jobs efectivos únicos, leases y fencing tokens impiden escrituras de workers antiguos.
+- **Documento:** [ADR-018](adr/ADR-018-operation-cycles-and-worker-recovery.md).
+
+## ADR-019: Identidad del proveedor, idempotencia semántica y recuperación tardía
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** evento, operación del proveedor y aplicación semántica tienen identidades/unicidad separadas. H-79 permite recuperación acotada y exige evidencia de reembolso antes de marcar `REFUNDED`.
+- **Documento:** [ADR-019](adr/ADR-019-provider-identity-and-late-payment-recovery.md).
+
+## ADR-020: Cierre de alcance Redis de Fase 4
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** se incorporan metadatos de eventos con TTL 60 s, claves de reserva con TTL y rate limiting de reservas/órdenes; PostgreSQL sigue siendo la fuente de verdad.
+- **Documento:** [ADR-020](adr/ADR-020-phase-4-redis-completion.md).
+
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
