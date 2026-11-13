@@ -77,3 +77,20 @@ ticketing:
     recovery-grace: ${RESERVATION_RECOVERY_GRACE:15m}
   payment:
     webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}
+  # Provider event processing limits (ADR-018, F4-01). Validated at startup by OperationProperties.
+  operation:
+    tx-rx-timeout: ${OPERATION_TX_RX_TIMEOUT:3s}
+    tx-claim-timeout: ${OPERATION_TX_CLAIM_TIMEOUT:3s}
+    tx-apply-timeout: ${OPERATION_TX_APPLY_TIMEOUT:5s}
+    tx-project-timeout: ${OPERATION_TX_PROJECT_TIMEOUT:3s}
+    lock-timeout: ${OPERATION_LOCK_TIMEOUT:1s}
+    lease-duration: ${OPERATION_LEASE_DURATION:30s}
+    batch-size: ${OPERATION_BATCH_SIZE:50}
+    max-attempts: ${OPERATION_MAX_ATTEMPTS:3}
+    retry-backoff: ${OPERATION_RETRY_BACKOFF:5s}
+    recovery-interval: ${OPERATION_RECOVERY_INTERVAL:1s}
+    recovery-enabled: ${OPERATION_RECOVERY_ENABLED:true}
+    provider:
+      code: ${PAYMENT_PROVIDER_CODE:SIMULATED}
+      merchant-account-id: ${PAYMENT_MERCHANT_ACCOUNT_ID:default}
+      identity-namespace: ${PAYMENT_IDENTITY_NAMESPACE:payments.v1}
