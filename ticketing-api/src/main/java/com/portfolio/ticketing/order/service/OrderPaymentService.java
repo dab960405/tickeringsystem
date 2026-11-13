@@ -77,6 +77,7 @@ public class OrderPaymentService {
     if (confirmation == ReservationConfirmationResult.CONFIRMED
         && order.getStatus() == OrderStatus.PENDING_PAYMENT) {
       order.markPaid();
+      order = orderRepository.save(order);
       ticketService.issueForOrder(order);
       order.markFulfilled();
     } else {
@@ -84,8 +85,8 @@ public class OrderPaymentService {
         order.markPaid();
       }
       order.markUnfulfillable();
+      orderRepository.save(order);
     }
-    orderRepository.save(order);
     paymentService.save(payment);
   }
 

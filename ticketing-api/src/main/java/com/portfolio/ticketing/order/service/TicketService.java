@@ -20,6 +20,7 @@ import com.portfolio.ticketing.order.repository.CommercialUnitRepository;
 import com.portfolio.ticketing.order.repository.OrderItemRepository;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.order.repository.TicketRepository;
+import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -46,6 +47,7 @@ public class TicketService {
   private final CommercialUnitRepository unitRepository;
   private final CommercialUnitGenerationRepository unitGenerationRepository;
   private final TicketRepository ticketRepository;
+  private final EntityManager entityManager;
 
   public TicketService(
       OrderRepository orderRepository,
@@ -53,21 +55,23 @@ public class TicketService {
       CommercialGenerationRepository generationRepository,
       CommercialUnitRepository unitRepository,
       CommercialUnitGenerationRepository unitGenerationRepository,
-      TicketRepository ticketRepository) {
+      TicketRepository ticketRepository,
+      EntityManager entityManager) {
     this.orderRepository = orderRepository;
     this.orderItemRepository = orderItemRepository;
     this.generationRepository = generationRepository;
     this.unitRepository = unitRepository;
     this.unitGenerationRepository = unitGenerationRepository;
     this.ticketRepository = ticketRepository;
+    this.entityManager = entityManager;
   }
 
   /** Initial issuance: generation 1 with one unit and one ticket per purchased quantity. */
   @Transactional(propagation = Propagation.MANDATORY)
   public TicketIssuanceResult issueForOrder(Order order) {
-    lockOrder(order.getId());
+    Order lockedOrder = lockOrder(order.getId());
     List<CommercialGeneration> generations =
-        generationRepository.findByOrderIdOrderByGenerationNumberAsc(order.getId());
+        generationRepository.findByOrderIdOrderByGenerationNumberAsc(lockedOrder.getId());
     if (!generations.isEmpty()) {
       CommercialGeneration latest = generations.getLast();
       return new TicketIssuanceResult(
@@ -76,11 +80,17 @@ public class TicketService {
           (int) unitGenerationRepository.countByGenerationId(latest.getId()),
           false);
     }
+    if (lockedOrder.getStatus() != OrderStatus.PAID
+        || lockedOrder.getFulfillmentStatus() != FulfillmentStatus.PENDING
+        || lockedOrder.getRefundStatus() != RefundStatus.NONE) {
+      throw new BusinessRuleViolationException(
+          "Only a paid order with pending fulfillment can issue its initial generation");
+    }
 
     CommercialGeneration generation =
-        generationRepository.save(CommercialGeneration.initial(order.getId()));
+        generationRepository.save(CommercialGeneration.initial(lockedOrder.getId()));
     List<CommercialUnit> units = new ArrayList<>();
-    for (OrderItem item : itemsInIssuanceOrder(order.getId())) {
+    for (OrderItem item : itemsInIssuanceOrder(lockedOrder.getId())) {
       for (int unitNumber = 1; unitNumber <= item.getQuantity(); unitNumber++) {
         units.add(new CommercialUnit(item, unitNumber));
       }
@@ -96,11 +106,7 @@ public class TicketService {
    * generation is superseded and the same units receive new codes in the next generation.
    */
   public TicketIssuanceResult reissueForOrder(UUID orderId) {
-    lockOrder(orderId);
-    Order order =
-        orderRepository
-            .findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Order " + orderId + " not found"));
+    Order order = lockOrder(orderId);
     if (order.getStatus() != OrderStatus.PAID
         || order.getFulfillmentStatus() != FulfillmentStatus.FULFILLED
         || order.getRefundStatus() != RefundStatus.NONE) {
@@ -176,9 +182,16 @@ public class TicketService {
             new BusinessRuleViolationException("Order " + orderId + " has no active tickets"));
   }
 
-  private void lockOrder(UUID orderId) {
+  private Order lockOrder(UUID orderId) {
+    entityManager.flush();
     orderRepository
         .lockById(orderId)
         .orElseThrow(() -> new ResourceNotFoundException("Order " + orderId + " not found"));
+    Order lockedOrder =
+        orderRepository
+            .findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order " + orderId + " not found"));
+    entityManager.refresh(lockedOrder);
+    return lockedOrder;
   }
 }

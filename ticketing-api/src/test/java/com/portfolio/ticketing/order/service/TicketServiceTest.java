@@ -27,6 +27,7 @@ import com.portfolio.ticketing.order.repository.CommercialUnitRepository;
 import com.portfolio.ticketing.order.repository.OrderItemRepository;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.order.repository.TicketRepository;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,6 +48,7 @@ class TicketServiceTest {
   @Mock private CommercialUnitRepository unitRepository;
   @Mock private CommercialUnitGenerationRepository unitGenerationRepository;
   @Mock private TicketRepository ticketRepository;
+  @Mock private EntityManager entityManager;
 
   private TicketService ticketService;
 
@@ -59,7 +61,8 @@ class TicketServiceTest {
             generationRepository,
             unitRepository,
             unitGenerationRepository,
-            ticketRepository);
+            ticketRepository,
+            entityManager);
     lenient()
         .when(generationRepository.save(any()))
         .thenAnswer(invocation -> CommercialFixtures.withId(invocation.getArgument(0)));
@@ -75,6 +78,7 @@ class TicketServiceTest {
   @Test
   void should_issueOneUnitLinkAndTicketPerPurchasedQuantity_inGenerationOne() {
     Order order = CommercialFixtures.paidOrder(3);
+    order.markPaid();
     lockSucceeds(order);
     when(generationRepository.findByOrderIdOrderByGenerationNumberAsc(order.getId()))
         .thenReturn(List.of());
@@ -133,6 +137,19 @@ class TicketServiceTest {
 
     assertThatThrownBy(() -> ticketService.issueForOrder(order))
         .isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void should_rejectInitialIssuance_when_orderIsNotPaid() {
+    Order order = CommercialFixtures.paidOrder(1);
+    lockSucceeds(order);
+    when(generationRepository.findByOrderIdOrderByGenerationNumberAsc(order.getId()))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(() -> ticketService.issueForOrder(order))
+        .isInstanceOf(BusinessRuleViolationException.class);
+    verify(generationRepository, never()).save(any());
+    verify(unitRepository, never()).saveAll(anyList());
   }
 
   @Test
@@ -297,6 +314,7 @@ class TicketServiceTest {
 
   private void lockSucceeds(Order order) {
     when(orderRepository.lockById(order.getId())).thenReturn(Optional.of(order.getId()));
+    when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
   }
 
   @SuppressWarnings("unchecked")

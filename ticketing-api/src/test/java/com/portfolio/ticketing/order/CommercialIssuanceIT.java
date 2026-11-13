@@ -114,6 +114,7 @@ class CommercialIssuanceIT extends AbstractIntegrationTest {
   @Test
   void should_issueExactlyOnce_when_issuanceRunsConcurrently() throws Exception {
     OrderFixture fixture = createOrder(2);
+    jdbcTemplate.update("UPDATE orders SET status = 'PAID' WHERE id = ?", fixture.orderId());
     CountDownLatch ready = new CountDownLatch(2);
     CountDownLatch start = new CountDownLatch(1);
     ExecutorService executor = Executors.newFixedThreadPool(2);

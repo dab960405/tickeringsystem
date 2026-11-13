@@ -60,6 +60,7 @@ class OrderPaymentServiceTest {
     stubOrderAndPayment(order, payment);
     when(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .thenReturn(ReservationConfirmationResult.CONFIRMED);
+    when(orderRepository.save(order)).thenReturn(order);
 
     orderPaymentService.process(successRequest());
 
