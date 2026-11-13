@@ -3,7 +3,6 @@ package com.portfolio.ticketing.payment.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -12,7 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.common.exception.AuthenticationFailedException;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
-import com.portfolio.ticketing.order.service.OrderPaymentService;
+import com.portfolio.ticketing.operation.service.PaymentOperationService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import com.portfolio.ticketing.payment.config.PaymentProperties;
 import java.nio.charset.StandardCharsets;
@@ -40,9 +39,8 @@ class PaymentWebhookServiceTest {
           + "\",\"providerOperationId\":\"operation-1\","
           + "\"operationKind\":\"PAYMENT_CAPTURE\",\"amount\":80.00,\"currency\":\"USD\"}";
 
-  @Mock private OrderPaymentService orderPaymentService;
   @Mock private ProviderEventInboxService inboxService;
-  @Mock private SemanticApplicationService semanticApplicationService;
+  @Mock private PaymentOperationService paymentOperationService;
 
   private PaymentWebhookService paymentWebhookService;
 
@@ -52,38 +50,23 @@ class PaymentWebhookServiceTest {
     properties.setWebhookSecret(SECRET);
     paymentWebhookService =
         new PaymentWebhookService(
-            properties,
-            new ObjectMapper(),
-            orderPaymentService,
-            inboxService,
-            semanticApplicationService);
+            properties, new ObjectMapper(), inboxService, paymentOperationService);
   }
 
   @Test
   void should_delegateValidSignedPayload() throws Exception {
     ProviderEventReceipt receipt = mock(ProviderEventReceipt.class);
     when(inboxService.receive(any(PaymentWebhookRequest.class), eq(PAYLOAD))).thenReturn(receipt);
-    doAnswer(
-            invocation -> {
-              invocation.getArgument(1, Runnable.class).run();
-              return null;
-            })
-        .when(semanticApplicationService)
-        .apply(eq(receipt), any(Runnable.class));
-
     paymentWebhookService.handle(signature(PAYLOAD), PAYLOAD);
 
-    verify(orderPaymentService)
-        .process(
-            org.mockito.ArgumentMatchers.argThat((PaymentWebhookRequest request) ->
-                request.orderId().equals(ORDER_ID) && request.providerReference().equals("ref-1")));
+    verify(paymentOperationService).process(receipt);
   }
 
   @Test
   void should_rejectInvalidSignature_beforeParsingPayload() {
     assertThatThrownBy(() -> paymentWebhookService.handle("invalid", PAYLOAD))
         .isInstanceOf(AuthenticationFailedException.class);
-    verifyNoInteractions(orderPaymentService, inboxService, semanticApplicationService);
+    verifyNoInteractions(inboxService, paymentOperationService);
   }
 
   @Test
@@ -92,7 +75,7 @@ class PaymentWebhookServiceTest {
 
     assertThatThrownBy(() -> paymentWebhookService.handle(signature(payload), payload))
         .isInstanceOf(BusinessRuleViolationException.class);
-    verifyNoInteractions(orderPaymentService, inboxService, semanticApplicationService);
+    verifyNoInteractions(inboxService, paymentOperationService);
   }
 
   private static String signature(String payload) throws Exception {

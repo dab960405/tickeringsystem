@@ -15,3 +15,6 @@ ticketing:
       refresh-ttl-days: 7
   payment:
     webhook-secret: test-webhook-secret-for-integration-tests
+  operation:
+    # Each test drives recovery explicitly; shared containers must not receive claims from other contexts.
+    recovery-enabled: false

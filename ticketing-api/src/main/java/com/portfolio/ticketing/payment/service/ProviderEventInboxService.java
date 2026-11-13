@@ -3,33 +3,43 @@ package com.portfolio.ticketing.payment.service;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.operation.config.OperationProperties;
+import com.portfolio.ticketing.operation.service.OperationCycleService;
+import com.portfolio.ticketing.operation.service.OperationTransactionExecutor;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ProviderEventInboxService {
 
   private final JdbcTemplate jdbcTemplate;
   private final OperationProperties properties;
+  private final OperationTransactionExecutor transactionExecutor;
+  private final OperationCycleService cycleService;
 
-  public ProviderEventInboxService(JdbcTemplate jdbcTemplate, OperationProperties properties) {
+  public ProviderEventInboxService(
+      JdbcTemplate jdbcTemplate,
+      OperationProperties properties,
+      OperationTransactionExecutor transactionExecutor,
+      OperationCycleService cycleService) {
     this.jdbcTemplate = jdbcTemplate;
     this.properties = properties;
+    this.transactionExecutor = transactionExecutor;
+    this.cycleService = cycleService;
   }
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public ProviderEventReceipt receive(PaymentWebhookRequest request, String payload) {
-    PaymentWebhookRequestValidator.validate(request);
-    requireOrder(request);
-    String semanticDigest = PaymentEvidenceDigest.semantic(request);
-    UUID operationId = registerOperation(request, semanticDigest);
-    UUID eventId = registerEvent(request, payload, operationId);
-    return new ProviderEventReceipt(eventId, operationId, semanticDigest, request);
+    return transactionExecutor.rx(() -> {
+      PaymentWebhookRequestValidator.validate(request);
+      requireOrder(request);
+      String semanticDigest = PaymentEvidenceDigest.semantic(request);
+      UUID operationId = registerOperation(request, semanticDigest);
+      UUID eventId = registerEvent(request, payload, operationId);
+      cycleService.register(eventId, request.orderId());
+      return new ProviderEventReceipt(eventId, operationId, semanticDigest, request);
+    });
   }
 
   private void requireOrder(PaymentWebhookRequest request) {

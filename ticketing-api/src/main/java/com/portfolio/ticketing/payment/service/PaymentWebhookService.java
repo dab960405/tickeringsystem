@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.common.exception.AuthenticationFailedException;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
-import com.portfolio.ticketing.order.service.OrderPaymentService;
+import com.portfolio.ticketing.operation.service.PaymentOperationService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import com.portfolio.ticketing.payment.config.PaymentProperties;
 import java.nio.charset.StandardCharsets;
@@ -20,21 +20,18 @@ public class PaymentWebhookService {
 
   private final PaymentProperties properties;
   private final ObjectMapper objectMapper;
-  private final OrderPaymentService orderPaymentService;
   private final ProviderEventInboxService inboxService;
-  private final SemanticApplicationService semanticApplicationService;
+  private final PaymentOperationService paymentOperationService;
 
   public PaymentWebhookService(
       PaymentProperties properties,
       ObjectMapper objectMapper,
-      OrderPaymentService orderPaymentService,
       ProviderEventInboxService inboxService,
-      SemanticApplicationService semanticApplicationService) {
+      PaymentOperationService paymentOperationService) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.orderPaymentService = orderPaymentService;
     this.inboxService = inboxService;
-    this.semanticApplicationService = semanticApplicationService;
+    this.paymentOperationService = paymentOperationService;
   }
 
   public void handle(String signature, String payload) {
@@ -44,7 +41,7 @@ public class PaymentWebhookService {
     try {
       PaymentWebhookRequest request = objectMapper.readValue(payload, PaymentWebhookRequest.class);
       ProviderEventReceipt receipt = inboxService.receive(request, payload);
-      semanticApplicationService.apply(receipt, () -> orderPaymentService.process(request));
+      paymentOperationService.process(receipt);
     } catch (JsonProcessingException exception) {
       throw new BusinessRuleViolationException("Invalid webhook payload");
     }

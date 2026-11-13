@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -18,8 +17,8 @@ public class SemanticApplicationService {
     this.jdbcTemplate = jdbcTemplate;
   }
 
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void apply(ProviderEventReceipt receipt, Runnable application) {
+  @Transactional
+  public boolean apply(ProviderEventReceipt receipt, Runnable application) {
     PaymentWebhookRequest request = receipt.request();
     String scope = "order:" + request.orderId();
     List<UUID> inserted =
@@ -40,13 +39,14 @@ public class SemanticApplicationService {
             receipt.payloadDigest());
     if (!inserted.isEmpty()) {
       application.run();
-      return;
+      return true;
     }
 
     String existingDigest = findDigest(scope, request);
     if (!existingDigest.equals(receipt.payloadDigest())) {
       throw new DuplicateResourceException("Semantic operation identity has different evidence");
     }
+    return false;
   }
 
   private String findDigest(String scope, PaymentWebhookRequest request) {

@@ -15,11 +15,11 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 | H75 — orden global de locks | Parcial: T → R en reservas; J → XA todavía no existe | Auditoría de todos los flujos y nuevos workers |
 | H76 — protocolo T → R | Implementado en confirmación, expiración, liberación y recuperación; pruebas de carreras presentes | Validación integral con los componentes nuevos |
 | H77 — unidades y generaciones | Pendiente | Modelo, backfill, emisión y reemisión |
-| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | Pendiente; solo existe `OperationProperties` | Persistencia, TX-RX/CLAIM/APPLY/PROJECT y recuperación |
-| H79 — pagos tardíos | Parcial: recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED` | Integración con inbox, workers e idempotencia global |
-| H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14, inbox durable, tres identidades, digest y aplicación semántica única | Integración con procesamiento recuperable H78 y pruebas concurrentes |
+| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y probado localmente:** V15, TX-RX/CLAIM/APPLY/PROJECT, renovación, reemplazo y recuperación | Validación integral final |
+| H79 — pagos tardíos | Recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED`, integrados con workers | Validación integral con idempotencia global |
+| H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14+V15, inbox, tres identidades, digest, aplicación global única y webhooks concurrentes | Validación integral final |
 | H81 — Redis | Parcial: caché de catálogo, login y degradación | Caché de eventos, claves de reserva y límites de reservas/órdenes de ADR-020 |
-| H82 — configuración operativa | Propiedades validadas y probadas | Consumo por transacciones y workers reales |
+| H82 — configuración operativa | **Integrada:** timeouts, lock/statement timeout, lease, lote, reintentos, backoff y recuperación se consumen en procesos reales | Validación integral final |
 | H83 — consistencia global de locks | Parcial | Auditoría después de H77/H78/H80 |
 | H84 — reembolsos | Parcial: solicitud y confirmación con evidencia | Integración con identidades, inbox, reintentos y workers |
 
@@ -31,6 +31,15 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 - `PaymentWebhookService` ya no depende únicamente del estado de la orden para deduplicar: persiste recepción e identidad semántica antes de devolver éxito.
 - Validación local: suite unitaria completa en verde y `OrderPaymentFlowIT` con **10 tests, 0 fallos y 0 errores** usando PostgreSQL/Testcontainers. Los nuevos casos cubren webhook repetido, eventos distintos de una misma operación, digest conflictivo y evidencia append-only.
 - Este incremento no implementa todavía ciclos, workers, leases ni recuperación; H80 permanece vinculado a H78 para el cierre.
+
+## Incremento H78/H82 — V15
+
+- V15 crea ciclos, participaciones, jobs, ejecuciones, disposiciones y proyecciones.
+- `OperationTransactionExecutor` aplica los timeouts y límites de `OperationProperties` en transacciones RX, CLAIM, APPLY y PROJECT.
+- `OperationJobService` implementa claims J → XA, renovación y expiración de leases, fencing, reemplazo de generaciones, backoff y agotamiento de intentos.
+- `PaymentOperationService` aplica la identidad semántica y el negocio en una sola transacción; la recuperación proyecta evidencia sin repetir efectos.
+- `OperationRecoveryWorker` procesa lotes configurables; el webhook conserva procesamiento síncrono y una ejecución superada por otro worker se trata como duplicado seguro.
+- Validación específica: `OperationWorkerIT` **8 tests** y `OrderPaymentFlowIT` **10 tests**, todos sin fallos con PostgreSQL/Testcontainers. Detalles en [F4-02](phase-4/F4-02-worker-processing.md).
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -119,11 +128,9 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Deuda técnica y trabajo diferido
 
 1. H77: unidades comerciales y generaciones individuales.
-2. H78/H82: ciclos, participaciones, jobs, ejecuciones, leases, fencing, disposiciones y proyecciones conectados a `OperationProperties`.
-3. H80: concurrencia de webhooks y recuperación mediante workers; la evidencia V14 ya está persistida.
-4. H81: alcance Redis de ADR-020.
-5. H75/H76/H83: auditoría global de locks después de incorporar los componentes estructurales.
-6. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
+2. H81: alcance Redis de ADR-020.
+3. H75/H76/H83: auditoría global de locks después de incorporar los componentes estructurales.
+4. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
 7. Cancelación de eventos y transición de órdenes pendientes a `EXPIRED`, conservadas como deuda previa por resolver dentro del alcance autorizado cuando corresponda.
 8. Refresh token sin rotación y webhook sin timestamp anti-replay.
 9. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
@@ -137,12 +144,11 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Próximos pasos
 
-1. Implementar H78/H82 sobre el inbox V14: TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT, con leases, fencing y recuperación.
-2. Implementar H77 y conectar emisión/reemisión a la aplicación de pagos.
-3. Completar H81 y auditar H75/H76/H83.
-4. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
-5. Preparar el expediente de cierre; la aprobación formal sigue reservada al responsable del proyecto.
-6. No iniciar Fase 5.
+1. Implementar H77 y conectar emisión/reemisión a la aplicación de pagos.
+2. Completar H81 y auditar H75/H76/H83.
+3. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
+4. Preparar el expediente de cierre; la aprobación formal sigue reservada al responsable del proyecto.
+5. No iniciar Fase 5.
 
 ## Comandos de referencia
 
