@@ -33,6 +33,8 @@ class TicketControllerTest {
   private static final UUID USER_ID = UUID.fromString("0b5e6f1a-3c2d-4e5f-8a9b-1c2d3e4f5a6b");
   private static final UUID ORDER_ID = UUID.fromString("2d7a8b3c-5e4f-6a70-8b9c-1d2e3f4a5b6c");
   private static final UUID TICKET_TYPE_ID = UUID.randomUUID();
+  private static final UUID UNIT_ID = UUID.randomUUID();
+  private static final UUID GENERATION_ID = UUID.randomUUID();
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private TicketService ticketService;
@@ -48,13 +50,21 @@ class TicketControllerTest {
     when(ticketService.listValidForUser(USER_ID))
         .thenReturn(
             List.of(
-                new TicketResponse("ticket-code", ORDER_ID, TICKET_TYPE_ID, TicketStatus.VALID)));
+                new TicketResponse(
+                    "ticket-code",
+                    ORDER_ID,
+                    TICKET_TYPE_ID,
+                    UNIT_ID,
+                    GENERATION_ID,
+                    TicketStatus.VALID)));
 
     mockMvc
         .perform(get("/api/v1/me/tickets").with(userJwt()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].code").value("ticket-code"))
         .andExpect(jsonPath("$[0].orderId").value(ORDER_ID.toString()))
+        .andExpect(jsonPath("$[0].unitId").value(UNIT_ID.toString()))
+        .andExpect(jsonPath("$[0].generationId").value(GENERATION_ID.toString()))
         .andExpect(jsonPath("$[0].status").value("VALID"));
   }
 

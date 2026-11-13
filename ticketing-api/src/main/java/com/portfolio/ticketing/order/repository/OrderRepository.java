@@ -6,6 +6,8 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
@@ -16,4 +18,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   boolean existsByReservationId(UUID reservationId);
 
   Page<Order> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+  /** Acquires lock O of ADR-016; returns the id so callers revalidate managed state. */
+  @Query(value = "SELECT id FROM orders WHERE id = :id FOR UPDATE", nativeQuery = true)
+  Optional<UUID> lockById(@Param("id") UUID id);
 }
