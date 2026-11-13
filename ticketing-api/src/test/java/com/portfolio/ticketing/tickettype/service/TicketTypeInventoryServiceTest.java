@@ -10,6 +10,7 @@ import com.portfolio.ticketing.common.exception.InsufficientStockException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,37 @@ class TicketTypeInventoryServiceTest {
     when(ticketTypeRepository.findById(ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> inventoryService.findRequired(ID))
+        .isInstanceOf(ResourceNotFoundException.class);
+  }
+
+  @Test
+  void should_lockTicketType_when_itExists() {
+    TicketType ticketType = org.mockito.Mockito.mock(TicketType.class);
+    when(ticketTypeRepository.findByIdForUpdate(ID)).thenReturn(Optional.of(ticketType));
+
+    assertThat(inventoryService.lockRequired(ID)).isSameAs(ticketType);
+  }
+
+  @Test
+  void should_lockTicketTypesOnceInAscendingOrder() {
+    UUID high = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+    UUID low = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    when(ticketTypeRepository.findAllByIdForUpdate(List.of(low, high)))
+        .thenReturn(
+            List.of(
+                org.mockito.Mockito.mock(TicketType.class),
+                org.mockito.Mockito.mock(TicketType.class)));
+
+    inventoryService.lockAll(List.of(high, low, high));
+
+    verify(ticketTypeRepository).findAllByIdForUpdate(List.of(low, high));
+  }
+
+  @Test
+  void should_rejectLockBatch_when_aTicketTypeDisappears() {
+    when(ticketTypeRepository.findAllByIdForUpdate(List.of(ID))).thenReturn(List.of());
+
+    assertThatThrownBy(() -> inventoryService.lockAll(List.of(ID)))
         .isInstanceOf(ResourceNotFoundException.class);
   }
 

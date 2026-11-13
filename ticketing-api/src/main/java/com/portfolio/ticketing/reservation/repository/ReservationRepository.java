@@ -2,6 +2,8 @@ package com.portfolio.ticketing.reservation.repository;
 
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,13 +20,27 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
       value =
           """
           SELECT * FROM reservations
-          WHERE status = 'ACTIVE' AND expires_at < :now
-          ORDER BY expires_at
+          WHERE status = 'ACTIVE' AND inventory_disposition = 'HELD'
+            AND expires_at <= :now
+          ORDER BY expires_at, id
           LIMIT :limit
+          """,
+      nativeQuery = true)
+  List<Reservation> findExpiredCandidates(@Param("now") Instant now, @Param("limit") int limit);
+
+  @Query(
+      value =
+          """
+          SELECT * FROM reservations
+          WHERE id IN (:ids)
+          ORDER BY id
           FOR UPDATE SKIP LOCKED
           """,
       nativeQuery = true)
-  List<Reservation> findExpiredForUpdate(@Param("now") Instant now, @Param("limit") int limit);
+  List<Reservation> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
+
+  @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
+  OffsetDateTime databaseNow();
 
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query(
@@ -65,9 +81,25 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
           SET status = 'CONFIRMED', inventory_disposition = 'CONSUMED',
               updated_at = CURRENT_TIMESTAMP
           WHERE id = :id AND user_id = :userId
-            AND ((status = 'ACTIVE' AND inventory_disposition = 'HELD')
-              OR (status = 'EXPIRED' AND inventory_disposition = 'RELEASED'))
+            AND status = 'ACTIVE' AND inventory_disposition = 'HELD'
+            AND expires_at > :evaluationTime
           """,
       nativeQuery = true)
-  int confirmForPayment(@Param("id") UUID id, @Param("userId") UUID userId);
+  int confirmActive(
+      @Param("id") UUID id,
+      @Param("userId") UUID userId,
+      @Param("evaluationTime") Instant evaluationTime);
+
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query(
+      value =
+          """
+          UPDATE reservations
+          SET status = 'CONFIRMED', inventory_disposition = 'CONSUMED',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = :id AND user_id = :userId
+            AND status = 'EXPIRED' AND inventory_disposition = 'RELEASED'
+          """,
+      nativeQuery = true)
+  int confirmRecovered(@Param("id") UUID id, @Param("userId") UUID userId);
 }

@@ -82,5 +82,11 @@ class ReservationExpirationIT extends AbstractIntegrationTest {
                 Integer.class,
                 ticketType.getId()))
         .isEqualTo(10);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT inventory_disposition FROM reservations WHERE id = ?",
+                String.class,
+                reservation.getId()))
+        .isEqualTo("RELEASED");
   }
 }

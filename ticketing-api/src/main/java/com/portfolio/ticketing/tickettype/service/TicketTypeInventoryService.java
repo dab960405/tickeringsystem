@@ -5,6 +5,9 @@ import com.portfolio.ticketing.common.exception.InsufficientStockException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +26,26 @@ public class TicketTypeInventoryService {
     return ticketTypeRepository
         .findById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Ticket type " + id + " not found"));
+  }
+
+  @Transactional
+  public TicketType lockRequired(UUID id) {
+    return ticketTypeRepository
+        .findByIdForUpdate(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Ticket type " + id + " not found"));
+  }
+
+  @Transactional
+  public void lockAll(Collection<UUID> ids) {
+    List<UUID> sortedIds =
+        ids.stream().distinct().sorted(Comparator.comparing(UUID::toString)).toList();
+    if (sortedIds.isEmpty()) {
+      return;
+    }
+    List<TicketType> locked = ticketTypeRepository.findAllByIdForUpdate(sortedIds);
+    if (locked.size() != sortedIds.size()) {
+      throw new ResourceNotFoundException("One or more ticket types no longer exist");
+    }
   }
 
   @Transactional

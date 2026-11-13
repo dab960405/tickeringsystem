@@ -1,5 +1,6 @@
 package com.portfolio.ticketing.reservation.service;
 
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,14 +20,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ReservationExpirationServiceTest {
 
   private static final Instant NOW = Instant.parse("2030-01-01T12:00:00Z");
   private static final UUID TICKET_TYPE_ID = UUID.randomUUID();
+  private static final UUID RESERVATION_ID = UUID.randomUUID();
 
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
@@ -41,21 +45,26 @@ class ReservationExpirationServiceTest {
   }
 
   @Test
-  void should_returnStock_when_expiredReservationIsMarked() {
-    Reservation reservation = expiredReservation();
-    when(reservationRepository.findExpiredForUpdate(NOW, 100)).thenReturn(List.of(reservation));
-    when(reservationRepository.expireActive(reservation.getId(), NOW)).thenReturn(1);
+  void should_returnStockAfterOrderedLocksAndDatabaseRevalidation() {
+    Reservation reservation = expiredReservation(NOW.minusSeconds(1));
+    stubCandidates(reservation);
+    when(reservationRepository.expireActive(RESERVATION_ID, NOW)).thenReturn(1);
 
     expirationService.expireOverdue();
 
-    verify(inventoryService).release(TICKET_TYPE_ID, 2);
+    InOrder order = inOrder(inventoryService, reservationRepository);
+    order.verify(inventoryService).lockAll(List.of(TICKET_TYPE_ID));
+    order.verify(reservationRepository).findAllByIdForUpdate(List.of(RESERVATION_ID));
+    order.verify(reservationRepository).databaseNow();
+    order.verify(reservationRepository).expireActive(RESERVATION_ID, NOW);
+    order.verify(inventoryService).release(TICKET_TYPE_ID, 2);
   }
 
   @Test
   void should_notReturnStock_when_reservationWasAlreadyProcessed() {
-    Reservation reservation = expiredReservation();
-    when(reservationRepository.findExpiredForUpdate(NOW, 100)).thenReturn(List.of(reservation));
-    when(reservationRepository.expireActive(reservation.getId(), NOW)).thenReturn(0);
+    Reservation reservation = expiredReservation(NOW.minusSeconds(1));
+    stubCandidates(reservation);
+    when(reservationRepository.expireActive(RESERVATION_ID, NOW)).thenReturn(0);
 
     expirationService.expireOverdue();
 
@@ -64,17 +73,37 @@ class ReservationExpirationServiceTest {
 
   @Test
   void should_useBoundedBatch_when_noReservationIsOverdue() {
-    when(reservationRepository.findExpiredForUpdate(NOW, 100)).thenReturn(List.of());
+    when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of());
 
     expirationService.expireOverdue();
 
-    verify(reservationRepository).findExpiredForUpdate(NOW, 100);
+    verify(reservationRepository).findExpiredCandidates(NOW, 100);
     verifyNoInteractions(inventoryService);
   }
 
-  private static Reservation expiredReservation() {
+  @Test
+  void should_notExpire_when_databaseTimePrecedesExpiration() {
+    Reservation reservation = expiredReservation(NOW.plusSeconds(1));
+    stubCandidates(reservation);
+
+    expirationService.expireOverdue();
+
+    verify(reservationRepository, never()).expireActive(RESERVATION_ID, NOW);
+    verify(inventoryService, never()).release(TICKET_TYPE_ID, 2);
+  }
+
+  private void stubCandidates(Reservation reservation) {
+    when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of(reservation));
+    when(reservationRepository.findAllByIdForUpdate(List.of(RESERVATION_ID)))
+        .thenReturn(List.of(reservation));
+    when(reservationRepository.databaseNow()).thenReturn(NOW.atOffset(ZoneOffset.UTC));
+  }
+
+  private static Reservation expiredReservation(Instant expiresAt) {
     TicketType ticketType = mock(TicketType.class);
     lenient().when(ticketType.getId()).thenReturn(TICKET_TYPE_ID);
-    return new Reservation(UUID.randomUUID(), ticketType, 2, NOW.minusSeconds(1));
+    Reservation reservation = new Reservation(UUID.randomUUID(), ticketType, 2, expiresAt);
+    ReflectionTestUtils.setField(reservation, "id", RESERVATION_ID);
+    return reservation;
   }
 }

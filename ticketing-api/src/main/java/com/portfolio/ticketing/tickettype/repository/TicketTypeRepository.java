@@ -1,7 +1,9 @@
 package com.portfolio.ticketing.tickettype.repository;
 
 import com.portfolio.ticketing.tickettype.domain.TicketType;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -24,6 +26,14 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
   boolean existsByEventId(UUID eventId);
 
   boolean existsByEventIdAndNameIgnoreCase(UUID eventId, String name);
+
+  @Query(value = "SELECT * FROM ticket_types WHERE id = :id FOR UPDATE", nativeQuery = true)
+  Optional<TicketType> findByIdForUpdate(@Param("id") UUID id);
+
+  @Query(
+      value = "SELECT * FROM ticket_types WHERE id IN (:ids) ORDER BY id FOR UPDATE",
+      nativeQuery = true)
+  List<TicketType> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
 
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query(

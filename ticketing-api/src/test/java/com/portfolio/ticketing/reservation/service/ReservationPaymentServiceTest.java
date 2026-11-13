@@ -50,9 +50,8 @@ class ReservationPaymentServiceTest {
   @Test
   void should_confirmActiveReservation_withoutTakingStockAgain() {
     Reservation reservation = reservation(ReservationStatus.ACTIVE);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
-    when(reservationRepository.confirmForPayment(RESERVATION_ID, USER_ID)).thenReturn(1);
+    stubLockedReservation(reservation);
+    when(reservationRepository.confirmActive(RESERVATION_ID, USER_ID, NOW)).thenReturn(1);
 
     ReservationConfirmationResult result =
         reservationService.confirmForPayment(RESERVATION_ID, USER_ID);
@@ -64,10 +63,9 @@ class ReservationPaymentServiceTest {
   @Test
   void should_recoverStock_when_expiredReservationCanBePaid() {
     Reservation reservation = reservation(ReservationStatus.EXPIRED);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
     when(inventoryService.tryReserve(TICKET_TYPE_ID, 2)).thenReturn(true);
-    when(reservationRepository.confirmForPayment(RESERVATION_ID, USER_ID)).thenReturn(1);
+    when(reservationRepository.confirmRecovered(RESERVATION_ID, USER_ID)).thenReturn(1);
 
     ReservationConfirmationResult result =
         reservationService.confirmForPayment(RESERVATION_ID, USER_ID);
@@ -79,33 +77,31 @@ class ReservationPaymentServiceTest {
   @Test
   void should_reportOutOfStock_when_expiredReservationCannotBeRecovered() {
     Reservation reservation = reservation(ReservationStatus.EXPIRED);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
     when(inventoryService.tryReserve(TICKET_TYPE_ID, 2)).thenReturn(false);
 
     ReservationConfirmationResult result =
         reservationService.confirmForPayment(RESERVATION_ID, USER_ID);
 
     assertThat(result).isEqualTo(ReservationConfirmationResult.OUT_OF_STOCK);
-    verify(reservationRepository, never()).confirmForPayment(RESERVATION_ID, USER_ID);
+    verify(reservationRepository, never()).confirmRecovered(RESERVATION_ID, USER_ID);
   }
 
   @Test
   void should_beIdempotent_when_reservationWasAlreadyConfirmed() {
     Reservation reservation = reservation(ReservationStatus.CONFIRMED);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
 
     assertThat(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .isEqualTo(ReservationConfirmationResult.CONFIRMED);
-    verify(reservationRepository, never()).confirmForPayment(RESERVATION_ID, USER_ID);
+    verify(reservationRepository, never()).confirmActive(RESERVATION_ID, USER_ID, NOW);
+    verify(reservationRepository, never()).confirmRecovered(RESERVATION_ID, USER_ID);
   }
 
   @Test
   void should_releaseStock_when_paymentFailsForActiveReservation() {
     Reservation reservation = reservation(ReservationStatus.ACTIVE);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
     when(reservationRepository.cancelActive(RESERVATION_ID, USER_ID)).thenReturn(1);
 
     reservationService.releaseForPayment(RESERVATION_ID, USER_ID);
@@ -116,8 +112,7 @@ class ReservationPaymentServiceTest {
   @Test
   void should_notReleaseStockAgain_when_reservationAlreadyExpired() {
     Reservation reservation = reservation(ReservationStatus.EXPIRED);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
 
     reservationService.releaseForPayment(RESERVATION_ID, USER_ID);
 
@@ -127,11 +122,18 @@ class ReservationPaymentServiceTest {
   @Test
   void should_rejectRelease_when_reservationIsConfirmed() {
     Reservation reservation = reservation(ReservationStatus.CONFIRMED);
-    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubLockedReservation(reservation);
 
     assertThatThrownBy(() -> reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
         .isInstanceOf(InvalidStateTransitionException.class);
+  }
+
+  private void stubLockedReservation(Reservation reservation) {
+    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(reservation));
+    lenient().when(reservationRepository.databaseNow()).thenReturn(NOW.atOffset(ZoneOffset.UTC));
   }
 
   private static Reservation reservation(ReservationStatus status) {

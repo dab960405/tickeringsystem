@@ -9,6 +9,7 @@ import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
 import com.portfolio.ticketing.reservation.domain.Reservation;
+import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
@@ -42,7 +43,7 @@ public class ReservationService {
 
   @PreAuthorize("hasRole('USER')")
   public ReservationResponse create(UUID userId, ReservationRequest request) {
-    TicketType ticketType = inventoryService.findRequired(request.ticketTypeId());
+    TicketType ticketType = inventoryService.lockRequired(request.ticketTypeId());
     Instant now = clock.instant();
     validateSale(ticketType, request.quantity(), now);
     inventoryService.reserve(ticketType.getId(), request.quantity());
@@ -57,15 +58,20 @@ public class ReservationService {
 
   @PreAuthorize("hasRole('USER')")
   public void cancel(UUID id, UUID userId) {
-    Reservation reservation = findOwned(id, userId);
-    if (reservation.getStatus() != ReservationStatus.ACTIVE) {
+    Reservation discovered = findOwned(id, userId);
+    UUID ticketTypeId = discovered.getTicketType().getId();
+    inventoryService.lockRequired(ticketTypeId);
+    Reservation reservation = findOwnedForUpdate(id, userId);
+    requireSameTicketType(reservation, ticketTypeId);
+    if (reservation.getStatus() != ReservationStatus.ACTIVE
+        || reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
       throw new InvalidStateTransitionException(
           "Reservation cannot move from " + reservation.getStatus() + " to CANCELLED");
     }
     if (reservationRepository.cancelActive(id, userId) == 0) {
       throw new InvalidStateTransitionException("Reservation is no longer active");
     }
-    inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+    inventoryService.release(ticketTypeId, reservation.getQuantity());
   }
 
   @Transactional(readOnly = true)
@@ -84,21 +90,39 @@ public class ReservationService {
 
   @Transactional
   public ReservationConfirmationResult confirmForPayment(UUID id, UUID userId) {
+    Reservation discovered = findOwned(id, userId);
+    UUID ticketTypeId = discovered.getTicketType().getId();
+    inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
-    if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
+    requireSameTicketType(reservation, ticketTypeId);
+    Instant evaluationTime = reservationRepository.databaseNow().toInstant();
+
+    if (reservation.getStatus() == ReservationStatus.CONFIRMED
+        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.CONSUMED) {
       return ReservationConfirmationResult.CONFIRMED;
     }
-    if (reservation.getStatus() != ReservationStatus.ACTIVE
-        && reservation.getStatus() != ReservationStatus.EXPIRED) {
+    if (reservation.getStatus() == ReservationStatus.ACTIVE
+        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.HELD
+        && reservation.getExpiresAt().isAfter(evaluationTime)) {
+      confirmActive(id, userId, evaluationTime);
+      return ReservationConfirmationResult.CONFIRMED;
+    }
+    boolean requiresRecovery =
+        reservation.getStatus() == ReservationStatus.EXPIRED
+            && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED;
+    if (reservation.getStatus() == ReservationStatus.ACTIVE
+        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.HELD) {
+      expireActiveReservation(reservation, evaluationTime);
+      requiresRecovery = true;
+    }
+    if (!requiresRecovery) {
       throw new InvalidStateTransitionException(
           "Reservation cannot be confirmed from " + reservation.getStatus());
     }
-    if (reservation.getStatus() == ReservationStatus.EXPIRED
-        && !inventoryService.tryReserve(
-            reservation.getTicketType().getId(), reservation.getQuantity())) {
+    if (!inventoryService.tryReserve(ticketTypeId, reservation.getQuantity())) {
       return ReservationConfirmationResult.OUT_OF_STOCK;
     }
-    if (reservationRepository.confirmForPayment(id, userId) == 0) {
+    if (reservationRepository.confirmRecovered(id, userId) == 0) {
       throw new InvalidStateTransitionException("Reservation is no longer available for payment");
     }
     return ReservationConfirmationResult.CONFIRMED;
@@ -106,15 +130,41 @@ public class ReservationService {
 
   @Transactional
   public void releaseForPayment(UUID id, UUID userId) {
+    Reservation discovered = findOwned(id, userId);
+    UUID ticketTypeId = discovered.getTicketType().getId();
+    inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
+    requireSameTicketType(reservation, ticketTypeId);
     if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
       throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
     }
     if (reservation.getStatus() != ReservationStatus.ACTIVE) {
       return;
     }
+    if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
+      throw new InvalidStateTransitionException("Active reservation does not hold inventory");
+    }
     if (reservationRepository.cancelActive(id, userId) == 1) {
-      inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+      inventoryService.release(ticketTypeId, reservation.getQuantity());
+    }
+  }
+
+  private void confirmActive(UUID id, UUID userId, Instant evaluationTime) {
+    if (reservationRepository.confirmActive(id, userId, evaluationTime) == 0) {
+      throw new InvalidStateTransitionException("Reservation is no longer active for payment");
+    }
+  }
+
+  private void expireActiveReservation(Reservation reservation, Instant evaluationTime) {
+    if (reservationRepository.expireActive(reservation.getId(), evaluationTime) != 1) {
+      throw new InvalidStateTransitionException("Reservation could not be expired for recovery");
+    }
+    inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+  }
+
+  private static void requireSameTicketType(Reservation reservation, UUID expectedTicketTypeId) {
+    if (!reservation.getTicketType().getId().equals(expectedTicketTypeId)) {
+      throw new BusinessRuleViolationException("Reservation inventory relationship changed");
     }
   }
 

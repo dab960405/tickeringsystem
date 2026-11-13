@@ -61,7 +61,7 @@ class ReservationServiceTest {
   @Test
   void should_createReservationWithConfiguredTtl_when_saleIsOpen() {
     TicketType ticketType = saleableTicketType(EventStatus.PUBLISHED, 4, true);
-    when(inventoryService.findRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
     when(reservationRepository.save(any(Reservation.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -81,7 +81,7 @@ class ReservationServiceTest {
   @Test
   void should_rejectReservation_when_eventIsNotPublished() {
     TicketType ticketType = saleableTicketType(EventStatus.DRAFT, 4, true);
-    when(inventoryService.findRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
 
     assertThatThrownBy(
             () -> reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2)))
@@ -92,7 +92,7 @@ class ReservationServiceTest {
   @Test
   void should_rejectReservation_when_saleWindowIsClosed() {
     TicketType ticketType = saleableTicketType(EventStatus.PUBLISHED, 4, false);
-    when(inventoryService.findRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
 
     assertThatThrownBy(
             () -> reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2)))
@@ -103,7 +103,7 @@ class ReservationServiceTest {
   @Test
   void should_rejectReservation_when_quantityExceedsMaxPerOrder() {
     TicketType ticketType = saleableTicketType(EventStatus.PUBLISHED, 1, true);
-    when(inventoryService.findRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
 
     assertThatThrownBy(
             () -> reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2)))
@@ -114,7 +114,7 @@ class ReservationServiceTest {
   @Test
   void should_propagateInsufficientStock_when_atomicUpdateFails() {
     TicketType ticketType = saleableTicketType(EventStatus.PUBLISHED, 4, true);
-    when(inventoryService.findRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
     doThrow(new InsufficientStockException("out of stock"))
         .when(inventoryService)
         .reserve(TICKET_TYPE_ID, 2);
@@ -129,6 +129,8 @@ class ReservationServiceTest {
   void should_releaseStock_when_ownerCancelsActiveReservation() {
     Reservation reservation = activeReservation();
     when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
     when(reservationRepository.cancelActive(RESERVATION_ID, USER_ID)).thenReturn(1);
 
@@ -152,6 +154,8 @@ class ReservationServiceTest {
     Reservation reservation = activeReservation();
     reservation.cancel();
     when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(reservation));
+    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
 
     assertThatThrownBy(() -> reservationService.cancel(RESERVATION_ID, USER_ID))

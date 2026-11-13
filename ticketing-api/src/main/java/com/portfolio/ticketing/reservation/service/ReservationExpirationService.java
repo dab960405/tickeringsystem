@@ -1,12 +1,19 @@
 package com.portfolio.ticketing.reservation.service;
 
+import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.reservation.domain.Reservation;
+import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
+import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,13 +41,45 @@ public class ReservationExpirationService {
       initialDelayString = "${ticketing.reservation.expiration-fixed-delay-ms:30000}")
   @Transactional
   public void expireOverdue() {
-    Instant now = clock.instant();
-    List<Reservation> candidates = reservationRepository.findExpiredForUpdate(now, BATCH_SIZE);
-    for (Reservation reservation : candidates) {
-      UUID ticketTypeId = reservation.getTicketType().getId();
-      int quantity = reservation.getQuantity();
-      if (reservationRepository.expireActive(reservation.getId(), now) == 1) {
-        inventoryService.release(ticketTypeId, quantity);
+    List<Reservation> candidates =
+        reservationRepository.findExpiredCandidates(clock.instant(), BATCH_SIZE);
+    if (candidates.isEmpty()) {
+      return;
+    }
+
+    List<UUID> ticketTypeIds =
+        candidates.stream()
+            .map(reservation -> reservation.getTicketType().getId())
+            .distinct()
+            .sorted(Comparator.comparing(UUID::toString))
+            .toList();
+    inventoryService.lockAll(ticketTypeIds);
+
+    List<UUID> reservationIds =
+        candidates.stream()
+            .map(Reservation::getId)
+            .sorted(Comparator.comparing(UUID::toString))
+            .toList();
+    Map<UUID, Reservation> candidatesById =
+        candidates.stream()
+            .collect(Collectors.toUnmodifiableMap(Reservation::getId, Function.identity()));
+    List<Reservation> lockedReservations =
+        reservationRepository.findAllByIdForUpdate(reservationIds);
+    Instant evaluationTime = reservationRepository.databaseNow().toInstant();
+
+    for (Reservation reservation : lockedReservations) {
+      Reservation candidate = candidatesById.get(reservation.getId());
+      if (candidate == null
+          || !candidate.getTicketType().getId().equals(reservation.getTicketType().getId())) {
+        throw new BusinessRuleViolationException("Reservation inventory relationship changed");
+      }
+      if (reservation.getStatus() != ReservationStatus.ACTIVE
+          || reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD
+          || reservation.getExpiresAt().isAfter(evaluationTime)) {
+        continue;
+      }
+      if (reservationRepository.expireActive(reservation.getId(), evaluationTime) == 1) {
+        inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
       }
     }
   }
