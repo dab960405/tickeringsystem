@@ -82,7 +82,7 @@ public class ReservationExpirationService {
         continue;
       }
       if (reservationRepository.expireActive(reservation.getId(), evaluationTime) == 1) {
-        inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+        inventoryService.release(candidateTicketTypeId, reservation.getQuantity());
       }
     }
   }

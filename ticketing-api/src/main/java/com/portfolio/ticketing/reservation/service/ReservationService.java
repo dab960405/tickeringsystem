@@ -91,39 +91,39 @@ public class ReservationService {
   public ReservationConfirmationResult confirmForPayment(UUID id, UUID userId) {
     UUID ticketTypeId = discoverTicketTypeId(id, userId);
     inventoryService.lockRequired(ticketTypeId);
-    Reservation reservation = findOwnedForUpdate(id, userId);
-    requireSameTicketType(reservation, ticketTypeId);
+    LockedReservation reservation =
+        LockedReservation.of(findOwnedForUpdate(id, userId), ticketTypeId);
     Instant evaluationTime = reservationRepository.databaseNow();
 
-    if (reservation.getStatus() == ReservationStatus.CONFIRMED
-        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.CONSUMED) {
+    if (reservation.status() == ReservationStatus.CONFIRMED
+        && reservation.disposition() == ReservationInventoryDisposition.CONSUMED) {
       return ReservationConfirmationResult.CONFIRMED;
     }
-    if (reservation.getStatus() == ReservationStatus.ACTIVE
-        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.HELD
-        && reservation.getExpiresAt().isAfter(evaluationTime)) {
+    if (reservation.status() == ReservationStatus.ACTIVE
+        && reservation.disposition() == ReservationInventoryDisposition.HELD
+        && reservation.expiresAt().isAfter(evaluationTime)) {
       confirmActive(id, userId, evaluationTime);
       return ReservationConfirmationResult.CONFIRMED;
     }
-    if (reservation.getStatus() == ReservationStatus.CANCELLED) {
+    if (reservation.status() == ReservationStatus.CANCELLED) {
       return ReservationConfirmationResult.RECOVERY_NOT_ALLOWED;
     }
     boolean requiresRecovery =
-        reservation.getStatus() == ReservationStatus.EXPIRED
-            && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED;
-    if (reservation.getStatus() == ReservationStatus.ACTIVE
-        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.HELD) {
+        reservation.status() == ReservationStatus.EXPIRED
+            && reservation.disposition() == ReservationInventoryDisposition.RELEASED;
+    if (reservation.status() == ReservationStatus.ACTIVE
+        && reservation.disposition() == ReservationInventoryDisposition.HELD) {
       expireActiveReservation(reservation, evaluationTime);
       requiresRecovery = true;
     }
     if (!requiresRecovery) {
       throw new InvalidStateTransitionException(
-          "Reservation cannot be confirmed from " + reservation.getStatus());
+          "Reservation cannot be confirmed from " + reservation.status());
     }
     if (!canRecover(reservation, evaluationTime)) {
       return ReservationConfirmationResult.RECOVERY_NOT_ALLOWED;
     }
-    if (!inventoryService.tryReserve(ticketTypeId, reservation.getQuantity())) {
+    if (!inventoryService.tryReserve(ticketTypeId, reservation.quantity())) {
       return ReservationConfirmationResult.OUT_OF_STOCK;
     }
     if (reservationRepository.confirmRecovered(id, userId) == 0) {
@@ -152,10 +152,10 @@ public class ReservationService {
     }
   }
 
-  private boolean canRecover(Reservation reservation, Instant evaluationTime) {
-    Instant recoveryDeadline = reservation.getExpiresAt().plus(properties.getRecoveryGrace());
-    Instant eventStartsAt = reservation.getTicketType().getEvent().getStartsAt();
-    return !evaluationTime.isAfter(recoveryDeadline) && eventStartsAt.isAfter(evaluationTime);
+  private boolean canRecover(LockedReservation reservation, Instant evaluationTime) {
+    Instant recoveryDeadline = reservation.expiresAt().plus(properties.getRecoveryGrace());
+    return !evaluationTime.isAfter(recoveryDeadline)
+        && reservation.eventStartsAt().isAfter(evaluationTime);
   }
 
   private void confirmActive(UUID id, UUID userId, Instant evaluationTime) {
@@ -164,11 +164,37 @@ public class ReservationService {
     }
   }
 
-  private void expireActiveReservation(Reservation reservation, Instant evaluationTime) {
-    if (reservationRepository.expireActive(reservation.getId(), evaluationTime) != 1) {
+  private void expireActiveReservation(LockedReservation reservation, Instant evaluationTime) {
+    if (reservationRepository.expireActive(reservation.id(), evaluationTime) != 1) {
       throw new InvalidStateTransitionException("Reservation could not be expired for recovery");
     }
-    inventoryService.release(reservation.getTicketType().getId(), reservation.getQuantity());
+    inventoryService.release(reservation.ticketTypeId(), reservation.quantity());
+  }
+
+  /**
+   * Values captured right after the T → R locks. Modifying queries clear the persistence context,
+   * so later decisions must not navigate lazy associations of the locked entity.
+   */
+  private record LockedReservation(
+      UUID id,
+      UUID ticketTypeId,
+      ReservationStatus status,
+      ReservationInventoryDisposition disposition,
+      int quantity,
+      Instant expiresAt,
+      Instant eventStartsAt) {
+
+    static LockedReservation of(Reservation reservation, UUID expectedTicketTypeId) {
+      requireSameTicketType(reservation, expectedTicketTypeId);
+      return new LockedReservation(
+          reservation.getId(),
+          expectedTicketTypeId,
+          reservation.getStatus(),
+          reservation.getInventoryDisposition(),
+          reservation.getQuantity(),
+          reservation.getExpiresAt(),
+          reservation.getTicketType().getEvent().getStartsAt());
+    }
   }
 
   private static void requireSameTicketType(Reservation reservation, UUID expectedTicketTypeId) {
