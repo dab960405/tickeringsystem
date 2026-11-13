@@ -37,6 +37,10 @@ public class Reservation extends BaseEntity {
   @Column(name = "expires_at", nullable = false)
   private Instant expiresAt;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "inventory_disposition", nullable = false, length = 20)
+  private ReservationInventoryDisposition inventoryDisposition;
+
   protected Reservation() {}
 
   public Reservation(UUID userId, TicketType ticketType, int quantity, Instant expiresAt) {
@@ -48,6 +52,7 @@ public class Reservation extends BaseEntity {
     }
     this.quantity = quantity;
     this.status = ReservationStatus.ACTIVE;
+    this.inventoryDisposition = ReservationInventoryDisposition.HELD;
   }
 
   public boolean isActiveAt(Instant now) {
@@ -71,11 +76,16 @@ public class Reservation extends BaseEntity {
   }
 
   private void transitionTo(ReservationStatus target) {
-    if (status != ReservationStatus.ACTIVE) {
+    if (status != ReservationStatus.ACTIVE
+        || inventoryDisposition != ReservationInventoryDisposition.HELD) {
       throw new InvalidStateTransitionException(
           "Reservation cannot move from " + status + " to " + target);
     }
     status = target;
+    inventoryDisposition =
+        target == ReservationStatus.CONFIRMED
+            ? ReservationInventoryDisposition.CONSUMED
+            : ReservationInventoryDisposition.RELEASED;
   }
 
   public UUID getUserId() {
@@ -96,5 +106,9 @@ public class Reservation extends BaseEntity {
 
   public Instant getExpiresAt() {
     return expiresAt;
+  }
+
+  public ReservationInventoryDisposition getInventoryDisposition() {
+    return inventoryDisposition;
   }
 }

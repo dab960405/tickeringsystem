@@ -95,6 +95,24 @@ class ReservationRepositoryIT extends AbstractIntegrationTest {
             jdbcTemplate.queryForObject(
                 "SELECT status FROM reservations WHERE id = ?", String.class, reservation.getId()))
         .isEqualTo("CANCELLED");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT inventory_disposition FROM reservations WHERE id = ?",
+                String.class,
+                reservation.getId()))
+        .isEqualTo("RELEASED");
+  }
+
+  @Test
+  void should_rejectReleasedInventory_when_reservationRemainsActive() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            jdbcTemplate.update(
+                "INSERT INTO reservations (user_id, ticket_type_id, quantity, status,"
+                    + " inventory_disposition, expires_at) VALUES (?, ?, 1, 'ACTIVE',"
+                    + " 'RELEASED', now() + interval '10 minutes')",
+                userId,
+                ticketType.getId()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
   }
 
   private int availableQuantity() {

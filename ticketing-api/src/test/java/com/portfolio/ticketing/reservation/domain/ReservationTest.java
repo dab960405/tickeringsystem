@@ -53,8 +53,13 @@ class ReservationTest {
     Reservation reservation = reservation();
 
     assertThat(reservation)
-        .extracting(Reservation::getStatus, Reservation::getQuantity, Reservation::getUserId)
-        .containsExactly(ReservationStatus.ACTIVE, 2, USER_ID);
+        .extracting(
+            Reservation::getStatus,
+            Reservation::getInventoryDisposition,
+            Reservation::getQuantity,
+            Reservation::getUserId)
+        .containsExactly(
+            ReservationStatus.ACTIVE, ReservationInventoryDisposition.HELD, 2, USER_ID);
   }
 
   @Test
@@ -75,26 +80,41 @@ class ReservationTest {
 
   static Stream<Arguments> terminalTransitions() {
     return Stream.of(
-        Arguments.of((Consumer<Reservation>) Reservation::confirm, ReservationStatus.CONFIRMED),
-        Arguments.of((Consumer<Reservation>) Reservation::expire, ReservationStatus.EXPIRED),
-        Arguments.of((Consumer<Reservation>) Reservation::cancel, ReservationStatus.CANCELLED));
+        Arguments.of(
+            (Consumer<Reservation>) Reservation::confirm,
+            ReservationStatus.CONFIRMED,
+            ReservationInventoryDisposition.CONSUMED),
+        Arguments.of(
+            (Consumer<Reservation>) Reservation::expire,
+            ReservationStatus.EXPIRED,
+            ReservationInventoryDisposition.RELEASED),
+        Arguments.of(
+            (Consumer<Reservation>) Reservation::cancel,
+            ReservationStatus.CANCELLED,
+            ReservationInventoryDisposition.RELEASED));
   }
 
   @ParameterizedTest
   @MethodSource("terminalTransitions")
   void should_transition_when_reservationIsActive(
-      Consumer<Reservation> transition, ReservationStatus expected) {
+      Consumer<Reservation> transition,
+      ReservationStatus expected,
+      ReservationInventoryDisposition expectedDisposition) {
     Reservation reservation = reservation();
 
     transition.accept(reservation);
 
-    assertThat(reservation.getStatus()).isEqualTo(expected);
+    assertThat(reservation)
+        .extracting(Reservation::getStatus, Reservation::getInventoryDisposition)
+        .containsExactly(expected, expectedDisposition);
   }
 
   @ParameterizedTest
   @MethodSource("terminalTransitions")
   void should_rejectTransition_when_reservationIsAlreadyTerminal(
-      Consumer<Reservation> transition, ReservationStatus expected) {
+      Consumer<Reservation> transition,
+      ReservationStatus expected,
+      ReservationInventoryDisposition expectedDisposition) {
     Reservation reservation = reservation();
     transition.accept(reservation);
 

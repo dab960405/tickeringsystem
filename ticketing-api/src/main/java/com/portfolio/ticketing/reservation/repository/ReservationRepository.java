@@ -31,8 +31,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
       value =
           """
           UPDATE reservations
-          SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
-          WHERE id = :id AND user_id = :userId AND status = 'ACTIVE'
+          SET status = 'CANCELLED', inventory_disposition = 'RELEASED',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = :id AND user_id = :userId
+            AND status = 'ACTIVE' AND inventory_disposition = 'HELD'
           """,
       nativeQuery = true)
   int cancelActive(@Param("id") UUID id, @Param("userId") UUID userId);
@@ -42,8 +44,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
       value =
           """
           UPDATE reservations
-          SET status = 'EXPIRED', updated_at = CURRENT_TIMESTAMP
-          WHERE id = :id AND status = 'ACTIVE' AND expires_at < :now
+          SET status = 'EXPIRED', inventory_disposition = 'RELEASED',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = :id AND status = 'ACTIVE' AND inventory_disposition = 'HELD'
+            AND expires_at <= :now
           """,
       nativeQuery = true)
   int expireActive(@Param("id") UUID id, @Param("now") Instant now);
@@ -58,8 +62,11 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
       value =
           """
           UPDATE reservations
-          SET status = 'CONFIRMED', updated_at = CURRENT_TIMESTAMP
-          WHERE id = :id AND user_id = :userId AND status IN ('ACTIVE', 'EXPIRED')
+          SET status = 'CONFIRMED', inventory_disposition = 'CONSUMED',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = :id AND user_id = :userId
+            AND ((status = 'ACTIVE' AND inventory_disposition = 'HELD')
+              OR (status = 'EXPIRED' AND inventory_disposition = 'RELEASED'))
           """,
       nativeQuery = true)
   int confirmForPayment(@Param("id") UUID id, @Param("userId") UUID userId);
