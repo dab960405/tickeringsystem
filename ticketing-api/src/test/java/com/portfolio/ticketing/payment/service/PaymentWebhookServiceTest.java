@@ -1,8 +1,13 @@
 package com.portfolio.ticketing.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.common.exception.AuthenticationFailedException;
@@ -36,6 +41,8 @@ class PaymentWebhookServiceTest {
           + "\"operationKind\":\"PAYMENT_CAPTURE\",\"amount\":80.00,\"currency\":\"USD\"}";
 
   @Mock private OrderPaymentService orderPaymentService;
+  @Mock private ProviderEventInboxService inboxService;
+  @Mock private SemanticApplicationService semanticApplicationService;
 
   private PaymentWebhookService paymentWebhookService;
 
@@ -44,11 +51,26 @@ class PaymentWebhookServiceTest {
     PaymentProperties properties = new PaymentProperties();
     properties.setWebhookSecret(SECRET);
     paymentWebhookService =
-        new PaymentWebhookService(properties, new ObjectMapper(), orderPaymentService);
+        new PaymentWebhookService(
+            properties,
+            new ObjectMapper(),
+            orderPaymentService,
+            inboxService,
+            semanticApplicationService);
   }
 
   @Test
   void should_delegateValidSignedPayload() throws Exception {
+    ProviderEventReceipt receipt = mock(ProviderEventReceipt.class);
+    when(inboxService.receive(any(PaymentWebhookRequest.class), eq(PAYLOAD))).thenReturn(receipt);
+    doAnswer(
+            invocation -> {
+              invocation.getArgument(1, Runnable.class).run();
+              return null;
+            })
+        .when(semanticApplicationService)
+        .apply(eq(receipt), any(Runnable.class));
+
     paymentWebhookService.handle(signature(PAYLOAD), PAYLOAD);
 
     verify(orderPaymentService)
@@ -61,7 +83,7 @@ class PaymentWebhookServiceTest {
   void should_rejectInvalidSignature_beforeParsingPayload() {
     assertThatThrownBy(() -> paymentWebhookService.handle("invalid", PAYLOAD))
         .isInstanceOf(AuthenticationFailedException.class);
-    verifyNoInteractions(orderPaymentService);
+    verifyNoInteractions(orderPaymentService, inboxService, semanticApplicationService);
   }
 
   @Test
@@ -70,7 +92,7 @@ class PaymentWebhookServiceTest {
 
     assertThatThrownBy(() -> paymentWebhookService.handle(signature(payload), payload))
         .isInstanceOf(BusinessRuleViolationException.class);
-    verifyNoInteractions(orderPaymentService);
+    verifyNoInteractions(orderPaymentService, inboxService, semanticApplicationService);
   }
 
   private static String signature(String payload) throws Exception {

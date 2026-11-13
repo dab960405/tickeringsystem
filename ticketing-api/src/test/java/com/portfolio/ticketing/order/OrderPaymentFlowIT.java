@@ -1,7 +1,10 @@
 package com.portfolio.ticketing.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
@@ -10,7 +13,9 @@ import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.order.service.OrderService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
+import com.portfolio.ticketing.payment.config.PaymentProperties;
 import com.portfolio.ticketing.payment.domain.PaymentStatus;
+import com.portfolio.ticketing.payment.service.PaymentWebhookService;
 import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.service.ReservationExpirationService;
@@ -21,14 +26,19 @@ import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -45,7 +55,10 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Autowired private ReservationExpirationService expirationService;
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
+  @Autowired private PaymentWebhookService paymentWebhookService;
   @Autowired private OrderCancellationService orderCancellationService;
+  @Autowired private ObjectMapper objectMapper;
+  @Autowired private PaymentProperties paymentProperties;
   @Autowired private TicketTypeRepository ticketTypeRepository;
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
@@ -160,6 +173,114 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         .isEqualTo("CANCELLED");
   }
 
+  @Test
+  void should_persistAndDeduplicateThreeIdentities_when_sameWebhookIsRepeated() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest webhook = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-inbox");
+    String payload = objectMapper.writeValueAsString(webhook);
+
+    paymentWebhookService.handle(signature(payload), payload);
+    paymentWebhookService.handle(signature(payload), payload);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(countRows("provider_events", "provider_event_id", webhook.providerEventId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "provider_operations", "provider_operation_id", webhook.providerOperationId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", webhook.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_applySemanticOperationOnceAcrossDistinctProviderEvents() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest first = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-two-events");
+    PaymentWebhookRequest second =
+        new PaymentWebhookRequest(
+            first.orderId(),
+            first.status(),
+            first.providerReference(),
+            UUID.randomUUID(),
+            first.providerOperationId(),
+            first.operationKind(),
+            first.amount(),
+            first.currency());
+
+    handle(first);
+    handle(second);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM provider_events pe"
+                    + " JOIN provider_operations po ON pe.provider_operation_id = po.id"
+                    + " WHERE po.provider_operation_id = ?",
+                Integer.class,
+                first.providerOperationId()))
+        .isEqualTo(2);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", first.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_rejectChangedEvidenceForSameProviderOperation() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest first = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-digest");
+    PaymentWebhookRequest changed =
+        new PaymentWebhookRequest(
+            first.orderId(),
+            first.status(),
+            first.providerReference(),
+            UUID.randomUUID(),
+            first.providerOperationId(),
+            first.operationKind(),
+            new BigDecimal("41.00"),
+            first.currency());
+    handle(first);
+
+    assertThatThrownBy(() -> handle(changed)).isInstanceOf(DuplicateResourceException.class);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", first.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_rejectUpdatesToAppendOnlyProviderEvidence() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest webhook = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-append");
+    handle(webhook);
+
+    assertThatThrownBy(() ->
+            jdbcTemplate.update(
+                "UPDATE provider_events SET payload_digest = payload_digest"
+                    + " WHERE provider_event_id = ?",
+                webhook.providerEventId()))
+        .isInstanceOf(DataAccessException.class)
+        .hasMessageContaining("append-only");
+  }
+
+  private void handle(PaymentWebhookRequest webhook) throws Exception {
+    String payload = objectMapper.writeValueAsString(webhook);
+    paymentWebhookService.handle(signature(payload), payload);
+  }
+
+  private String signature(String payload) throws Exception {
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(
+        new SecretKeySpec(
+            paymentProperties.getWebhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    return HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+  }
+
   private static PaymentWebhookRequest webhook(
       OrderFixture fixture, PaymentStatus status, String providerReference) {
     return new PaymentWebhookRequest(
@@ -268,6 +389,11 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   private int countRows(String table, String column, UUID id) {
+    return jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?", Integer.class, id);
+  }
+
+  private int countRowsByString(String table, String column, String id) {
     return jdbcTemplate.queryForObject(
         "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?", Integer.class, id);
   }

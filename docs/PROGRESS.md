@@ -1,12 +1,36 @@
 # Progreso del proyecto
 
-Última actualización: 2026-11-12 · Rama de trabajo: `dev`
+Última actualización: 2026-11-13 · Rama de trabajo: `dev`
 
 ## Estado actual
 
-**Fases 0–2 completadas. Fase 3: alcance principal implementado; hardening de cancelación de eventos pendiente. Fase 4: implementación y evidencia CI completadas; cierre formal pendiente de confirmación explícita. Fase 5 no iniciada.**
+**Fase 4 abierta. Fase 5 bloqueada y no iniciada.** El cierre exige evidencia para H75–H84 y aprobación independiente; los pipelines verdes anteriores no demuestran ese cierre.
 
-El alcance real de Fase 4 es: caché Redis de metadatos del catálogo, fallback ante fallos Redis, rate limiting de login fail-open, refresh token store fail-closed y validación local de access tokens. No se implementó caché de eventos ni almacenamiento de reservas en Redis.
+La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo CI `43437152585` estaba en verde. En ese punto existían configuración operativa y mejoras de reservas/pagos, pero no las estructuras de H77/H78 ni las identidades persistentes de H80.
+
+## Matriz de cierre H75–H84
+
+| Requisito | Estado demostrado | Pendiente |
+| --- | --- | --- |
+| H75 — orden global de locks | Parcial: T → R en reservas; J → XA todavía no existe | Auditoría de todos los flujos y nuevos workers |
+| H76 — protocolo T → R | Implementado en confirmación, expiración, liberación y recuperación; pruebas de carreras presentes | Validación integral con los componentes nuevos |
+| H77 — unidades y generaciones | Pendiente | Modelo, backfill, emisión y reemisión |
+| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | Pendiente; solo existe `OperationProperties` | Persistencia, TX-RX/CLAIM/APPLY/PROJECT y recuperación |
+| H79 — pagos tardíos | Parcial: recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED` | Integración con inbox, workers e idempotencia global |
+| H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14, inbox durable, tres identidades, digest y aplicación semántica única | Integración con procesamiento recuperable H78 y pruebas concurrentes |
+| H81 — Redis | Parcial: caché de catálogo, login y degradación | Caché de eventos, claves de reserva y límites de reservas/órdenes de ADR-020 |
+| H82 — configuración operativa | Propiedades validadas y probadas | Consumo por transacciones y workers reales |
+| H83 — consistencia global de locks | Parcial | Auditoría después de H77/H78/H80 |
+| H84 — reembolsos | Parcial: solicitud y confirmación con evidencia | Integración con identidades, inbox, reintentos y workers |
+
+## Incremento H80 — V14
+
+- `provider_events`, `provider_operations` y `semantic_applications` tienen restricciones únicas independientes y triggers append-only.
+- `ProviderEventInboxService` registra la recepción en una transacción independiente y detecta reuso de identidad con payload o evidencia distinta.
+- `SemanticApplicationService` reserva `(application_scope, operation_kind, idempotency_key)` en la misma transacción que los efectos de negocio; un duplicado con el mismo digest es no-op.
+- `PaymentWebhookService` ya no depende únicamente del estado de la orden para deduplicar: persiste recepción e identidad semántica antes de devolver éxito.
+- Validación local: suite unitaria completa en verde y `OrderPaymentFlowIT` con **10 tests, 0 fallos y 0 errores** usando PostgreSQL/Testcontainers. Los nuevos casos cubren webhook repetido, eventos distintos de una misma operación, digest conflictivo y evidencia append-only.
+- Este incremento no implementa todavía ciclos, workers, leases ni recuperación; H80 permanece vinculado a H78 para el cierre.
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -94,32 +118,31 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. **Cancelación de eventos incompleta:** `EventService.cancel()` no coordina todavía reservas, órdenes pendientes, pagos, tickets ni la transición/evento correspondiente. Requiere hardening y pruebas específicas.
-2. **Órdenes que nunca pasan a `EXPIRED`:** pendiente definir y verificar una transición explícita para órdenes pendientes que sobreviven a la expiración de la reserva.
-3. **Reembolso sin devolución automática de stock:** se mantiene ADR-009; cambiarlo requiere una regla de negocio explícita.
-4. **Webhooks concurrentes sin prueba de integración:** falta validar callbacks simultáneos.
-5. **Rate limiting limitado a login:** no hay políticas para reservas ni órdenes.
-6. **Sin caché de eventos ni claves Redis `reservation:{id}`.**
-7. **Refresh token sin rotación:** refresh conserva el mismo refresh token.
-8. **Webhook sin timestamp anti-replay.**
-9. **Sin caché de `GET /events/{id}`.**
-10. **Outbox/Kafka y consumidor de notificaciones:** pertenecen a Fase 5.
+1. H77: unidades comerciales y generaciones individuales.
+2. H78/H82: ciclos, participaciones, jobs, ejecuciones, leases, fencing, disposiciones y proyecciones conectados a `OperationProperties`.
+3. H80: concurrencia de webhooks y recuperación mediante workers; la evidencia V14 ya está persistida.
+4. H81: alcance Redis de ADR-020.
+5. H75/H76/H83: auditoría global de locks después de incorporar los componentes estructurales.
+6. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
+7. Cancelación de eventos y transición de órdenes pendientes a `EXPIRED`, conservadas como deuda previa por resolver dentro del alcance autorizado cuando corresponda.
+8. Refresh token sin rotación y webhook sin timestamp anti-replay.
+9. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
 
 ## Verificación local y limitaciones
 
 - Los tests de integración requieren Docker/Testcontainers; la evidencia de Fase 4 se obtuvo en GitHub Actions.
 - [LOCAL_RUN](LOCAL_RUN.md) describe comandos y dependencias, pero los pasos con Docker Compose no se verificaron en el entorno de desarrollo asistido.
 - [flow.http](flow.http) es manual y no se ejecuta en CI. La firma del webhook debe generarse sobre el cuerpo raw exacto.
-- No se ejecutaron Maven ni Spotless en el entorno de desarrollo asistido; el estado reportado corresponde a CI.
+- Desde el incremento V14 se ejecutan Maven, Spotless y Testcontainers localmente con Java 21 y Docker. La evidencia histórica anterior procede de CI.
 
 ## Próximos pasos
 
-1. Ejecutar el hardening pendiente del ciclo de cancelación de eventos bajo una tarea autorizada independiente. Esta actualización documental no autoriza ni ejecuta esa implementación.
-2. Verificar los criterios de aceptación pendientes de las fases anteriores.
-3. Realizar la revisión formal de cierre de Fase 4.
-4. Esperar la confirmación explícita del cierre de Fase 4.
-5. No iniciar Fase 5 antes de completar y autorizar el cierre de Fase 4.
-6. Mantener los demás diferidos visibles en el backlog.
+1. Implementar H78/H82 sobre el inbox V14: TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT, con leases, fencing y recuperación.
+2. Implementar H77 y conectar emisión/reemisión a la aplicación de pagos.
+3. Completar H81 y auditar H75/H76/H83.
+4. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
+5. Preparar el expediente de cierre; la aprobación formal sigue reservada al responsable del proyecto.
+6. No iniciar Fase 5.
 
 ## Comandos de referencia
 

@@ -21,14 +21,20 @@ public class PaymentWebhookService {
   private final PaymentProperties properties;
   private final ObjectMapper objectMapper;
   private final OrderPaymentService orderPaymentService;
+  private final ProviderEventInboxService inboxService;
+  private final SemanticApplicationService semanticApplicationService;
 
   public PaymentWebhookService(
       PaymentProperties properties,
       ObjectMapper objectMapper,
-      OrderPaymentService orderPaymentService) {
+      OrderPaymentService orderPaymentService,
+      ProviderEventInboxService inboxService,
+      SemanticApplicationService semanticApplicationService) {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.orderPaymentService = orderPaymentService;
+    this.inboxService = inboxService;
+    this.semanticApplicationService = semanticApplicationService;
   }
 
   public void handle(String signature, String payload) {
@@ -36,7 +42,9 @@ public class PaymentWebhookService {
       throw new AuthenticationFailedException("Invalid webhook signature");
     }
     try {
-      orderPaymentService.process(objectMapper.readValue(payload, PaymentWebhookRequest.class));
+      PaymentWebhookRequest request = objectMapper.readValue(payload, PaymentWebhookRequest.class);
+      ProviderEventReceipt receipt = inboxService.receive(request, payload);
+      semanticApplicationService.apply(receipt, () -> orderPaymentService.process(request));
     } catch (JsonProcessingException exception) {
       throw new BusinessRuleViolationException("Invalid webhook payload");
     }
