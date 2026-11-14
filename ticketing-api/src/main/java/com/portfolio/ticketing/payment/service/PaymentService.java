@@ -22,6 +22,13 @@ public class PaymentService {
     return paymentRepository.save(new Payment(orderId, amount));
   }
 
+  public Payment lockRequiredByOrderId(UUID orderId) {
+    return paymentRepository
+        .findByOrderIdForUpdate(orderId)
+        .orElseThrow(
+            () -> new ResourceNotFoundException("Payment for order " + orderId + " not found"));
+  }
+
   @Transactional(readOnly = true)
   public Payment findRequiredByOrderId(UUID orderId) {
     return paymentRepository
