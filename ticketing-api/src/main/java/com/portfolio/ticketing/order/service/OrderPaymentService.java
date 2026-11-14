@@ -67,13 +67,14 @@ public class OrderPaymentService {
     }
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         && (order.getStatus() == OrderStatus.PAID
-            || order.getStatus() == OrderStatus.CANCELLED)) {
+            || order.getStatus() == OrderStatus.CANCELLED
+            || order.getStatus() == OrderStatus.EXPIRED)) {
       requireSameProviderReference(payment, request.providerReference());
       return;
     }
     UUID orderId = order.getId();
     ReservationConfirmationResult confirmation =
-        order.getStatus() == OrderStatus.CANCELLED
+        (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED)
             ? ReservationConfirmationResult.RECOVERY_NOT_ALLOWED
             : reservationService.confirmForPayment(order.getReservationId(), order.getUserId());
     LockedOrderPayment locked = lockOrderAndPayment(orderId);
@@ -91,7 +92,8 @@ public class OrderPaymentService {
     }
     if (payment.getStatus() != PaymentStatus.PENDING
         || (order.getStatus() != OrderStatus.PENDING_PAYMENT
-            && order.getStatus() != OrderStatus.CANCELLED)) {
+            && order.getStatus() != OrderStatus.CANCELLED
+            && order.getStatus() != OrderStatus.EXPIRED)) {
       throw new InvalidStateTransitionException("Order or payment cannot accept this capture");
     }
 
@@ -129,7 +131,8 @@ public class OrderPaymentService {
     if (releaseResult == ReservationReleaseResult.CONFIRMED) {
       throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
     }
-    if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
+    if ((order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED)
+        && payment.getStatus() == PaymentStatus.FAILED) {
       return;
     }
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
