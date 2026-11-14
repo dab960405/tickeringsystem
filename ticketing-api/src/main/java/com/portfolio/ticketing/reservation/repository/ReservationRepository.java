@@ -23,10 +23,12 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
   @Query(
       value =
           """
-          SELECT id, ticket_type_id AS ticketTypeId FROM reservations
-          WHERE status = 'ACTIVE' AND inventory_disposition = 'HELD'
-            AND expires_at <= :now
-          ORDER BY expires_at, id
+          SELECT r.id, r.ticket_type_id AS ticketTypeId, tt.event_id AS eventId
+          FROM reservations r
+          JOIN ticket_types tt ON tt.id = r.ticket_type_id
+          WHERE r.status = 'ACTIVE' AND r.inventory_disposition = 'HELD'
+            AND r.expires_at <= :now
+          ORDER BY r.expires_at, r.id
           LIMIT :limit
           """,
       nativeQuery = true)
