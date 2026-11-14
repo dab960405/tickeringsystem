@@ -73,6 +73,7 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   @Autowired private OrderCancellationService orderCancellationService;
   @Autowired private ProviderEventInboxService inboxService;
   @Autowired private OperationJobService jobService;
+  @Autowired private OperationTransactionExecutor transactionExecutor;
   @Autowired private PaymentOperationService paymentOperationService;
   @Autowired private PaymentWebhookService paymentWebhookService;
   @Autowired private PaymentProperties paymentProperties;
@@ -82,6 +83,19 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private DataSource dataSource;
+
+  @Test
+  void should_applyConfiguredPostgresTimeoutsInsideOperationTransactions() {
+    TimeoutSettings rx = transactionExecutor.rx(this::currentTimeouts);
+    TimeoutSettings claim = transactionExecutor.claim(this::currentTimeouts);
+    TimeoutSettings apply = transactionExecutor.apply(this::currentTimeouts);
+    TimeoutSettings project = transactionExecutor.project(this::currentTimeouts);
+
+    assertThat(rx).isEqualTo(new TimeoutSettings(1000, 2000));
+    assertThat(claim).isEqualTo(new TimeoutSettings(1000, 2000));
+    assertThat(apply).isEqualTo(new TimeoutSettings(1000, 4000));
+    assertThat(project).isEqualTo(new TimeoutSettings(1000, 2000));
+  }
 
   @Test
   void should_allowOnlyOneWorkerToClaimSameJob() throws Exception {
@@ -477,6 +491,16 @@ class OperationWorkerIT extends AbstractIntegrationTest {
     }
   }
 
+  private TimeoutSettings currentTimeouts() {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT
+          (EXTRACT(EPOCH FROM current_setting('lock_timeout')::interval) * 1000)::int,
+          (EXTRACT(EPOCH FROM current_setting('statement_timeout')::interval) * 1000)::int
+        """,
+        (resultSet, rowNum) -> new TimeoutSettings(resultSet.getInt(1), resultSet.getInt(2)));
+  }
+
   private Instant leaseExpiration(OperationClaim claim) {
     return jdbcTemplate
         .queryForObject(
@@ -552,6 +576,8 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   }
 
   private record OrderFixture(UUID userId, UUID orderId) {}
+
+  private record TimeoutSettings(int lockTimeoutMs, int statementTimeoutMs) {}
 
   private record PendingOperation(
       ProviderEventReceipt receipt, PaymentWebhookRequest request, UUID jobId) {}
