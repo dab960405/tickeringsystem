@@ -29,18 +29,21 @@ public class EventService {
   private final TicketTypeQueryService ticketTypeQueryService;
   private final EventCatalogCacheService eventCatalogCacheService;
   private final EventCancellationService eventCancellationService;
+  private final EventLockService eventLockService;
 
   public EventService(
       EventRepository eventRepository,
       VenueService venueService,
       TicketTypeQueryService ticketTypeQueryService,
       EventCatalogCacheService eventCatalogCacheService,
-      EventCancellationService eventCancellationService) {
+      EventCancellationService eventCancellationService,
+      EventLockService eventLockService) {
     this.eventRepository = eventRepository;
     this.venueService = venueService;
     this.ticketTypeQueryService = ticketTypeQueryService;
     this.eventCatalogCacheService = eventCatalogCacheService;
     this.eventCancellationService = eventCancellationService;
+    this.eventLockService = eventLockService;
   }
 
   public PageResponse<EventSummaryResponse> listPublished(EventFilter filter, Pageable pageable) {
@@ -86,6 +89,7 @@ public class EventService {
   @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse update(UUID id, EventRequest request) {
+    eventLockService.lockExclusive(id);
     Event event = findEvent(id);
     Venue venue = venueService.findVenue(request.venueId());
     event.update(
@@ -103,6 +107,7 @@ public class EventService {
   @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse publish(UUID id) {
+    eventLockService.lockExclusive(id);
     Event event = findEvent(id);
     if (!ticketTypeQueryService.existsForEvent(id)) {
       throw new BusinessRuleViolationException(
