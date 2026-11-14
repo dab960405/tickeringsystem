@@ -1,5 +1,6 @@
 package com.portfolio.ticketing.event.service;
 
+import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import java.util.UUID;
 import org.springframework.security.core.Authentication;
@@ -29,8 +30,15 @@ public class EventAuthorizationService {
     }
     return eventRepository
         .findById(eventId)
-        .map(event -> event.isOwnedBy(subject(authentication)))
-        // Let the business service return 404 instead of disclosing whether an id exists.
+        .map(
+            event -> {
+              if (!event.isOwnedBy(subject(authentication))) {
+                // Conceal the existence of resources owned by another organizer.
+                throw new ResourceNotFoundException("Event " + eventId + " not found");
+              }
+              return true;
+            })
+        // Let the business service return 404 for an unknown event.
         .orElse(true);
   }
 
