@@ -182,6 +182,111 @@ class CommercialIssuanceIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_serializeConcurrentReissues_withoutDuplicatingUnitsOrActiveGenerations()
+      throws Exception {
+    OrderFixture fixture = createOrder(2);
+    orderPaymentService.process(capture(fixture));
+    List<UUID> unitsBefore = unitIds(fixture);
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    Callable<TicketIssuanceResult> reissue =
+        () -> {
+          ready.countDown();
+          start.await();
+          return ticketService.reissueForOrder(fixture.orderId());
+        };
+    try {
+      Future<TicketIssuanceResult> first = executor.submit(reissue);
+      Future<TicketIssuanceResult> second = executor.submit(reissue);
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      List<TicketIssuanceResult> results =
+          List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+
+      assertThat(results)
+          .extracting(TicketIssuanceResult::generationNumber)
+          .containsExactlyInAnyOrder(2, 3);
+    } finally {
+      executor.shutdownNow();
+    }
+    assertThat(unitIds(fixture)).containsExactlyElementsOf(unitsBefore);
+    assertThat(
+            count(
+                "SELECT COUNT(*) FROM commercial_generations WHERE order_id = ?"
+                    + " AND status = 'ACTIVE'",
+                fixture))
+        .isEqualTo(1);
+    assertThat(count("SELECT COUNT(*) FROM tickets WHERE order_id = ?", fixture)).isEqualTo(6);
+    assertThat(
+            count("SELECT COUNT(*) FROM tickets WHERE order_id = ? AND status = 'VALID'", fixture))
+        .isEqualTo(2);
+  }
+
+  @Test
+  void should_preserveCommercialIdentity_when_reissueRacesWithRefundConfirmation()
+      throws Exception {
+    OrderFixture fixture = createOrder(2);
+    orderPaymentService.process(capture(fixture));
+    List<UUID> unitsBefore = unitIds(fixture);
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+    PaymentWebhookRequest refund = refund(fixture);
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    Callable<String> reissue =
+        () -> {
+          ready.countDown();
+          start.await();
+          try {
+            ticketService.reissueForOrder(fixture.orderId());
+            return "REISSUED";
+          } catch (BusinessRuleViolationException exception) {
+            return "REJECTED";
+          }
+        };
+    Callable<String> confirmRefund =
+        () -> {
+          ready.countDown();
+          start.await();
+          orderPaymentService.process(refund);
+          return "REFUNDED";
+        };
+    try {
+      Future<String> reissued = executor.submit(reissue);
+      Future<String> refunded = executor.submit(confirmRefund);
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      assertThat(reissued.get(30, TimeUnit.SECONDS)).isIn("REISSUED", "REJECTED");
+      assertThat(refunded.get(30, TimeUnit.SECONDS)).isEqualTo("REFUNDED");
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertThat(unitIds(fixture)).containsExactlyElementsOf(unitsBefore);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT status FROM orders WHERE id = ?", String.class, fixture.orderId()))
+        .isEqualTo("REFUNDED");
+    assertThat(
+            count(
+                "SELECT COUNT(*) FROM commercial_generations WHERE order_id = ?"
+                    + " AND status = 'ACTIVE'",
+                fixture))
+        .isZero();
+    assertThat(
+            count("SELECT COUNT(*) FROM tickets WHERE order_id = ? AND status = 'VALID'", fixture))
+        .isZero();
+    assertThat(
+            count(
+                "SELECT COUNT(*) FROM tickets WHERE order_id = ? AND status = 'CANCELLED'",
+                fixture))
+        .isEqualTo(count("SELECT COUNT(*) FROM tickets WHERE order_id = ?", fixture));
+  }
+
+  @Test
   void should_rejectReissue_when_aTicketWasUsed() {
     OrderFixture fixture = createOrder(1);
     orderPaymentService.process(capture(fixture));
@@ -353,15 +458,96 @@ class CommercialIssuanceIT extends AbstractIntegrationTest {
     }
   }
 
-  private LegacyIds insertLegacyPurchase(JdbcTemplate legacy, String schema) {
+  @Test
+  void should_backfillAllLegacyTicketStatusesAndCancelledOrders_whenMigratingFromV15() {
+    String schema = "legacy_" + UUID.randomUUID().toString().replace("-", "");
+    Flyway.configure()
+        .dataSource(dataSource)
+        .schemas(schema)
+        .locations("classpath:db/migration")
+        .target("15")
+        .load()
+        .migrate();
+    JdbcTemplate legacy = new JdbcTemplate(dataSource);
+    try {
+      LegacyIds mixed = insertLegacyPurchase(legacy, schema, "VALID", "USED", "CANCELLED");
+      LegacyIds cancelled = insertLegacyPurchase(legacy, schema, "CANCELLED");
+
+      Flyway.configure()
+          .dataSource(dataSource)
+          .schemas(schema)
+          .locations("classpath:db/migration")
+          .load()
+          .migrate();
+
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT status FROM " + schema + ".commercial_generations WHERE order_id = ?",
+                  String.class,
+                  mixed.orderId()))
+          .isEqualTo("ACTIVE");
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT status FROM " + schema + ".commercial_generations WHERE order_id = ?",
+                  String.class,
+                  cancelled.orderId()))
+          .isEqualTo("CANCELLED");
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT COUNT(*) FROM " + schema + ".commercial_units WHERE order_id = ?",
+                  Integer.class,
+                  mixed.orderId()))
+          .isEqualTo(3);
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT COUNT(*) FROM " + schema + ".commercial_units WHERE order_id = ?",
+                  Integer.class,
+                  cancelled.orderId()))
+          .isEqualTo(1);
+      assertThat(
+              legacy.queryForList(
+                  "SELECT status FROM " + schema + ".tickets WHERE order_id = ?",
+                  String.class,
+                  mixed.orderId()))
+          .containsExactlyInAnyOrder("VALID", "USED", "CANCELLED");
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT COUNT(*) FROM "
+                      + schema
+                      + ".commercial_unit_generations WHERE order_id IN (?, ?)",
+                  Integer.class,
+                  mixed.orderId(),
+                  cancelled.orderId()))
+          .isEqualTo(4);
+      assertThat(
+              legacy.queryForObject(
+                  "SELECT COUNT(*) FROM "
+                      + schema
+                      + ".tickets WHERE order_id IN (?, ?) AND (generation_id IS NULL"
+                      + " OR commercial_unit_id IS NULL OR order_id IS NULL)",
+                  Integer.class,
+                  mixed.orderId(),
+                  cancelled.orderId()))
+          .isZero();
+    } finally {
+      legacy.execute("DROP SCHEMA " + schema + " CASCADE");
+    }
+  }
+
+  private LegacyIds insertLegacyPurchase(
+      JdbcTemplate legacy, String schema, String... requestedStatuses) {
+    String[] ticketStatuses =
+        requestedStatuses.length == 0 ? new String[] {"VALID", "VALID"} : requestedStatuses;
+    int quantity = ticketStatuses.length;
     String prefix = schema + ".";
     UUID userId =
         legacy.queryForObject(
             "INSERT INTO "
                 + prefix
                 + "users (email, password_hash, full_name, role)"
-                + " VALUES ('legacy@example.com', 'hash', 'Legacy', 'USER') RETURNING id",
-            UUID.class);
+                + " VALUES (?, 'hash', 'Legacy', 'USER') RETURNING id",
+            UUID.class,
+            "legacy-" + UUID.randomUUID() + "@example.com");
     UUID venueId =
         legacy.queryForObject(
             "INSERT INTO "
@@ -385,47 +571,54 @@ class CommercialIssuanceIT extends AbstractIntegrationTest {
                 + prefix
                 + "ticket_types (event_id, name, price, total_quantity, available_quantity,"
                 + " sale_starts_at, sale_ends_at, max_per_order)"
-                + " VALUES (?, 'General', 40.00, 10, 8, now() - interval '1 day',"
+                + " VALUES (?, 'General', 40.00, 10, ?, now() - interval '1 day',"
                 + " now() + interval '1 day', 4) RETURNING id",
             UUID.class,
-            eventId);
+            eventId,
+            10 - quantity);
     UUID reservationId =
         legacy.queryForObject(
             "INSERT INTO "
                 + prefix
                 + "reservations (user_id, ticket_type_id, quantity, status, expires_at,"
                 + " inventory_disposition)"
-                + " VALUES (?, ?, 2, 'CONFIRMED', now(), 'CONSUMED') RETURNING id",
+                + " VALUES (?, ?, ?, 'CONFIRMED', now(), 'CONSUMED') RETURNING id",
             UUID.class,
             userId,
-            ticketTypeId);
+            ticketTypeId,
+            quantity);
     UUID orderId =
         legacy.queryForObject(
             "INSERT INTO "
                 + prefix
                 + "orders (user_id, reservation_id, status, total_amount, idempotency_key,"
-                + " fulfillment_status) VALUES (?, ?, 'PAID', 80.00, 'legacy-key', 'FULFILLED')"
-                + " RETURNING id",
+                + " fulfillment_status) VALUES (?, ?, 'PAID', ?, ?, 'FULFILLED') RETURNING id",
             UUID.class,
             userId,
-            reservationId);
+            reservationId,
+            UNIT_PRICE.multiply(BigDecimal.valueOf(quantity)),
+            "legacy-" + UUID.randomUUID());
     UUID itemId =
         legacy.queryForObject(
             "INSERT INTO "
                 + prefix
                 + "order_items (order_id, ticket_type_id, quantity, unit_price)"
-                + " VALUES (?, ?, 2, 40.00) RETURNING id",
+                + " VALUES (?, ?, ?, 40.00) RETURNING id",
             UUID.class,
             orderId,
-            ticketTypeId);
-    legacy.update(
-        "INSERT INTO "
-            + prefix
-            + "tickets (order_item_id, code, created_at) VALUES"
-            + " (?, 'legacy-a', now() - interval '2 second'),"
-            + " (?, 'legacy-b', now() - interval '1 second')",
-        itemId,
-        itemId);
+            ticketTypeId,
+            quantity);
+    for (int index = 0; index < quantity; index++) {
+      legacy.update(
+          "INSERT INTO "
+              + prefix
+              + "tickets (order_item_id, code, status, created_at)"
+              + " VALUES (?, ?, ?, now() - (? * interval '1 second'))",
+          itemId,
+          "legacy-" + orderId + "-" + String.format("%02d", index),
+          ticketStatuses[index],
+          quantity - index);
+    }
     return new LegacyIds(orderId);
   }
 
