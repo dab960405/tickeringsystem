@@ -189,6 +189,24 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_cancelPendingOrder_when_itsReservationExpiredBeforeEventCancellation() {
+    OrderFixture fixture = createOrder(createReservation(2));
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = ? WHERE id = ?",
+        Timestamp.from(Instant.now().minusSeconds(60)),
+        fixture.reservation().reservationId());
+    expirationService.expireOverdue();
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("PENDING_PAYMENT", "PENDING", "EXPIRED", "PENDING", 0, 2));
+
+    eventCancellationService.cancel(fixture.reservation().eventId());
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("CANCELLED", "PENDING", "EXPIRED", "PENDING", 0, 2));
+  }
+
+  @Test
   void should_preservePaidOrdersAndConfirmedReservations_when_eventIsCancelled() {
     OrderFixture fixture = createOrder(createReservation(2));
     orderPaymentService.process(capture(fixture));
