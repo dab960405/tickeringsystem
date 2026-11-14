@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.repository.ReservationExpirationCandidate;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
@@ -30,11 +31,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ReservationExpirationServiceTest {
 
   private static final Instant NOW = Instant.parse("2030-01-01T12:00:00Z");
+  private static final UUID EVENT_ID = UUID.randomUUID();
   private static final UUID TICKET_TYPE_ID = UUID.randomUUID();
   private static final UUID RESERVATION_ID = UUID.randomUUID();
 
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
+  @Mock private EventLockService eventLockService;
 
   private ReservationExpirationService expirationService;
 
@@ -42,7 +45,10 @@ class ReservationExpirationServiceTest {
   void setUp() {
     expirationService =
         new ReservationExpirationService(
-            reservationRepository, inventoryService, Clock.fixed(NOW, ZoneOffset.UTC));
+            reservationRepository,
+            inventoryService,
+            eventLockService,
+            Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
   @Test
@@ -53,7 +59,8 @@ class ReservationExpirationServiceTest {
 
     expirationService.expireOverdue();
 
-    InOrder order = inOrder(inventoryService, reservationRepository);
+    InOrder order = inOrder(eventLockService, inventoryService, reservationRepository);
+    order.verify(eventLockService).lockShared(EVENT_ID);
     order.verify(inventoryService).lockAll(List.of(TICKET_TYPE_ID));
     order.verify(reservationRepository).findAllByIdForUpdate(List.of(RESERVATION_ID));
     order.verify(reservationRepository).databaseNow();
@@ -79,7 +86,7 @@ class ReservationExpirationServiceTest {
     expirationService.expireOverdue();
 
     verify(reservationRepository).findExpiredCandidates(NOW, 100);
-    verifyNoInteractions(inventoryService);
+    verifyNoInteractions(inventoryService, eventLockService);
   }
 
   @Test
@@ -97,6 +104,7 @@ class ReservationExpirationServiceTest {
     ReservationExpirationCandidate candidate = mock(ReservationExpirationCandidate.class);
     when(candidate.getId()).thenReturn(RESERVATION_ID);
     when(candidate.getTicketTypeId()).thenReturn(TICKET_TYPE_ID);
+    when(candidate.getEventId()).thenReturn(EVENT_ID);
     when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of(candidate));
     when(reservationRepository.findAllByIdForUpdate(List.of(RESERVATION_ID)))
         .thenReturn(List.of(reservation));
