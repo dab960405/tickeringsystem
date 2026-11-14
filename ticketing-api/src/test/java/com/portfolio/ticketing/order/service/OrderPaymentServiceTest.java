@@ -226,6 +226,23 @@ class OrderPaymentServiceTest {
   }
 
   @Test
+  void should_beIdempotent_when_lateCaptureWasAlreadyRecordedForCancelledOrder() {
+    Order order = order();
+    order.cancel();
+    order.markUnfulfillable();
+    Payment payment = payment();
+    payment.markSucceeded("provider-123");
+    stubOrderAndPayment(order, payment);
+
+    orderPaymentService.process(successRequest());
+
+    verify(reservationService, never()).confirmForPayment(any(), any());
+    verify(orderRepository, never()).save(any());
+    verify(paymentService, never()).save(any());
+    verify(ticketService, never()).issueForOrder(any());
+  }
+
+  @Test
   void should_confirmRefundOnlyWithProviderEvidence() {
     Order order = order();
     order.markPaid();
