@@ -57,7 +57,12 @@ import org.testcontainers.utility.DockerImageName;
  * <p>This class deliberately does not extend {@link AbstractIntegrationTest}: its Redis instance
  * must remain independent from the JVM-shared Redis container used by the other integration tests.
  */
-@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=20s")
+@SpringBootTest(
+    properties = {
+      "ticketing.cache.ticket-types.ttl=20s",
+      "ticketing.reservation.expiration-fixed-delay-ms=600000",
+      "ticketing.order.expiration-fixed-delay-ms=600000"
+    })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
