@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,8 +55,6 @@ import org.springframework.test.context.TestPropertySource;
 @SpringBootTest
 @TestPropertySource(properties = "ticketing.reservation.expiration-fixed-delay-ms=600000")
 class EventGuardConcurrencyIT extends AbstractIntegrationTest {
-
-  private static final Duration BLOCKED_WINDOW = Duration.ofMillis(750);
 
   @Autowired private ReservationService reservationService;
   @Autowired private ReservationExpirationService expirationService;
@@ -159,7 +158,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
 
       CompletableFuture<Void> pending = CompletableFuture.runAsync(operation, executor);
       try {
-        awaitWaitingOnEventRow(eventId, pending);
+        awaitWaitingOnEventRow(canceller, eventId, pending);
       } catch (AssertionError notBlocked) {
         canceller.rollback();
         throw notBlocked;
@@ -175,29 +174,37 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     }
   }
 
-  private void awaitWaitingOnEventRow(UUID eventId, CompletableFuture<Void> pending)
-      throws InterruptedException {
-    Instant deadline = Instant.now().plusSeconds(10);
-    while (Instant.now().isBefore(deadline) && !pending.isDone()) {
-      Integer waiting =
-          jdbcTemplate.queryForObject(
-              """
-              SELECT COUNT(*) FROM pg_stat_activity
-              WHERE wait_event_type = 'Lock'
-                AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
-              """,
-              Integer.class);
-      if (waiting != null && waiting > 0) {
-        Thread.sleep(BLOCKED_WINDOW.toMillis());
-        assertThat(pending).as("operation must still wait on E").isNotDone();
-        return;
-      }
-      Thread.sleep(25);
+  private void awaitWaitingOnEventRow(
+      Connection blocker, UUID eventId, CompletableFuture<Void> pending) throws Exception {
+    int blockerPid;
+    try (var statement = blocker.createStatement();
+        var result = statement.executeQuery("SELECT pg_backend_pid()")) {
+      result.next();
+      blockerPid = result.getInt(1);
     }
-    throw new AssertionError("Operation never blocked on the shared lock of event " + eventId);
+
+    Awaitility.await()
+        .alias("operation waits for event row " + eventId)
+        .atMost(Duration.ofSeconds(10))
+        .pollInterval(Duration.ofMillis(25))
+        .until(
+            () -> {
+              Integer waiting =
+                  jdbcTemplate.queryForObject(
+                      """
+                      SELECT COUNT(*) FROM pg_stat_activity
+                      WHERE wait_event_type = 'Lock'
+                        AND ? = ANY(pg_blocking_pids(pid))
+                        AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
+                      """,
+                      Integer.class,
+                      blockerPid);
+              return waiting != null && waiting > 0;
+            });
+    assertThat(pending).as("operation must still wait on E").isNotDone();
   }
 
-  private ReservationFixture createReservation(int stock) {
+  ate ReservationFixture createReservation(int stock) {
     Instant now = Instant.now();
     UUID userId =
         jdbcTemplate.queryForObject(
