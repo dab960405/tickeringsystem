@@ -528,12 +528,14 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @RepeatedTest(10)
   void should_notLoseRefund_whenPendingAndRefundedArriveConcurrently() throws Exception {
     OrderFixture fixture = createOrder(1);
-    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-race"));
+    String referenceSuffix = UUID.randomUUID().toString();
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-race-" + referenceSuffix));
     asUser(
         fixture.userId(),
         () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
 
-    PaymentWebhookRequest pending = refundWebhook(fixture, PaymentStatus.PENDING, "refund-h84-race");
+    PaymentWebhookRequest pending =
+        refundWebhook(fixture, PaymentStatus.PENDING, "refund-h84-race-" + referenceSuffix);
     PaymentWebhookRequest refunded =
         new PaymentWebhookRequest(
             pending.orderId(),
