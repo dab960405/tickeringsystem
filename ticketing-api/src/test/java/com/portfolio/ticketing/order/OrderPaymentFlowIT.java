@@ -498,7 +498,8 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         fixture.userId(),
         () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
 
-    PaymentWebhookRequest failed = refundWebhook(fixture, PaymentStatus.FAILED, "refund-h84-failed");
+    PaymentWebhookRequest failed =
+        refundWebhook(fixture, PaymentStatus.FAILED, "refund-h84-failed");
     PaymentWebhookRequest refunded =
         new PaymentWebhookRequest(
             failed.orderId(),
