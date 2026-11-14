@@ -428,8 +428,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture()
-      throws Exception {
+  void should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture() throws Exception {
     OrderFixture fixture = createOrder(1);
     PaymentWebhookRequest earlyRefund =
         refundWebhook(fixture, PaymentStatus.REFUNDED, "refund-early-" + UUID.randomUUID());
