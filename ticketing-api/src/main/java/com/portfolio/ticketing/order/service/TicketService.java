@@ -122,7 +122,8 @@ public class TicketService {
 
     current.supersede();
     // Flush only the generation transition before inserting its successor. Old ticket cancellation
-    // is deliberately deferred until after U -> EN issuance so implicit FK locks keep ADR-016 order.
+    // is deliberately deferred until after U -> EN issuance so implicit FK locks keep ADR-016
+    // order.
     generationRepository.saveAndFlush(current);
 
     CommercialGeneration successor = generationRepository.save(current.successor());
