@@ -86,7 +86,8 @@ public class OrderPaymentService {
     }
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         && (order.getStatus() == OrderStatus.PAID
-            || order.getStatus() == OrderStatus.CANCELLED)) {
+            || order.getStatus() == OrderStatus.CANCELLED
+            || order.getStatus() == OrderStatus.EXPIRED)) {
       requireSameProviderReference(payment, request.providerReference());
       return;
     }
