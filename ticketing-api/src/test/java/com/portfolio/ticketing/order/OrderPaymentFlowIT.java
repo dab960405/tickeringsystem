@@ -184,13 +184,13 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
       Future<?> first =
           executor.submit(() -> {
             start.await();
-                orderExpirationProcessor.expire(candidate);
+            orderExpirationProcessor.expire(candidate);
             return null;
           });
       Future<?> second =
           executor.submit(() -> {
             start.await();
-                orderExpirationProcessor.expire(candidate);
+            orderExpirationProcessor.expire(candidate);
             return null;
           });
 
@@ -228,13 +228,13 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
       Future<?> expiration =
           executor.submit(() -> {
             start.await();
-                orderExpirationProcessor.expire(candidate);
+            orderExpirationProcessor.expire(candidate);
             return null;
           });
       Future<?> capture =
           executor.submit(() -> {
             start.await();
-                orderPaymentService.process(lateCapture);
+            orderPaymentService.process(lateCapture);
             return null;
           });
 
@@ -422,13 +422,13 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
       Future<?> firstResult =
           executor.submit(() -> {
             start.await();
-                handle(first);
+            handle(first);
             return null;
           });
       Future<?> secondResult =
           executor.submit(() -> {
             start.await();
-                handle(second);
+            handle(second);
             return null;
           });
 

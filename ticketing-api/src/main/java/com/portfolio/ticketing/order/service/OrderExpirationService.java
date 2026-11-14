@@ -37,7 +37,8 @@ public class OrderExpirationService {
       try {
         processor.expire(candidate);
       } catch (RuntimeException exception) {
-        log.error("Pending order expiration failed for order {}", candidate.getOrderId(), exception);
+        log.error(
+            "Pending order expiration failed for order {}", candidate.getOrderId(), exception);
       }
     }
   }

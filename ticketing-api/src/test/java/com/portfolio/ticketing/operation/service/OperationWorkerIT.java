@@ -198,7 +198,8 @@ class OperationWorkerIT extends AbstractIntegrationTest {
 
       try (Connection probe = dataSource.getConnection();
           PreparedStatement jobLock =
-              probe.prepareStatement("SELECT id FROM operation_jobs WHERE id = ? FOR UPDATE NOWAIT")) {
+              probe.prepareStatement(
+                  "SELECT id FROM operation_jobs WHERE id = ? FOR UPDATE NOWAIT")) {
         probe.setAutoCommit(false);
         jobLock.setObject(1, pending.jobId());
         jobLock.executeQuery().close();

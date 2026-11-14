@@ -103,7 +103,8 @@ class TicketTypeServiceTest {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
     when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
-    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
+    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID))
+        .thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.saveAndFlush(ticketType)).thenReturn(ticketType);
 
     var updated = ticketTypeService.update(TICKET_TYPE_ID, request("vip", 150));
@@ -117,7 +118,8 @@ class TicketTypeServiceTest {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
     when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
-    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
+    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID))
+        .thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(true);
 
     assertThatThrownBy(() -> ticketTypeService.update(TICKET_TYPE_ID, request("General", 100)))
