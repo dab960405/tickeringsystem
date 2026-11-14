@@ -399,8 +399,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_keepRefundPendingForReconciliationWithoutChangingPaymentOrTickets()
-      throws Exception {
+  void should_keepRefundPendingForReconciliationWithoutChangingPaymentOrTickets() throws Exception {
     OrderFixture fixture = createOrder(1);
     handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-refund-pending"));
     asUser(
@@ -445,9 +444,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         .isEqualTo(1);
     assertThat(
             countRowsByString(
-                "semantic_applications",
-                "idempotency_key",
-                outOfOrderRefund.providerOperationId()))
+                "semantic_applications", "idempotency_key", outOfOrderRefund.providerOperationId()))
         .isEqualTo(1);
 
     handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-after-refund-evidence"));
