@@ -250,8 +250,7 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
 
   private void saveOrganizer(String email, String fullName) {
     userRepository.save(
-        new User(
-            email, passwordEncoder.encode("Password123"), fullName, UserRole.ORGANIZER));
+        new User(email, passwordEncoder.encode("Password123"), fullName, UserRole.ORGANIZER));
   }
 
   private TokenResponse login(String email) {
