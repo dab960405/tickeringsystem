@@ -131,13 +131,13 @@ public class OrderPaymentService {
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
       return;
     }
+    if (releaseFailure != null) {
+      throw releaseFailure;
+    }
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
       payment.markFailed();
       paymentService.save(payment);
       return;
-    }
-    if (releaseFailure != null) {
-      throw releaseFailure;
     }
     requirePending(order, payment);
     order.cancel();
