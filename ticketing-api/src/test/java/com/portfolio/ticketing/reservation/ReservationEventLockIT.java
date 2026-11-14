@@ -195,7 +195,7 @@ class ReservationEventLockIT extends AbstractIntegrationTest {
             });
   }
 
-  ate boolean ticketTypeIsUnlocked(UUID ticketTypeId) throws SQLException {
+  private boolean ticketTypeIsUnlocked(UUID ticketTypeId) throws SQLException {
     try (Connection probe = dataSource.getConnection()) {
       probe.setAutoCommit(false);
       try (Statement timeout = probe.createStatement()) {
