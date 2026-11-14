@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
 
-> **Estado (2026-11-13):** Fases 0–2 completadas. Fase 2 cerrada formalmente tras validar los criterios de autorización, propiedad de recursos y aislamiento con JWT reales, respaldados por CI #154 y #43545520476. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado y continúa bloqueada.
+> **Estado (2026-11-14):** Fases 0–2 completadas. Fase 2 cerrada formalmente tras validar los criterios de autorización, propiedad de recursos y aislamiento con JWT reales, respaldados por CI #154 y #43545520476. El alcance funcional de Fase 3, incluido el hardening de cancelación de eventos y la expiración de órdenes tras la gracia configurable, está implementado y validado por CI; el cierre formal sigue pendiente de resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, completar la documentación de cierre y recibir autorización del responsable. Fase 4 permanece abierta. Fase 5 no ha comenzado y continúa bloqueada.
 
 ## Documentación
 
@@ -110,7 +110,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
-- [ ] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets implementado. **Fase pendiente de completar:** ejecutar y verificar el hardening del ciclo de cancelación de eventos.
+- [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
 - [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
@@ -119,8 +119,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 ## Deuda técnica conocida
 
-- El ciclo de cancelación de eventos no coordina todavía reservas, órdenes pendientes, pagos, tickets ni la transición/evento correspondiente; requiere hardening y pruebas específicas.
-- Órdenes que nunca alcanzan el estado `EXPIRED`.
+- `EventCancellationService` coordina la cancelación con reservas, inventario y órdenes pendientes, pero actualmente accede directamente a repositorios/tablas de otros módulos; este acoplamiento requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
 - El reembolso no devuelve stock automáticamente; decisión documentada en [ADR-009](docs/decisions.md).
 - No existe todavía una prueba de webhooks concurrentes.
 - El rate limiting está implementado únicamente para login.
