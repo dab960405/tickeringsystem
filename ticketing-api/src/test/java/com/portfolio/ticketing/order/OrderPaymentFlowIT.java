@@ -41,11 +41,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -214,6 +209,54 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
                 String.class,
                 fixture.reservationId()))
         .isEqualTo("RELEASED");
+  }
+
+  @Test
+  void should_reconcileLateCaptureWithoutTickets_when_captureRacesOrderExpiration()
+      throws Exception {
+    OrderFixture fixture = createOrder(1);
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        fixture.reservationId());
+    expirationService.expireOverdue();
+
+    OrderExpirationCandidate candidate =
+        orderRepository.findExpiredPendingOrderCandidates(10).getFirst();
+    PaymentWebhookRequest lateCapture =
+        webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-expiration-race");
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      Future<?> expiration =
+          executor.submit(
+              () -> {
+                start.await();
+                orderExpirationProcessor.expire(candidate);
+                return null;
+              });
+      Future<?> capture =
+          executor.submit(
+              () -> {
+                start.await();
+                orderPaymentService.process(lateCapture);
+                return null;
+              });
+
+      start.countDown();
+      expiration.get(60, TimeUnit.SECONDS);
+      capture.get(60, TimeUnit.SECONDS);
+    }
+
+    PaymentFlowResult result = paymentFlowResult(fixture);
+    assertThat(result.orderStatus()).isIn("PAID", "EXPIRED");
+    assertThat(result.paymentStatus()).isEqualTo("SUCCEEDED");
+    assertThat(result.reservationStatus()).isEqualTo("EXPIRED");
+    assertThat(result.ticketCount()).isZero();
+    assertThat(result.availableQuantity()).isEqualTo(1);
+    assertThat(queryString("SELECT fulfillment_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("UNFULFILLABLE");
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUIRED");
   }
 
   @Test
