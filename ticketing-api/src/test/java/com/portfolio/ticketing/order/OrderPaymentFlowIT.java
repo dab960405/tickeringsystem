@@ -180,6 +180,14 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         .isEqualTo("UNFULFILLABLE");
     assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
         .isEqualTo("REQUIRED");
+
+    orderPaymentService.process(
+        refundWebhook(fixture, PaymentStatus.REFUNDED, "provider-refund-after-expiry"));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "REFUNDED", "EXPIRED", 0, 1));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("CONFIRMED");
   }
 
   @Test
