@@ -165,7 +165,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
     stubLocks(payment);
-    org.mockito.Mockito.doAnswer(
+    doAnswer(
             invocation -> {
               order.markPaid();
               order.markFulfilled();
