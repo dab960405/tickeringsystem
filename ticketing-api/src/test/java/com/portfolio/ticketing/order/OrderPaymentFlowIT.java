@@ -223,8 +223,10 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
     expirationService.expireOverdue();
 
     OrderExpirationCandidate candidate =
-        orderRepository.findExpiredPendingOrderCandidates(
-            reservationProperties.getRecoveryGrace().toSeconds(), 10).getFirst();
+        orderRepository
+            .findExpiredPendingOrderCandidates(
+                reservationProperties.getRecoveryGrace().toSeconds(), 10)
+            .getFirst();
     PaymentWebhookRequest lateCapture =
         webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-expiration-race");
     CountDownLatch start = new CountDownLatch(1);
