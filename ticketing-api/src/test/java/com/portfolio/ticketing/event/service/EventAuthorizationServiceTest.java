@@ -1,9 +1,11 @@
 package com.portfolio.ticketing.event.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
 import java.time.Instant;
@@ -42,13 +44,14 @@ class EventAuthorizationServiceTest {
   }
 
   @Test
-  void should_rejectDifferentOrganizer() {
+  void should_hideEventFromDifferentOrganizerAsNotFound() {
     when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(eventOwnedBy(OWNER_ID)));
 
-    assertThat(
-            authorizationService.canManage(
-                EVENT_ID, authentication(UUID.randomUUID(), "ROLE_ORGANIZER")))
-        .isFalse();
+    assertThatThrownBy(
+            () ->
+                authorizationService.canManage(
+                    EVENT_ID, authentication(UUID.randomUUID(), "ROLE_ORGANIZER")))
+        .isInstanceOf(ResourceNotFoundException.class);
   }
 
   @Test
