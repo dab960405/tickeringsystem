@@ -134,6 +134,15 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 - ADR-014: resiliencia Redis y degradación diferenciada de autenticación.
 - ADR-015: una orden por reserva, con guard de aplicación e índice único PostgreSQL en V11.
 
+## Estabilización de CI — runs #269 a #281
+
+- CI #269 falló en `UserRepositoryIT` porque el slice `@DataJpaTest` no importaba `JpaAuditingConfig`; el resto de los repository slices que persisten entidades auditadas sí lo hacía.
+- El commit `7629e51de62509a9fb1bab3f64070967f479dbfd` añadió la configuración de auditoría al slice y aserciones explícitas sobre `createdAt`/`updatedAt`. En CI #270, `UserRepositoryIT` pasó y la suite llegó a 387 unitarios y 140 integraciones sin fallos; el build quedó rojo únicamente por Spotless en archivos modificados por otros incrementos.
+- Tras las correcciones posteriores, CI #280 sobre `82032baf563c84b0d85315bfd6fa955ee4412b84` completó 388 unitarios y 140 integraciones de `ticketing-api`, sin fallos, errores ni omitidos; Spotless y JaCoCo pasaron.
+- CI #280 reveló un efecto secundario de lifecycle de tests: el contexto cacheado de `RedisOutageIT` conservaba activo `OrderExpirationService` después de detener su PostgreSQL dedicado, produciendo un error asíncrono contra un Hikari pool ya cerrado aunque el build terminaba en verde.
+- El commit `cc72f1bc3de90ed58f66cfb6da4c75b522208130` aisló los schedulers de expiración en `RedisOutageIT`. CI #281 terminó en verde sobre ese SHA exacto: 388 unitarios y 140 integraciones de `ticketing-api`, `BUILD SUCCESS`, Spotless limpio y sin `too many clients already`, sin acceso tardío a `HikariPool-5` y sin `Unexpected error occurred in scheduled task`.
+- Se mantiene `spring.test.context.cache.maxSize=4`; la evidencia actual muestra que permite completar la suite sin reproducir el agotamiento de conexiones observado en CI #268.
+
 ## Deuda técnica y trabajo diferido
 
 1. H81: alcance Redis de ADR-020.

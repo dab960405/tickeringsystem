@@ -61,7 +61,7 @@ flowchart TB
 | `ticketing-api.tickettype` | Tipos de entrada, ventana de venta y operaciones atómicas sobre inventario. |
 | `ticketing-api.reservation` | Crear/cancelar reservas, TTL, confirmación durante el pago y expiración por lotes. |
 | `ticketing-api.order` | Creación idempotente, unicidad de orden por reserva, snapshot de precio, estado de orden, cancelación y emisión/consulta de tickets. |
-| `ticketing-api.payment` | Registro de pago y recepción de webhook autenticado mediante HMAC-SHA256. |
+| `ticketing-api.payment` | Recepción HMAC, evidencia persistente del proveedor, identidad de operación, idempotencia semántica y aplicación/recuperación de operaciones financieras. |
 | `notification-service` | Aplicación separada prevista para consumir eventos y gestionar notificaciones; integración Kafka pendiente de Fase 5. |
 
 ## Flujo de negocio: reserva → orden → pago → tickets
@@ -99,9 +99,10 @@ sequenceDiagram
                 API->>DB: Marcar order PAID y payment SUCCEEDED
                 API->>DB: Emitir tickets por cada unidad
                 API-->>GW: Webhook procesado (204)
-            else Reserva vencida y sin stock disponible
-                API->>DB: Registrar pago y estado REFUNDED
-                Note over API,DB: No se emiten tickets
+            else Reserva vencida y recuperación no posible
+                API->>DB: Conservar evidencia SUCCEEDED
+                API->>DB: fulfillment UNFULFILLABLE + refund REQUIRED
+                Note over API,DB: No se emiten tickets; REFUNDED exige evidencia de reembolso
                 API-->>GW: Webhook procesado (204)
             end
         else Misma clave y misma reserva
@@ -121,17 +122,16 @@ sequenceDiagram
 1. **Reserva de inventario:** `TicketTypeRepository.reserveStock` ejecuta un único `UPDATE ticket_types` con predicado `available_quantity >= :quantity`. La base de datos serializa las escrituras concurrentes sobre la fila y el número de filas afectadas determina el resultado. No se hace primero un SELECT de stock para luego descontarlo.
 2. **Ventana de reserva:** la reserva guarda `expires_at` calculado con el TTL configurable. El job de expiración reclama lotes con `FOR UPDATE SKIP LOCKED`; dentro de la misma transacción cambia el estado y devuelve inventario solo si la transición condicional actualizó una fila.
 3. **Orden:** el precio unitario se copia a `order_items`; una modificación posterior del catálogo no cambia el importe de la orden ya creada. `(user_id, idempotency_key)` tiene una restricción única en PostgreSQL. Adicionalmente, `OrderService.create` rechaza una orden previa para la reserva y V11 impone el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`. La restricción incluye órdenes canceladas; una reserva con orden cancelada no se reutiliza y una nueva compra requiere otra reserva. Las colisiones de integridad correspondientes se traducen a HTTP `409 Conflict`.
-4. **Pago:** el webhook verifica HMAC-SHA256 sobre el cuerpo recibido antes de procesar la transición. La orden y el pago se actualizan en una transacción; un pago exitoso confirma la reserva y emite un ticket por unidad del detalle.
+4. **Pago e idempotencia:** el webhook verifica HMAC-SHA256 sobre el cuerpo recibido y registra por separado la identidad del evento recibido, la operación del proveedor y la aplicación semántica (`provider_events`, `provider_operations`, `semantic_applications`). Una misma operación comercial se aplica una sola vez aunque llegue mediante eventos distintos o concurrentes. Si una captura tardía no puede recuperar la compra, se conserva `SUCCEEDED`, no se emiten tickets y la orden queda `UNFULFILLABLE` con reembolso `REQUIRED`; `REFUNDED` solo se confirma con evidencia válida de reembolso.
 5. **Outbox y notificaciones:** la tabla `outbox_events` ya existe en el esquema, pero la escritura/publicación de eventos, Kafka y el consumidor `notification-service` aún no forman parte del flujo activo. Se implementarán en la Fase 5.
 
 ## Persistencia
 
-El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de autenticación y caché-aside de metadatos del catálogo. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. La caché tiene TTL configurable, invalidación diferida hasta el commit y un manejador de errores Redis que permite continuar con PostgreSQL.
+El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de autenticación y caché-aside de metadatos de tipos de entrada y eventos públicos. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. La caché tiene TTL configurable, invalidación diferida hasta el commit y un manejador de errores Redis que permite continuar con PostgreSQL.
 
 ## Límites conocidos
 
 - El proveedor de pago es simulado; no hay integración con un gateway externo real.
-- La idempotencia de webhook se basa en las transiciones de estado y en `provider_reference`; todavía no existe una tabla de inbox/event IDs del proveedor.
 - La publicación del outbox y el flujo Kafka → notificaciones están pendientes de Fase 5.
-- El ciclo completo de cancelación de eventos y sus efectos sobre reservas, órdenes, pagos y tickets requiere hardening; no se debe inferir que está implementado por existir el ciclo de estados de cada entidad.
+- La cancelación coordinada de eventos está implementada y cubierta por pruebas de concurrencia, pero `EventCancellationService` accede directamente a repositorios/tablas de otros módulos. La especificación del monolito modular exige comunicación mediante servicios o eventos; esta excepción requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
 - Los tests `*IT` que necesitan PostgreSQL/Redis mediante Testcontainers deben ejecutarse en un entorno con Docker. La documentación no sustituye esa verificación.

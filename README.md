@@ -69,6 +69,7 @@ PostgreSQL, Redis, Kafka y MongoDB deben aparecer como `healthy` antes de inicia
 - La disponibilidad de inventario se consulta siempre en PostgreSQL; no se cachea stock.
 - Las escrituras del catálogo invalidan la caché mediante `RedisCacheManager` transaccional.
 - Los fallos de caché Redis contemplados por `CacheErrorHandler` permiten fallback a PostgreSQL. Si falla una invalidación, una entrada anterior puede permanecer hasta su TTL.
+- Caché pública de eventos con TTL de 60 s para detalle publicado y primera página popular; la disponibilidad de inventario permanece fuera de caché.
 - Rate limiting de login con Redis y política fail-open ante indisponibilidad (`LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SECONDS`).
 - Refresh token store fail-closed: las operaciones que requieren Redis fallan con HTTP 503 si no se puede comprobar o persistir el estado de sesión.
 - Los access tokens JWT se validan localmente mediante Spring Security Resource Server, sin consultar Redis.
@@ -111,7 +112,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
+- [ ] Fase 4: abierta. H77 está implementado y validado, pero permanecen pendientes H81, la auditoría global H75/H76/H83 y la validación integral de H79/H84 antes de proponer el cierre.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
@@ -121,9 +122,8 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 - `EventCancellationService` coordina la cancelación con reservas, inventario y órdenes pendientes, pero actualmente accede directamente a repositorios/tablas de otros módulos; este acoplamiento requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
 - El reembolso no devuelve stock automáticamente; decisión documentada en [ADR-009](docs/decisions.md).
-- No existe todavía una prueba de webhooks concurrentes.
 - El rate limiting está implementado únicamente para login.
-- No se implementó caché para eventos ni claves Redis `reservation:{id}`.
+- La caché pública de eventos ya está implementada y probada; siguen pendientes las claves Redis `reservation:{id}` y el rate limiting efectivo de creación de reservas/órdenes para completar H81.
 - Los refresh tokens no rotan durante la operación de refresh.
 - El webhook HMAC no incluye timestamp ni mecanismo anti-replay temporal.
 

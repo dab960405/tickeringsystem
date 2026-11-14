@@ -156,6 +156,7 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 
 ## Pendientes de decidir
 
+- **Coordinación cross-module de cancelación de eventos:** `EventCancellationService` necesita coordinar en una única transacción el evento, inventario, reservas y órdenes pendientes, y actualmente utiliza repositorios y SQL directo sobre módulos vecinos. La especificación general exige comunicación entre módulos mediante servicios o eventos de aplicación. Antes del cierre formal de Fase 3, el Tech Lead debe decidir explícitamente entre aceptar una excepción transaccional estrecha y documentada para este coordinador o exigir un refactor que preserve el mismo protocolo de locks y atomicidad. **Esta entrada registra la decisión pendiente; no constituye aceptación de la excepción.**
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
 
 ## ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
