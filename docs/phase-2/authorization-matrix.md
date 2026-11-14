@@ -64,7 +64,7 @@ Las rutas no enumeradas quedan sujetas a .anyRequest().authenticated(); deben a�
 | Rol requerido para eventos y tipos | EventControllerTest, TicketTypeControllerTest | Pruebas HTTP con usuarios simulados |
 | USER requerido para órdenes/reservas/tickets | OrderControllerTest, ReservationControllerTest, TicketControllerTest | Pruebas HTTP con usuarios simulados |
 | Aislamiento entre dos organizadores con JWT reales | Caso añadido a AuthenticationFlowIT | Pendiente de CI |
-| Aislamiento entre dos usuarios reales para órdenes y reservas | No se ha demostrado en la auditoría | Pendiente de evidencia |
+| Aislamiento entre dos usuarios reales para órdenes y reservas | Caso añadido a AuthenticationFlowIT: GET/cancelación de orden y cancelación de reserva de otro usuario | Pendiente de CI |
 | Matriz exhaustiva método × rol × estado de recurso | No existe una suite única que cubra todas las celdas | Pendiente de completar según endpoints existentes |
 
 ## Criterio de aceptación para Fase 2
