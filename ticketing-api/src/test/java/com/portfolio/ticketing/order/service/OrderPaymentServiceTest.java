@@ -61,6 +61,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
+    stubLocks();
     when(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .thenReturn(ReservationConfirmationResult.CONFIRMED);
     when(orderRepository.save(order)).thenReturn(order);
@@ -127,6 +128,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
+    stubLocks();
     when(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .thenReturn(ReservationConfirmationResult.OUT_OF_STOCK);
 
@@ -146,6 +148,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
+    stubLocks();
 
     orderPaymentService.process(failureRequest());
 
@@ -161,6 +164,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     payment.markFailed();
     stubOrderAndPayment(order, payment);
+    stubLocks();
 
     orderPaymentService.process(failureRequest());
 
@@ -183,6 +187,7 @@ class OrderPaymentServiceTest {
     order.cancel();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
+    stubLocks();
 
     orderPaymentService.process(successRequest());
 
@@ -203,6 +208,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     payment.markSucceeded("provider-123");
     stubOrderAndPayment(order, payment);
+    stubLocks();
 
     orderPaymentService.process(
         request(PaymentStatus.REFUNDED, ProviderOperationKind.PAYMENT_REFUND, "refund-123"));
@@ -266,9 +272,13 @@ class OrderPaymentServiceTest {
 
   private void stubOrderAndPayment(Order order, Payment payment) {
     when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
     when(paymentService.findRequiredByOrderId(ORDER_ID)).thenReturn(payment);
-    when(paymentService.lockRequiredByOrderId(ORDER_ID)).thenReturn(payment);
+  }
+
+  private void stubLocks() {
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
+    when(paymentService.lockRequiredByOrderId(ORDER_ID))
+        .thenReturn(paymentService.findRequiredByOrderId(ORDER_ID).orElseThrow());
   }
 
   private static PaymentWebhookRequest successRequest() {
