@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
-import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.order.domain.FulfillmentStatus;
 import com.portfolio.ticketing.order.domain.Order;
