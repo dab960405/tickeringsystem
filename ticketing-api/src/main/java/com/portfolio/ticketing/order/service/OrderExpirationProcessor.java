@@ -39,7 +39,7 @@ public class OrderExpirationProcessor {
     this.entityManager = entityManager;
   }
 
-  /** Processes one candidate in its own transaction, respecting ADR-016 lock order E → T → R → O → P. */
+  /** Processes one candidate in its own transaction, respecting ADR-016 lock order E → T → R → O. */
   @Transactional
   public void expire(OrderExpirationCandidate candidate) {
     eventLockService.lockShared(candidate.getEventId());
