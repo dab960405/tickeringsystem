@@ -18,7 +18,7 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 | H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y probado localmente:** V15, TX-RX/CLAIM/APPLY/PROJECT, renovación, reemplazo y recuperación | Validación integral final |
 | H79 — pagos tardíos | Recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED`, integrados con workers | Validación integral con idempotencia global |
 | H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14+V15, inbox, tres identidades, digest, aplicación global única y webhooks concurrentes | Validación integral final |
-| H81 — Redis | Parcial: caché de catálogo, login y degradación | Caché de eventos, claves de reserva y límites de reservas/órdenes de ADR-020 |
+| H81 — Redis | **Implementado y validado en CI:** caché de tipos/eventos, proyección de reservas, rate limiting login/reservas/órdenes y degradación | Cierre documental dentro del expediente integral de Fase 4 |
 | H82 — configuración operativa | **Integrada:** timeouts, lock/statement timeout, lease, lote, reintentos, backoff y recuperación se consumen en procesos reales | Validación integral final |
 | H83 — consistencia global de locks | Parcial | Auditoría después de H77/H78/H80 |
 | H84 — reembolsos | Parcial: solicitud y confirmación con evidencia | Integración con identidades, inbox, reintentos y workers |
@@ -49,6 +49,16 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 - `CommercialIssuanceIT` contiene **14 tests** para compra multiunidad, idempotencia, emisión concurrente, reemisión, carreras con reembolso, restricciones y migración desde V15.
 - CI #278, SHA `715af51fad107ede9e152e0ae7b63f151a806133`: `CommercialIssuanceIT` 14/14, `OperationWorkerIT` 9/9, `OrderPaymentFlowIT` 16/16; suite de integración 140/140 y Surefire de `ticketing-api` 388/388, sin fallos, errores ni omitidos. JaCoCo y Spotless correctos.
 - H77 deja de clasificarse como “pendiente de implementación”; todavía participa en la auditoría global de locks H75/H83 y no implica cierre de Fase 4.
+
+## Incremento H81 — cierre del alcance Redis de ADR-020
+
+- La caché pública de eventos cubre detalle publicado y primera página popular con TTL de 60 s; la disponibilidad de inventario permanece en PostgreSQL.
+- Las escrituras de eventos y tipos de entrada invalidan detalle/listado después del commit. Los cambios de venue publican un evento de aplicación y el módulo de eventos invalida sus caches en `AFTER_COMMIT`, evitando una dependencia directa `venue → event`.
+- `ReservationRedisProjectionService` mantiene `ticketing:reservation:{id}` con `status=ACTIVE`, `expiresAt` y TTL restante. La escritura se programa después del commit y la clave se elimina tras cancelación, expiración o confirmación, incluidas las rutas de cancelación de evento y expiración de orden.
+- La proyección de reserva es fail-open: errores Redis se registran y no alteran la transacción PostgreSQL.
+- `ReservationController` aplica 20 creaciones/60 s por usuario y `OrderController` 10/60 s; login conserva 5/60 s. `RedisRateLimiter` usa incremento+expiración atómicos y degrada fail-open ante indisponibilidad Redis.
+- CI #286, SHA `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`: 390 unitarios y 147 integraciones de `ticketing-api`, sin fallos, errores ni omitidos. `EventCatalogCacheIT` 5/5, `RedisRateLimiterIT` 3/3 y `ReservationRedisProjectionIT` 5/5; Spotless y JaCoCo correctos; `BUILD SUCCESS`.
+- H81 deja de clasificarse como pendiente técnico. Esto no implica cierre de Fase 4: H75/H76/H83 y H79/H84 continúan pendientes de validación integral.
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -145,12 +155,11 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. H81: alcance Redis de ADR-020.
-2. H75/H76/H83: auditoría global de locks con V16 y los workers ya integrados.
-3. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
-4. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
-5. Refresh token sin rotación y webhook sin timestamp anti-replay.
-6. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
+1. H75/H76/H83: auditoría global de locks con V16 y los workers ya integrados.
+2. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
+3. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
+4. Refresh token sin rotación y webhook sin timestamp anti-replay.
+5. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
 
 ## Verificación local y limitaciones
 
@@ -162,9 +171,9 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Próximos pasos
 
 1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
-2. Completar H81 y auditar H75/H76/H83 con H77/H78/H80 ya presentes.
+2. Auditar H75/H76/H83 con H77/H78/H80/H81 ya presentes.
 3. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
-4. Sincronizar F4-02 y el resto de la documentación con V16 y los 9 casos actuales de `OperationWorkerIT`.
+4. Sincronizar el resto de la documentación con la evidencia actual.
 5. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
 6. No iniciar Fase 5.
 
@@ -189,7 +198,7 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 - Se añade `EventCatalogCacheIT` con cobertura de TTL, lecturas cacheadas, invalidación tras commit y exclusión de consultas filtradas.
 - CI del commit original: run #43532844492 reportado como exitoso en la verificación previa. La integración en `dev` requiere su propia ejecución CI; no se considera validada hasta que finalice en verde.
 
-**Alcance y limitaciones:** este incremento no completa H81 ni Fase 4. Permanecen pendientes las claves de reservas temporales y los límites de reservas/órdenes de ADR-020. También debe revisarse la invalidación ante cambios de venue, dado que `EventMetadata` incluye datos del venue y el cambio no evidencia invalidación desde `VenueService.update`; el TTL limita temporalmente la obsolescencia, pero no sustituye la decisión funcional correspondiente.
+**Evolución posterior:** este incremento histórico fue completado por la proyección de reservas, los límites efectivos de reservas/órdenes y la invalidación post-commit ante cambios de venue. La evidencia integrada actual de H81 es CI #286 sobre `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`. Fase 4 continúa abierta por otros requisitos.
 
 ## Fase 2 — auditoría de cierre y correcciones de autorización (2026-11-13)
 

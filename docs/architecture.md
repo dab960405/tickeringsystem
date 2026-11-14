@@ -28,11 +28,12 @@ flowchart TB
       common -. soporte transversal .-> payment
     end
     postgres[(PostgreSQL · Flyway)]
-    redis[(Redis · refresh tokens, rate limit y metadatos de catálogo)]
+    redis[(Redis · refresh tokens, rate limits, caches y proyección de reservas)]
     client --> security
     catalog --> postgres
     catalog -. cache-aside de metadatos .-> redis
     reservation --> postgres
+    reservation -. proyección temporal .-> redis
     order --> postgres
     payment --> postgres
     security --> redis
@@ -127,7 +128,7 @@ sequenceDiagram
 
 ## Persistencia
 
-El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de autenticación y caché-aside de metadatos de tipos de entrada y eventos públicos. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. La caché tiene TTL configurable, invalidación diferida hasta el commit y un manejador de errores Redis que permite continuar con PostgreSQL.
+El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de login/reservas/órdenes, caché-aside de metadatos de tipos de entrada y eventos públicos, y la proyección temporal `ticketing:reservation:{id}`. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. Las invalidaciones y la proyección de reservas se coordinan con el commit; los cambios de venue invalidan la caché de eventos mediante un evento de aplicación `AFTER_COMMIT`. Los fallos Redis de cache/proyección permiten continuar con PostgreSQL, mientras el refresh token store permanece fail-closed.
 
 ## Límites conocidos
 

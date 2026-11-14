@@ -70,7 +70,8 @@ PostgreSQL, Redis, Kafka y MongoDB deben aparecer como `healthy` antes de inicia
 - Las escrituras del catálogo invalidan la caché mediante `RedisCacheManager` transaccional.
 - Los fallos de caché Redis contemplados por `CacheErrorHandler` permiten fallback a PostgreSQL. Si falla una invalidación, una entrada anterior puede permanecer hasta su TTL.
 - Caché pública de eventos con TTL de 60 s para detalle publicado y primera página popular; la disponibilidad de inventario permanece fuera de caché.
-- Rate limiting de login con Redis y política fail-open ante indisponibilidad (`LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SECONDS`).
+- Proyección Redis `ticketing:reservation:{id}` para reservas activas, escrita después del commit con TTL restante y eliminada tras cancelación, expiración o confirmación; PostgreSQL sigue siendo la autoridad.
+- Rate limiting Redis fail-open para login (5/60 s), creación de reservas (20/60 s por usuario) y creación de órdenes (10/60 s por usuario).
 - Refresh token store fail-closed: las operaciones que requieren Redis fallan con HTTP 503 si no se puede comprobar o persistir el estado de sesión.
 - Los access tokens JWT se validan localmente mediante Spring Security Resource Server, sin consultar Redis.
 
@@ -112,7 +113,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: abierta. H77 está implementado y validado, pero permanecen pendientes H81, la auditoría global H75/H76/H83 y la validación integral de H79/H84 antes de proponer el cierre.
+- [ ] Fase 4: abierta. H77 y H81 están implementados y validados; permanecen pendientes la auditoría global H75/H76/H83 y la validación integral de H79/H84 antes de proponer el cierre.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
@@ -122,8 +123,6 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 - `EventCancellationService` coordina la cancelación con reservas, inventario y órdenes pendientes, pero actualmente accede directamente a repositorios/tablas de otros módulos; este acoplamiento requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
 - El reembolso no devuelve stock automáticamente; decisión documentada en [ADR-009](docs/decisions.md).
-- El rate limiting está implementado únicamente para login.
-- La caché pública de eventos ya está implementada y probada; siguen pendientes las claves Redis `reservation:{id}` y el rate limiting efectivo de creación de reservas/órdenes para completar H81.
 - Los refresh tokens no rotan durante la operación de refresh.
 - El webhook HMAC no incluye timestamp ni mecanismo anti-replay temporal.
 
@@ -131,7 +130,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
 
-La Fase 4 queda lista para revisión de cierre, pero no se marca como cerrada hasta recibir confirmación explícita. La Fase 5 no debe iniciarse antes de ese cierre.
+La Fase 4 continúa abierta: H75/H76/H83 y H79/H84 aún requieren validación integral. La Fase 5 no debe iniciarse antes del cierre formal de Fase 4.
 
 ## Decisiones técnicas
 

@@ -37,3 +37,13 @@ ADR-014 dejó sin implementar caché de eventos, claves `reservation:{id}` y rat
 - La degradación se prueba con Redis pausado y se verifican hits, TTL e invalidación con Redis real.
 - Ninguna escritura comercial depende de que la proyección Redis se haya completado.
 - Los refresh tokens siguen fail-closed y los access tokens se validan localmente.
+
+## Evidencia de implementación
+
+- Caché pública de eventos: `EventCatalogCacheIT` cubre TTL, exclusión de inventario, invalidación post-commit por evento/tipo de entrada y, desde el cierre de H81, invalidación tras cambios de venue mediante evento de aplicación.
+- Reservas temporales: `ReservationRedisProjectionService` escribe `ticketing:reservation:{id}` solo después del commit, con `status`, `expiresAt` y TTL restante; elimina la proyección al resolver la reserva. `ReservationRedisProjectionIT` cubre commit, TTL, cancelación, confirmación y expiración.
+- Rate limiting: `RedisRateLimiterIT` demuestra los límites independientes de reservas y órdenes, TTL de ventana y reinicio del contador; los controllers aplican el límite antes de crear recursos.
+- Degradación: la proyección de reservas y el rate limiter toleran indisponibilidad Redis sin revertir la operación PostgreSQL; el refresh token store conserva la política fail-closed de ADR-014.
+- CI #286, SHA `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`: 390 unitarios y 147 integraciones de `ticketing-api`, 0 fallos, 0 errores y 0 omitidos; `EventCatalogCacheIT` 5/5, `RedisRateLimiterIT` 3/3 y `ReservationRedisProjectionIT` 5/5; Spotless y JaCoCo correctos; `BUILD SUCCESS`.
+
+Esta evidencia completa el alcance técnico de H81. No implica por sí sola el cierre de Fase 4.
