@@ -3,8 +3,8 @@ package com.portfolio.ticketing.reservation.service;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
-import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.domain.EventStatus;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
@@ -27,25 +27,30 @@ public class ReservationService {
 
   private final ReservationRepository reservationRepository;
   private final TicketTypeInventoryService inventoryService;
+  private final EventLockService eventLockService;
   private final ReservationProperties properties;
   private final Clock clock;
 
   public ReservationService(
       ReservationRepository reservationRepository,
       TicketTypeInventoryService inventoryService,
+      EventLockService eventLockService,
       ReservationProperties properties,
       Clock clock) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
+    this.eventLockService = eventLockService;
     this.properties = properties;
     this.clock = clock;
   }
 
   @PreAuthorize("hasRole('USER')")
   public ReservationResponse create(UUID userId, ReservationRequest request) {
+    UUID eventId = inventoryService.findEventId(request.ticketTypeId());
+    EventStatus lockedEventStatus = eventLockService.lockShared(eventId);
     TicketType ticketType = inventoryService.lockRequired(request.ticketTypeId());
     Instant now = clock.instant();
-    validateSale(ticketType, request.quantity(), now);
+    validateSale(lockedEventStatus, ticketType, request.quantity(), now);
     inventoryService.reserve(ticketType.getId(), request.quantity());
     Reservation reservation =
         new Reservation(
@@ -221,9 +226,9 @@ public class ReservationService {
         .orElseThrow(() -> new ResourceNotFoundException("Reservation " + id + " not found"));
   }
 
-  private static void validateSale(TicketType ticketType, int quantity, Instant now) {
-    Event event = ticketType.getEvent();
-    if (event.getStatus() != EventStatus.PUBLISHED) {
+  private static void validateSale(
+      EventStatus lockedEventStatus, TicketType ticketType, int quantity, Instant now) {
+    if (lockedEventStatus != EventStatus.PUBLISHED) {
       throw new BusinessRuleViolationException("Reservations require a published event");
     }
     if (!ticketType.isOnSale(now)) {

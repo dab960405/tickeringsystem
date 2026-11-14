@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.domain.EventStatus;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
@@ -33,6 +35,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -41,11 +44,13 @@ class ReservationServiceTest {
 
   private static final UUID USER_ID = UUID.randomUUID();
   private static final UUID TICKET_TYPE_ID = UUID.randomUUID();
+  private static final UUID EVENT_ID = UUID.randomUUID();
   private static final UUID RESERVATION_ID = UUID.randomUUID();
   private static final Instant NOW = Instant.parse("2030-01-01T12:00:00Z");
 
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
+  @Mock private EventLockService eventLockService;
 
   private ReservationService reservationService;
 
@@ -55,7 +60,54 @@ class ReservationServiceTest {
     properties.setTtlMinutes(10);
     reservationService =
         new ReservationService(
-            reservationRepository, inventoryService, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+            reservationRepository,
+            inventoryService,
+            eventLockService,
+            properties,
+            Clock.fixed(NOW, ZoneOffset.UTC));
+  }
+
+  @Test
+  void should_lockEventSharedBeforeTicketType_when_creatingReservation() {
+    TicketType ticketType = saleableTicketType(EventStatus.PUBLISHED, 4, true);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+    when(reservationRepository.save(any(Reservation.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2));
+
+    InOrder order = inOrder(inventoryService, eventLockService, reservationRepository);
+    order.verify(inventoryService).findEventId(TICKET_TYPE_ID);
+    order.verify(eventLockService).lockShared(EVENT_ID);
+    order.verify(inventoryService).lockRequired(TICKET_TYPE_ID);
+    order.verify(inventoryService).reserve(TICKET_TYPE_ID, 2);
+    order.verify(reservationRepository).save(any(Reservation.class));
+  }
+
+  @Test
+  void should_neitherTakeStockNorPersist_when_eventIsCancelledUnderLock() {
+    TicketType ticketType = saleableTicketType(EventStatus.CANCELLED, 4, true);
+    lenient().when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketType);
+
+    assertThatThrownBy(
+            () -> reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2)))
+        .isInstanceOf(BusinessRuleViolationException.class);
+    verify(inventoryService, never()).reserve(any(), any(Integer.class));
+    verify(inventoryService, never()).tryReserve(any(), any(Integer.class));
+    verify(reservationRepository, never()).save(any());
+  }
+
+  @Test
+  void should_notLockTicketType_when_eventLockFindsNoEvent() {
+    when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
+    when(eventLockService.lockShared(EVENT_ID))
+        .thenThrow(new ResourceNotFoundException("Event " + EVENT_ID + " not found"));
+
+    assertThatThrownBy(
+            () -> reservationService.create(USER_ID, new ReservationRequest(TICKET_TYPE_ID, 2)))
+        .isInstanceOf(ResourceNotFoundException.class);
+    verify(inventoryService, never()).lockRequired(any());
+    verify(reservationRepository, never()).save(any());
   }
 
   @Test
@@ -192,9 +244,13 @@ class ReservationServiceTest {
     return ticketType;
   }
 
-  private static TicketType saleableTicketType(
-      EventStatus status, int maxPerOrder, boolean onSale) {
-    Event event =
+  /**
+   * The loaded entity graph always claims PUBLISHED: only the status read under the event lock is
+   * authoritative, so a stale snapshot must never let a sale through.
+   */
+  private TicketType saleableTicketType(
+      EventStatus lockedEventStatus, int maxPerOrder, boolean onSale) {
+    Event staleSnapshot =
         new Event(
             UUID.randomUUID(),
             new Venue("Arena", "Lima", "Main St 1", 500),
@@ -203,11 +259,11 @@ class ReservationServiceTest {
             "MUSIC",
             NOW.plusSeconds(7200),
             NOW.plusSeconds(10800));
-    if (status == EventStatus.PUBLISHED) {
-      event.publish();
-    }
+    staleSnapshot.publish();
+    lenient().when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
+    lenient().when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
     TicketType ticketType = ticketTypeMock();
-    when(ticketType.getEvent()).thenReturn(event);
+    lenient().when(ticketType.getEvent()).thenReturn(staleSnapshot);
     lenient().when(ticketType.isOnSale(NOW)).thenReturn(onSale);
     lenient().when(ticketType.getMaxPerOrder()).thenReturn(maxPerOrder);
     return ticketType;

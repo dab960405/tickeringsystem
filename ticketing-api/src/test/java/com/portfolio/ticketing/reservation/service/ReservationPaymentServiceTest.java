@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
@@ -36,6 +37,7 @@ class ReservationPaymentServiceTest {
 
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
+  @Mock private EventLockService eventLockService;
 
   private ReservationService reservationService;
 
@@ -45,7 +47,11 @@ class ReservationPaymentServiceTest {
     properties.setTtlMinutes(10);
     reservationService =
         new ReservationService(
-            reservationRepository, inventoryService, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+            reservationRepository,
+            inventoryService,
+            eventLockService,
+            properties,
+            Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
   @Test

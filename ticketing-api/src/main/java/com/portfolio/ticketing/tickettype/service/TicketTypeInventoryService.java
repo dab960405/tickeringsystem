@@ -28,6 +28,14 @@ public class TicketTypeInventoryService {
         .orElseThrow(() -> new ResourceNotFoundException("Ticket type " + id + " not found"));
   }
 
+  /** Unlocked scalar read used to discover which event lock (E) precedes this ticket type (T). */
+  @Transactional(readOnly = true)
+  public UUID findEventId(UUID id) {
+    return ticketTypeRepository
+        .findEventIdById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Ticket type " + id + " not found"));
+  }
+
   @Transactional
   public TicketType lockRequired(UUID id) {
     return ticketTypeRepository

@@ -27,6 +27,9 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
 
   boolean existsByEventIdAndNameIgnoreCase(UUID eventId, String name);
 
+  @Query(value = "SELECT event_id FROM ticket_types WHERE id = :id", nativeQuery = true)
+  Optional<UUID> findEventIdById(@Param("id") UUID id);
+
   @Query(value = "SELECT * FROM ticket_types WHERE id = :id FOR UPDATE", nativeQuery = true)
   Optional<TicketType> findByIdForUpdate(@Param("id") UUID id);
 
