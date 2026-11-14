@@ -104,6 +104,51 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_notResurrectCancelledOrder_when_captureWaitsForCancellationCommit() throws Exception {
+    OrderFixture fixture = createOrder(createReservation(2));
+
+    try (Connection canceller = dataSource.getConnection();
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      canceller.setAutoCommit(false);
+      try (PreparedStatement lock =
+          canceller.prepareStatement("SELECT status FROM events WHERE id = ? FOR UPDATE")) {
+        lock.setObject(1, fixture.reservation().eventId());
+        lock.executeQuery().close();
+      }
+
+      CompletableFuture<Void> capture =
+          CompletableFuture.runAsync(() -> orderPaymentService.process(capture(fixture)), executor);
+      awaitWaitingOnEventRow(canceller, fixture.reservation().eventId(), capture);
+
+      try (PreparedStatement cancelEvent =
+          canceller.prepareStatement("UPDATE events SET status = 'CANCELLED' WHERE id = ?");
+          PreparedStatement expireReservation =
+              canceller.prepareStatement(
+                  "UPDATE reservations SET status = 'EXPIRED', inventory_disposition = 'RELEASED'"
+                      + " WHERE id = ?");
+          PreparedStatement restoreStock =
+              canceller.prepareStatement(
+                  "UPDATE ticket_types SET available_quantity = available_quantity + 1 WHERE id = ?");
+          PreparedStatement cancelOrder =
+              canceller.prepareStatement("UPDATE orders SET status = 'CANCELLED' WHERE id = ?")) {
+        cancelEvent.setObject(1, fixture.reservation().eventId());
+        assertThat(cancelEvent.executeUpdate()).isEqualTo(1);
+        expireReservation.setObject(1, fixture.reservation().reservationId());
+        assertThat(expireReservation.executeUpdate()).isEqualTo(1);
+        restoreStock.setObject(1, fixture.reservation().ticketTypeId());
+        assertThat(restoreStock.executeUpdate()).isEqualTo(1);
+        cancelOrder.setObject(1, fixture.orderId());
+        assertThat(cancelOrder.executeUpdate()).isEqualTo(1);
+      }
+      canceller.commit();
+      capture.get(10, TimeUnit.SECONDS);
+    }
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("CANCELLED", "SUCCEEDED", "EXPIRED", "UNFULFILLABLE", 0, 2));
+  }
+
+  @Test
   void should_rejectOrder_when_cancellationCommitsWhileCreationWaits() throws Exception {
     ReservationFixture reservation = createReservation(2);
 
