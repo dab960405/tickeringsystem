@@ -1,6 +1,8 @@
 package com.portfolio.ticketing.order.service;
 
 import com.portfolio.ticketing.order.repository.OrderExpirationCandidate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import java.util.List;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class OrderExpirationService {
 
+  private static final Logger log = LoggerFactory.getLogger(OrderExpirationService.class);
   private static final int BATCH_SIZE = 100;
 
   private final OrderRepository orderRepository;
@@ -31,7 +34,11 @@ public class OrderExpirationService {
     List<OrderExpirationCandidate> candidates =
         orderRepository.findExpiredPendingOrderCandidates(BATCH_SIZE);
     for (OrderExpirationCandidate candidate : candidates) {
-      processor.expire(candidate);
+      try {
+        processor.expire(candidate);
+      } catch (RuntimeException exception) {
+        log.error("Pending order expiration failed for order {}", candidate.getOrderId(), exception);
+      }
     }
   }
 }
