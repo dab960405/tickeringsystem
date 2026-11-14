@@ -211,7 +211,7 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 
 ### Dictamen
 
-La brecha de ocultación de eventos ajenos quedó corregida en código y se añadieron pruebas de integración de aislamiento para eventos, órdenes y reservas. Sin ejecución CI satisfactoria del HEAD final, el cierre formal de Fase 2 sigue pendiente. Fase 5 continúa bloqueada y no iniciada.
+Fase 2 queda cerrada formalmente con autorización expresa del responsable. La implementación, las pruebas de aislamiento con identidades reales, la documentación de permisos y la evidencia CI satisfacen los criterios de aceptación de la especificación. La matriz exhaustiva método × rol × estado queda como mejora no bloqueante. Este cierre no autoriza ni inicia Fase 5; Fase 4 continúa abierta y Fase 5 permanece bloqueada.
 
 
 ## Fase 2 — resultado final de CI tras corrección Spotless (2026-11-14)
