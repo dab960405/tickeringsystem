@@ -15,6 +15,7 @@ import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.payment.service.PaymentWebhookRequestValidator;
 import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
+import jakarta.persistence.EntityManager;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +28,19 @@ public class OrderPaymentService {
   private final PaymentService paymentService;
   private final ReservationService reservationService;
   private final TicketService ticketService;
+  private final EntityManager entityManager;
 
   public OrderPaymentService(
       OrderRepository orderRepository,
       PaymentService paymentService,
       ReservationService reservationService,
-      TicketService ticketService) {
+      TicketService ticketService,
+      EntityManager entityManager) {
     this.orderRepository = orderRepository;
     this.paymentService = paymentService;
     this.reservationService = reservationService;
     this.ticketService = ticketService;
+    this.entityManager = entityManager;
   }
 
   public void process(PaymentWebhookRequest request) {
@@ -56,6 +60,10 @@ public class OrderPaymentService {
   }
 
   private void processSuccess(Order order, Payment payment, PaymentWebhookRequest request) {
+    ReservationConfirmationResult confirmation =
+        reservationService.confirmForPayment(order.getReservationId(), order.getUserId());
+    payment = lockOrderAndPayment(order);
+
     if (payment.getStatus() == PaymentStatus.REFUNDED) {
       return;
     }
@@ -69,15 +77,11 @@ public class OrderPaymentService {
       throw new InvalidStateTransitionException("Order or payment cannot accept this capture");
     }
 
-    ReservationConfirmationResult confirmation =
-        order.getStatus() == OrderStatus.CANCELLED
-            ? ReservationConfirmationResult.RECOVERY_NOT_ALLOWED
-            : reservationService.confirmForPayment(order.getReservationId(), order.getUserId());
     payment.markSucceeded(request.providerReference());
     if (confirmation == ReservationConfirmationResult.CONFIRMED
         && order.getStatus() == OrderStatus.PENDING_PAYMENT) {
       order.markPaid();
-      order = orderRepository.save(order);
+      orderRepository.save(order);
       ticketService.issueForOrder(order);
       order.markFulfilled();
     } else {
@@ -91,11 +95,21 @@ public class OrderPaymentService {
   }
 
   private void processFailure(Order order, Payment payment) {
+    if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
+      reservationService.releaseForPayment(order.getReservationId(), order.getUserId());
+    }
+    payment = lockOrderAndPayment(order);
+
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         || payment.getStatus() == PaymentStatus.REFUNDED) {
       return;
     }
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
+      return;
+    }
+    if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
+      payment.markFailed();
+      paymentService.save(payment);
       return;
     }
     requirePending(order, payment);
@@ -107,6 +121,7 @@ public class OrderPaymentService {
   }
 
   private void processRefund(Order order, Payment payment, PaymentWebhookRequest request) {
+    payment = lockOrderAndPayment(order);
     switch (request.status()) {
       case REFUNDED -> confirmRefund(order, payment, request);
       case FAILED -> recordRefundFailure(order, payment);
@@ -152,6 +167,21 @@ public class OrderPaymentService {
     }
     order.markRefundPendingReconciliation();
     orderRepository.save(order);
+  }
+
+  /**
+   * Acquires O → P after any reservation-side E → T → R locks and refreshes state read before
+   * waiting. This prevents a stale webhook entity from overwriting a concurrent cancellation.
+   */
+  private Payment lockOrderAndPayment(Order order) {
+    orderRepository
+        .lockById(order.getId())
+        .orElseThrow(
+            () -> new ResourceNotFoundException("Order " + order.getId() + " not found"));
+    entityManager.refresh(order);
+    Payment payment = paymentService.lockRequiredByOrderId(order.getId());
+    entityManager.refresh(payment);
+    return payment;
   }
 
   private static void requirePending(Order order, Payment payment) {
