@@ -118,7 +118,9 @@ public class Order extends BaseEntity {
   }
 
   public void confirmRefund() {
-    if ((status != OrderStatus.PAID && status != OrderStatus.CANCELLED)
+    if ((status != OrderStatus.PAID
+            && status != OrderStatus.CANCELLED
+            && status != OrderStatus.EXPIRED)
         || refundStatus == RefundStatus.CONFIRMED) {
       throw new InvalidStateTransitionException("Order cannot confirm this refund");
     }
@@ -143,7 +145,9 @@ public class Order extends BaseEntity {
   }
 
   private void requireRefundableOrder() {
-    if ((status != OrderStatus.PAID && status != OrderStatus.CANCELLED)
+    if ((status != OrderStatus.PAID
+            && status != OrderStatus.CANCELLED
+            && status != OrderStatus.EXPIRED)
         || refundStatus == RefundStatus.NONE
         || refundStatus == RefundStatus.CONFIRMED) {
       throw new InvalidStateTransitionException("Order has no refundable operation in progress");
