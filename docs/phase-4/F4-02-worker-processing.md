@@ -42,19 +42,20 @@ Cada transacción configura `lock_timeout` y `statement_timeout` mediante `SET L
 
 ## Evidencia de pruebas
 
-`OperationWorkerIT` ejecuta 8 casos con PostgreSQL real:
+`OperationWorkerIT` ejecuta 9 casos con PostgreSQL real:
 
 1. Dos workers compitiendo por el mismo job.
 2. Renovación de lease.
 3. Reemplazo de job y fencing de la ejecución anterior.
 4. Lease vencido y rechazo del worker antiguo.
-5. Recuperación de proyección sin reaplicar negocio.
-6. Reintentos y agotamiento sin aplicación semántica.
-7. Nueva operación de ciclo sin repetir la aplicación semántica global.
-8. Webhook duplicado concurrente con una sola emisión.
+5. Adquisición del lock de evento antes de J/XA durante APPLY.
+6. Recuperación de proyección sin reaplicar negocio.
+7. Reintentos y agotamiento sin aplicación semántica.
+8. Nueva operación de ciclo sin repetir la aplicación semántica global.
+9. Webhook duplicado concurrente con una sola emisión.
 
-`OrderPaymentFlowIT` ejecuta 10 casos de extremo a extremo para compra, fallo, pagos tardíos, reembolsos, identidades persistentes y evidencia append-only.
+`OrderPaymentFlowIT` ejecuta 16 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes y evidencia append-only.
 
 ## Pendientes
 
-H77, H81 y la auditoría global H75/H76/H83 siguen abiertos. H79/H84 deben someterse a la validación integral final. Este documento no representa el cierre formal de Fase 4 ni autoriza Fase 5.
+H77 está implementado mediante V16 y validado por `CommercialIssuanceIT`, pero continúa sujeto a la auditoría transversal H75/H83. H81 y la auditoría global H75/H76/H83 siguen abiertos. H79/H84 deben someterse a la validación integral final. Este documento no representa el cierre formal de Fase 4 ni autoriza Fase 5.
