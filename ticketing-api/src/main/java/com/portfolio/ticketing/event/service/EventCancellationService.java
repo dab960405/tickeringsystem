@@ -82,7 +82,8 @@ public class EventCancellationService {
     List<ReservationCandidate> reservations =
         jdbcTemplate.query(
             """
-            SELECT r.id, r.ticket_type_id, r.quantity
+            SELECT r.id, r.ticket_type_id, r.quantity,
+                   (r.status = 'ACTIVE' AND r.inventory_disposition = 'HELD') AS held
             FROM reservations r
             JOIN ticket_types t ON t.id = r.ticket_type_id
             WHERE t.event_id = ?
