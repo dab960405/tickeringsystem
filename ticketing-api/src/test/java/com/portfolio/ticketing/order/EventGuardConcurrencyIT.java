@@ -207,6 +207,26 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_applyConcurrentLateCaptureOnlyOnce_when_eventWasAlreadyCancelled() throws Exception {
+    OrderFixture fixture = createOrder(createReservation(2));
+    eventCancellationService.cancel(fixture.reservation().eventId());
+    PaymentWebhookRequest request = capture(fixture);
+
+    runConcurrently(
+        () -> {
+          orderPaymentService.process(request);
+          return null;
+        },
+        () -> {
+          orderPaymentService.process(request);
+          return null;
+        });
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("CANCELLED", "SUCCEEDED", "EXPIRED", "UNFULFILLABLE", 0, 2));
+  }
+
+  @Test
   void should_preservePaidOrdersAndConfirmedReservations_when_eventIsCancelled() {
     OrderFixture fixture = createOrder(createReservation(2));
     orderPaymentService.process(capture(fixture));
