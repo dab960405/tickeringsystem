@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +51,7 @@ class OrderCancellationServiceTest {
   @Mock private Reservation reservation;
   @Mock private TicketType ticketType;
   @Mock private Event event;
+  @Mock private EntityManager entityManager;
 
   private OrderCancellationService cancellationService;
 
@@ -57,13 +59,14 @@ class OrderCancellationServiceTest {
   void setUp() {
     cancellationService =
         new OrderCancellationService(
-            orderRepository, reservationService, Clock.fixed(NOW, ZoneOffset.UTC));
+            orderRepository, reservationService, Clock.fixed(NOW, ZoneOffset.UTC), entityManager);
   }
 
   @Test
   void should_releaseReservationAndCancelOrder_when_paymentIsPending() {
     Order order = order(OrderStatus.PENDING_PAYMENT);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
     when(orderRepository.save(order)).thenReturn(order);
 
     OrderResponse response = cancellationService.cancel(ORDER_ID, USER_ID);
