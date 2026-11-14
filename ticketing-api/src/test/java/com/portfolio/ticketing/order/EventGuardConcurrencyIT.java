@@ -212,8 +212,10 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     eventCancellationService.cancel(fixture.reservation().eventId());
     PaymentWebhookRequest request = capture(fixture);
 
-    try (Connection blocker = dataSource.getConnection();
-        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    // Close the blocker connection before the executor: otherwise executor.close() can
+    // wait forever for tasks that are still blocked by this connection.
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        Connection blocker = dataSource.getConnection()) {
       blocker.setAutoCommit(false);
       int blockerPid;
       try (PreparedStatement lock =
@@ -246,7 +248,9 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
                         """,
                         Integer.class,
                         blockerPid);
-                assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(2);
+                // Lock order is E → T → R → O: one request can wait on O while
+                // the other is still serialized behind the first request's R lock.
+                assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
               });
       blocker.commit();
       CompletableFuture.allOf(first, second).get(10, TimeUnit.SECONDS);
