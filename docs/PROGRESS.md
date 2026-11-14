@@ -172,3 +172,42 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 - CI del commit original: run #43532844492 reportado como exitoso en la verificación previa. La integración en `dev` requiere su propia ejecución CI; no se considera validada hasta que finalice en verde.
 
 **Alcance y limitaciones:** este incremento no completa H81 ni Fase 4. Permanecen pendientes las claves de reservas temporales y los límites de reservas/órdenes de ADR-020. También debe revisarse la invalidación ante cambios de venue, dado que `EventMetadata` incluye datos del venue y el cambio no evidencia invalidación desde `VenueService.update`; el TTL limita temporalmente la obsolescencia, pero no sustituye la decisión funcional correspondiente.
+
+## Fase 2 — auditoría de cierre y correcciones de autorización (2026-11-13)
+
+**Estado: implementación de cierre publicada; aceptación final pendiente de CI.** La Fase 2 no se declara cerrada hasta verificar el workflow completo del HEAD final.
+
+### Alcance realizado en dev
+
+- Se añadió `docs/phase-2/authorization-matrix.md`, que clasifica las rutas funcionales por método HTTP, acceso, rol y reglas de propiedad.
+- Se añadió ADR-021: los recursos privados ajenos e inexistentes responden 404 en las mismas operaciones de propiedad; se conserva 403 para denegación por rol.
+- `EventAuthorizationService` ahora responde mediante `ResourceNotFoundException` cuando un ORGANIZER intenta gestionar un evento existente de otro organizador. ADMIN conserva acceso global; un evento inexistente sigue llegando al servicio de negocio y responde 404.
+- `AuthenticationFlowIT` amplía la cobertura con tokens reales:
+  - Dos organizadores: uno crea un borrador, el otro intenta modificarlo y recibe el mismo 404 que un ID inexistente; el propietario legítimo puede actualizarlo.
+  - Dos usuarios: el usuario A crea reserva y orden; el usuario B no puede consultar/cancelar la orden ni cancelar la reserva. El propietario A conserva acceso a la lectura de su orden.
+- README y registro de decisiones enlazan ADR-021 y la matriz, y dejan de declarar la Fase 2 cerrada anticipadamente.
+
+### Commits de los incrementos
+
+- `4ba7117c594e315e775247abe6ba6b0b0a6ddad3` — prueba de aislamiento entre organizadores con JWT reales.
+- `f72fbe1d86646d4c827442c83b1693cdce4375cc` — prueba unitaria de ocultación de propiedad.
+- `6890df100902b432fab06c5c251573a276782bbb` — implementación de ocultación de eventos ajenos.
+- `40007149a5a53415f8e7aedd646f6278c96057b6` — matriz inicial de autorización.
+- `b281bebf8df5c79e5b04a5b035133b445fae0385` — ADR-021.
+- `de05bc43ca7b512ebf677f442794a0d8ad5916f5` — registro ADR actualizado.
+- `3631e0407d1c92d43f5b23314b943a7a127fa9ec` — pruebas de aislamiento de órdenes y reservas con dos JWT reales.
+- `57246b3722f323c37a4f8f9e8e203bb5c8223877` — matriz actualizada con cobertura añadida.
+- `87d92f5a0f9c9c034c1b7aa910eb86d5289c81c0` — ADR-021 actualizado con la evidencia prevista.
+- `75f69668859be13c3a5f8a76b5ddb98e892a4377` — README y roadmap corregidos.
+
+### Verificación pendiente
+
+- No se ejecutó Maven/Testcontainers en este entorno; no afirmar que las pruebas pasan.
+- La evidencia de CI debe corresponder al HEAD final después de actualizar este documento.
+- Revisar el resultado de `./mvnw -B clean verify`, incluyendo Spotless, Surefire, Failsafe y JaCoCo.
+- Si CI falla, corregir el defecto, añadir/ajustar pruebas y publicar cada incremento mediante commit y push inmediato a `dev`.
+- La matriz identifica que la cobertura HTTP de cada celda método × rol no está consolidada en una suite única. Se deben revisar los casos que CI revele, sin duplicar pruebas existentes.
+
+### Dictamen
+
+La brecha de ocultación de eventos ajenos quedó corregida en código y se añadieron pruebas de integración de aislamiento para eventos, órdenes y reservas. Sin ejecución CI satisfactoria del HEAD final, el cierre formal de Fase 2 sigue pendiente. Fase 5 continúa bloqueada y no iniciada.
