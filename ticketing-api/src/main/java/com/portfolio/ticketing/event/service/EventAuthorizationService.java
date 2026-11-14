@@ -30,14 +30,13 @@ public class EventAuthorizationService {
     }
     return eventRepository
         .findById(eventId)
-        .map(
-            event -> {
-              if (!event.isOwnedBy(subject(authentication))) {
-                // Conceal the existence of resources owned by another organizer.
-                throw new ResourceNotFoundException("Event " + eventId + " not found");
-              }
-              return true;
-            })
+        .map(event -> {
+          if (!event.isOwnedBy(subject(authentication))) {
+            // Conceal the existence of resources owned by another organizer.
+            throw new ResourceNotFoundException("Event " + eventId + " not found");
+          }
+          return true;
+        })
         // Let the business service return 404 for an unknown event.
         .orElse(true);
   }
