@@ -42,6 +42,7 @@ class ReservationPaymentServiceTest {
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
   @Mock private EventLockService eventLockService;
+  @Mock private ReservationRedisProjectionService redisProjectionService;
 
   private ReservationService reservationService;
 
@@ -55,6 +56,7 @@ class ReservationPaymentServiceTest {
             inventoryService,
             eventLockService,
             properties,
+            redisProjectionService,
             Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
@@ -69,6 +71,7 @@ class ReservationPaymentServiceTest {
 
     assertThat(result).isEqualTo(ReservationConfirmationResult.CONFIRMED);
     verify(inventoryService, never()).tryReserve(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test
@@ -83,6 +86,7 @@ class ReservationPaymentServiceTest {
 
     assertThat(result).isEqualTo(ReservationConfirmationResult.CONFIRMED);
     verify(inventoryService).tryReserve(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test
@@ -212,6 +216,7 @@ class ReservationPaymentServiceTest {
     assertThat(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
         .isEqualTo(ReservationReleaseResult.RELEASED);
     verify(inventoryService).release(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test
