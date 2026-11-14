@@ -26,7 +26,10 @@ import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HexFormat;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,6 +46,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.sql.DataSource;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,6 +79,7 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private DataSource dataSource;
 
   @Test
   void should_allowOnlyOneWorkerToClaimSameJob() throws Exception {
@@ -137,6 +144,75 @@ class OperationWorkerIT extends AbstractIntegrationTest {
     assertThat(ticketCount(fixture.orderId())).isEqualTo(1);
     assertThat(semanticCount(pending.request())).isEqualTo(1);
     assertThat(projectionStatus(pending.jobId())).isEqualTo("COMPLETED");
+  }
+
+  @Test
+  void should_lockEventBeforeJobAndExecution_when_applyingPayment() throws Exception {
+    OrderFixture fixture = createOrder();
+    PendingOperation pending = pendingOperation(fixture, new BigDecimal("40.00"));
+    OperationClaim claim = jobService.claim(pending.jobId(), "event-first-worker").orElseThrow();
+    UUID eventId =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT t.event_id
+            FROM orders o
+            JOIN reservations r ON r.id = o.reservation_id
+            JOIN ticket_types t ON t.id = r.ticket_type_id
+            WHERE o.id = ?
+            """,
+            UUID.class,
+            fixture.orderId());
+
+    try (Connection blocker = dataSource.getConnection();
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      blocker.setAutoCommit(false);
+      try (PreparedStatement lock =
+          blocker.prepareStatement("SELECT status FROM events WHERE id = ? FOR UPDATE")) {
+        lock.setObject(1, eventId);
+        lock.executeQuery().close();
+      }
+      int blockerPid;
+      try (PreparedStatement pid = blocker.prepareStatement("SELECT pg_backend_pid()");
+          var result = pid.executeQuery()) {
+        result.next();
+        blockerPid = result.getInt(1);
+      }
+
+      CompletableFuture<Void> applying =
+          CompletableFuture.runAsync(() -> paymentOperationService.apply(claim), executor);
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .pollInterval(Duration.ofMillis(25))
+          .untilAsserted(
+              () -> {
+                Integer waiting =
+                    jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*) FROM pg_stat_activity
+                        WHERE wait_event_type = 'Lock'
+                          AND ? = ANY(pg_blocking_pids(pid))
+                          AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
+                        """,
+                        Integer.class,
+                        blockerPid);
+                assertThat(waiting).isNotNull().isGreaterThan(0);
+              });
+
+      try (Connection probe = dataSource.getConnection();
+          PreparedStatement jobLock =
+              probe.prepareStatement("SELECT id FROM operation_jobs WHERE id = ? FOR UPDATE NOWAIT")) {
+        jobLock.setObject(1, pending.jobId());
+        jobLock.executeQuery().close();
+        probe.commit();
+      }
+      assertThat(semanticCount(pending.request())).isZero();
+      blocker.commit();
+      applying.get(10, TimeUnit.SECONDS);
+    }
+
+    paymentOperationService.project(claim);
+    assertThat(ticketCount(fixture.orderId())).isEqualTo(1);
+    assertThat(semanticCount(pending.request())).isEqualTo(1);
   }
 
   @Test
