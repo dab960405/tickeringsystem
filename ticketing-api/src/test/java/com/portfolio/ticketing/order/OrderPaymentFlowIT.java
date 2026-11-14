@@ -10,6 +10,7 @@ import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
 import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
+import com.portfolio.ticketing.order.service.OrderExpirationService;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.order.service.OrderService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
@@ -55,6 +56,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Autowired private ReservationExpirationService expirationService;
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
+  @Autowired private OrderExpirationService orderExpirationService;
   @Autowired private PaymentWebhookService paymentWebhookService;
   @Autowired private OrderCancellationService orderCancellationService;
   @Autowired private ObjectMapper objectMapper;
@@ -129,6 +131,43 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "EXPIRED", 0, 0));
+    assertThat(queryString("SELECT fulfillment_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("UNFULFILLABLE");
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUIRED");
+  }
+
+  @Test
+  void should_notExpirePendingOrderBeforeFifteenMinuteGracePeriod() {
+    OrderFixture fixture = createOrder(1);
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '14 minutes' WHERE id = ?",
+        fixture.reservationId());
+    expirationService.expireOverdue();
+
+    orderExpirationService.expireOverdue();
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "EXPIRED", 0, 1));
+  }
+
+  @Test
+  void should_expirePendingOrderAfterGraceAndRequireRefundForLateCapture() {
+    OrderFixture fixture = createOrder(1);
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        fixture.reservationId());
+    expirationService.expireOverdue();
+
+    orderExpirationService.expireOverdue();
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "FAILED", "EXPIRED", 0, 1));
+
+    orderPaymentService.process(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-after-order-expiry"));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "SUCCEEDED", "EXPIRED", 0, 1));
     assertThat(queryString("SELECT fulfillment_status FROM orders WHERE id = ?", fixture.orderId()))
         .isEqualTo("UNFULFILLABLE");
     assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
