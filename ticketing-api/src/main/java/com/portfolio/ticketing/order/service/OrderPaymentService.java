@@ -17,6 +17,7 @@ import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import jakarta.persistence.EntityManager;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
