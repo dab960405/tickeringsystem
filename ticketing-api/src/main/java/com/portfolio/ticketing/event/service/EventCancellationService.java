@@ -26,9 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Cancels an event and resolves every still-held reservation in the same transaction.
  *
- * <p>The event lock excludes new reservations and payment confirmation. Resource locks then
- * follow ADR-016: T (ticket types), R (reservations), and O (orders). Payments are deliberately
- * left pending: cancellation is not evidence that a provider payment failed or was refunded.
+ * <p>The event lock excludes new reservations and payment confirmation. Resource locks then follow
+ * ADR-016: T (ticket types), R (reservations), and O (orders). Payments are deliberately left
+ * pending: cancellation is not evidence that a provider payment failed or was refunded.
  */
 @Service
 @Transactional
