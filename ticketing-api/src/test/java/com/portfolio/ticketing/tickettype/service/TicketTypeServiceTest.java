@@ -11,12 +11,15 @@ import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.event.domain.EventStatus;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.event.service.EventCatalogCacheService;
 import com.portfolio.ticketing.event.service.EventService;
 import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
@@ -38,17 +41,22 @@ class TicketTypeServiceTest {
   @Mock private TicketTypeRepository ticketTypeRepository;
   @Mock private EventService eventService;
   @Mock private EventCatalogCacheService eventCatalogCacheService;
+  @Mock private EventLockService eventLockService;
+  @Mock private EntityManager entityManager;
   @InjectMocks private TicketTypeService ticketTypeService;
 
   private static Event draftEvent() {
-    return new Event(
-        UUID.randomUUID(),
-        new Venue("Arena", "Lima", "Main St 1", 500),
-        "Show",
-        null,
-        "MUSIC",
-        Instant.parse("2030-01-10T20:00:00Z"),
-        Instant.parse("2030-01-10T23:00:00Z"));
+    Event event =
+        new Event(
+            UUID.randomUUID(),
+            new Venue("Arena", "Lima", "Main St 1", 500),
+            "Show",
+            null,
+            "MUSIC",
+            Instant.parse("2030-01-10T20:00:00Z"),
+            Instant.parse("2030-01-10T23:00:00Z"));
+    ReflectionTestUtils.setField(event, "id", EVENT_ID);
+    return event;
   }
 
   private static TicketTypeRequest request(String name, int total) {
@@ -61,6 +69,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_createFullyAvailableTicketType_when_nameIsUnique() {
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventService.findEvent(EVENT_ID)).thenReturn(draftEvent());
     when(ticketTypeRepository.save(any(TicketType.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -72,6 +81,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_rejectCreate_when_nameAlreadyExists() {
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventService.findEvent(EVENT_ID)).thenReturn(draftEvent());
     when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(EVENT_ID, "VIP")).thenReturn(true);
 
@@ -81,9 +91,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_rejectCreate_when_eventIsCancelled() {
-    Event event = draftEvent();
-    event.cancel();
-    when(eventService.findEvent(EVENT_ID)).thenReturn(event);
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
 
     assertThatThrownBy(() -> ticketTypeService.create(EVENT_ID, request("VIP", 100)))
         .isInstanceOf(BusinessRuleViolationException.class);
@@ -93,6 +101,8 @@ class TicketTypeServiceTest {
   void should_skipDuplicateCheck_when_nameIsUnchanged() {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.saveAndFlush(ticketType)).thenReturn(ticketType);
 
     var updated = ticketTypeService.update(TICKET_TYPE_ID, request("vip", 150));
@@ -105,10 +115,23 @@ class TicketTypeServiceTest {
   void should_rejectUpdate_when_renamedToExistingName() {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(true);
 
     assertThatThrownBy(() -> ticketTypeService.update(TICKET_TYPE_ID, request("General", 100)))
         .isInstanceOf(DuplicateResourceException.class);
+  }
+
+  @Test
+  void should_rejectUpdate_when_eventIsCancelled() {
+    TicketType ticketType = existing(draftEvent());
+    when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
+
+    assertThatThrownBy(() -> ticketTypeService.update(TICKET_TYPE_ID, request("VIP", 100)))
+        .isInstanceOf(BusinessRuleViolationException.class);
+    verify(ticketTypeRepository, never()).findByIdForUpdate(TICKET_TYPE_ID);
   }
 
   @Test
