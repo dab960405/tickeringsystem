@@ -165,9 +165,17 @@ public class ReservationService {
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
     if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
+      if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.CONSUMED) {
+        throw new InvalidStateTransitionException(
+            "Confirmed reservation does not have consumed inventory");
+      }
       return ReservationReleaseResult.CONFIRMED;
     }
     if (reservation.getStatus() != ReservationStatus.ACTIVE) {
+      if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.RELEASED) {
+        throw new InvalidStateTransitionException(
+            "Resolved reservation does not have released inventory");
+      }
       return ReservationReleaseResult.ALREADY_RELEASED;
     }
     if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
