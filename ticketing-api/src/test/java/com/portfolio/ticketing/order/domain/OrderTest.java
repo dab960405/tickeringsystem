@@ -66,6 +66,18 @@ class OrderTest {
   }
 
   @Test
+  void should_confirmRefundAndKeepExpiredState_when_lateCaptureWasUnfulfillable() {
+    Order order = newOrder();
+    order.expire();
+    order.markUnfulfillable();
+
+    order.confirmRefund();
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+    assertThat(order.getRefundStatus()).isEqualTo(RefundStatus.CONFIRMED);
+  }
+
+  @Test
   void should_rejectInvalidStateTransition() {
     Order order = newOrder();
     order.markPaid();
