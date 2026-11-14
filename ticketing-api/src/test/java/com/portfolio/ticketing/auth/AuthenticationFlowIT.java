@@ -5,6 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.portfolio.ticketing.auth.api.LoginRequest;
 import com.portfolio.ticketing.auth.api.RefreshTokenRequest;
 import com.portfolio.ticketing.auth.api.TokenResponse;
+import com.portfolio.ticketing.order.api.OrderRequest;
+import com.portfolio.ticketing.order.api.OrderResponse;
+import com.portfolio.ticketing.reservation.api.ReservationRequest;
+import com.portfolio.ticketing.reservation.api.ReservationResponse;
+import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
+import com.portfolio.ticketing.tickettype.api.TicketTypeResponse;
 import com.portfolio.ticketing.event.api.EventDetailResponse;
 import com.portfolio.ticketing.event.api.EventRequest;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
@@ -13,6 +19,7 @@ import com.portfolio.ticketing.user.domain.UserRole;
 import com.portfolio.ticketing.user.repository.UserRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -130,6 +137,113 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
 
     assertThat(ownerUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(ownerUpdate.getBody().title()).isEqualTo("Updated by owner");
+  }
+
+
+  @Test
+  void should_isolateReservationsAndOrdersBetweenTwoRealUserTokens() {
+    String organizerEmail = "sales-owner-" + UUID.randomUUID() + "@example.com";
+    String buyerAEmail = "buyer-a-" + UUID.randomUUID() + "@example.com";
+    String buyerBEmail = "buyer-b-" + UUID.randomUUID() + "@example.com";
+    saveOrganizer(organizerEmail, "Sales Owner");
+    saveUser(buyerAEmail, "Buyer A");
+    saveUser(buyerBEmail, "Buyer B");
+    Venue venue = venueRepository.save(new Venue("Order Isolation Arena", "Lima", "Main St 3", 500));
+
+    TokenResponse organizerTokens = login(organizerEmail);
+    TokenResponse buyerATokens = login(buyerAEmail);
+    TokenResponse buyerBTokens = login(buyerBEmail);
+
+    ResponseEntity<EventDetailResponse> event =
+        restTemplate.exchange(
+            "/api/v1/events",
+            HttpMethod.POST,
+            new HttpEntity<>(eventRequest(venue.getId(), "Isolation Event"), bearerHeaders(organizerTokens)),
+            EventDetailResponse.class);
+    assertThat(event.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    TicketTypeRequest ticketTypeRequest =
+        new TicketTypeRequest(
+            "General",
+            new BigDecimal("30.00"),
+            10,
+            Instant.now().minusSeconds(60),
+            Instant.now().plusSeconds(86400),
+            4);
+    ResponseEntity<TicketTypeResponse> ticketType =
+        restTemplate.exchange(
+            "/api/v1/events/" + event.getBody().id() + "/ticket-types",
+            HttpMethod.POST,
+            new HttpEntity<>(ticketTypeRequest, bearerHeaders(organizerTokens)),
+            TicketTypeResponse.class);
+    assertThat(ticketType.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<EventDetailResponse> published =
+        restTemplate.exchange(
+            "/api/v1/events/" + event.getBody().id() + "/publish",
+            HttpMethod.POST,
+            new HttpEntity<>(bearerHeaders(organizerTokens)),
+            EventDetailResponse.class);
+    assertThat(published.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    ResponseEntity<ReservationResponse> reservation =
+        restTemplate.exchange(
+            "/api/v1/reservations",
+            HttpMethod.POST,
+            new HttpEntity<>(
+                new ReservationRequest(ticketType.getBody().id(), 1), bearerHeaders(buyerATokens)),
+            ReservationResponse.class);
+    assertThat(reservation.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<OrderResponse> order =
+        restTemplate.exchange(
+            "/api/v1/orders",
+            HttpMethod.POST,
+            orderEntity(reservation.getBody().id(), buyerATokens),
+            OrderResponse.class);
+    assertThat(order.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+    ResponseEntity<String> foreignOrderRead =
+        restTemplate.exchange(
+            "/api/v1/orders/" + order.getBody().id(),
+            HttpMethod.GET,
+            new HttpEntity<>(bearerHeaders(buyerBTokens)),
+            String.class);
+    ResponseEntity<String> foreignOrderCancel =
+        restTemplate.exchange(
+            "/api/v1/orders/" + order.getBody().id() + "/cancel",
+            HttpMethod.POST,
+            new HttpEntity<>(bearerHeaders(buyerBTokens)),
+            String.class);
+    ResponseEntity<String> foreignReservationCancel =
+        restTemplate.exchange(
+            "/api/v1/reservations/" + reservation.getBody().id(),
+            HttpMethod.DELETE,
+            new HttpEntity<>(bearerHeaders(buyerBTokens)),
+            String.class);
+
+    assertThat(foreignOrderRead.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(foreignOrderCancel.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(foreignReservationCancel.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+    ResponseEntity<OrderResponse> ownerOrderRead =
+        restTemplate.exchange(
+            "/api/v1/orders/" + order.getBody().id(),
+            HttpMethod.GET,
+            new HttpEntity<>(bearerHeaders(buyerATokens)),
+            OrderResponse.class);
+    assertThat(ownerOrderRead.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  private void saveUser(String email, String fullName) {
+    userRepository.save(
+        new User(email, passwordEncoder.encode("Password123"), fullName, UserRole.USER));
+  }
+
+  private static HttpEntity<OrderRequest> orderEntity(UUID reservationId, TokenResponse tokens) {
+    HttpHeaders headers = bearerHeaders(tokens);
+    headers.set("Idempotency-Key", "checkout-" + UUID.randomUUID());
+    return new HttpEntity<>(new OrderRequest(reservationId), headers);
   }
 
   private void saveOrganizer(String email, String fullName) {
