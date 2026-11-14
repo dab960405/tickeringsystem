@@ -30,13 +30,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @TestPropertySource(
@@ -67,14 +67,14 @@ class ReservationRedisProjectionIT extends AbstractIntegrationTest {
     Instant expiresAt = Instant.now().plusSeconds(120);
     String key = key(reservationId);
     ReservationRedisProjectionService projectionService =
-        new ReservationRedisProjectionService(redisTemplate, objectMapper, java.time.Clock.systemUTC());
+        new ReservationRedisProjectionService(
+            redisTemplate, objectMapper, java.time.Clock.systemUTC());
 
     new TransactionTemplate(transactionManager)
-        .executeWithoutResult(
-            status -> {
-              projectionService.writeActiveAfterCommit(reservationId, expiresAt);
-              assertThat(redisTemplate.hasKey(key)).isFalse();
-            });
+        .executeWithoutResult(status -> {
+          projectionService.writeActiveAfterCommit(reservationId, expiresAt);
+          assertThat(redisTemplate.hasKey(key)).isFalse();
+        });
 
     assertThat(redisTemplate.hasKey(key)).isTrue();
     redisTemplate.delete(key);
@@ -89,7 +89,8 @@ class ReservationRedisProjectionIT extends AbstractIntegrationTest {
     JsonNode json = objectMapper.readTree(payload);
 
     assertThat(json.path("status").asText()).isEqualTo("ACTIVE");
-    assertThat(json.path("expiresAt").asText()).isEqualTo(fixture.reservation().expiresAt().toString());
+    assertThat(json.path("expiresAt").asText())
+        .isEqualTo(fixture.reservation().expiresAt().toString());
     assertThat(redisTemplate.getExpire(key)).isBetween(1L, 600L);
   }
 
