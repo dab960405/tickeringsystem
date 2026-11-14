@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.domain.EventStatus;
 import com.portfolio.ticketing.event.service.EventLockService;
@@ -197,8 +196,8 @@ class ReservationPaymentServiceTest {
     stubLockedReservation(reservation);
     when(reservationRepository.cancelActive(RESERVATION_ID, USER_ID)).thenReturn(1);
 
-    reservationService.releaseForPayment(RESERVATION_ID, USER_ID);
-
+    assertThat(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationReleaseResult.RELEASED);
     verify(inventoryService).release(TICKET_TYPE_ID, 2);
   }
 
@@ -207,18 +206,19 @@ class ReservationPaymentServiceTest {
     Reservation reservation = reservation(ReservationStatus.EXPIRED);
     stubLockedReservation(reservation);
 
-    reservationService.releaseForPayment(RESERVATION_ID, USER_ID);
-
+    assertThat(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationReleaseResult.ALREADY_RELEASED);
     verify(inventoryService, never()).release(TICKET_TYPE_ID, 2);
   }
 
   @Test
-  void should_rejectRelease_when_reservationIsConfirmed() {
+  void should_reportConfirmedReservation_withoutThrowing_when_releaseIsAttempted() {
     Reservation reservation = reservation(ReservationStatus.CONFIRMED);
     stubLockedReservation(reservation);
 
-    assertThatThrownBy(() -> reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
-        .isInstanceOf(InvalidStateTransitionException.class);
+    assertThat(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationReleaseResult.CONFIRMED);
+    verify(inventoryService, never()).release(any(), anyInt());
   }
 
   private void stubLockedReservation(Reservation reservation) {
