@@ -56,7 +56,7 @@ class OrderServiceTest {
   @Test
   void should_createOrderWithCopiedPriceAndPendingPayment() {
     Reservation reservation = reservation();
-    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID)).thenReturn(reservation);
+    when(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(orderRepository.save(any(Order.class)))
         .thenAnswer(invocation -> {
           Order order = invocation.getArgument(0);
@@ -86,7 +86,7 @@ class OrderServiceTest {
 
     assertThat(result.created()).isFalse();
     assertThat(result.response().id()).isEqualTo(ORDER_ID);
-    verify(reservationService, never()).findActiveForUser(any(), any());
+    verify(reservationService, never()).lockActiveForOrder(any(), any());
     verify(paymentService, never()).createPending(any(), any());
   }
 
@@ -98,14 +98,14 @@ class OrderServiceTest {
     assertThatThrownBy(
             () -> orderService.create(USER_ID, "checkout-123", new OrderRequest(UUID.randomUUID())))
         .isInstanceOf(DuplicateResourceException.class);
-    verify(reservationService, never()).findActiveForUser(any(), any());
+    verify(reservationService, never()).lockActiveForOrder(any(), any());
   }
 
   @Test
   void should_rejectAnotherOrder_when_reservationAlreadyHasAnOrder() {
     Reservation reservation = org.mockito.Mockito.mock(Reservation.class);
     when(reservation.getId()).thenReturn(RESERVATION_ID);
-    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID)).thenReturn(reservation);
+    when(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(orderRepository.existsByReservationId(RESERVATION_ID)).thenReturn(true);
 
     assertThatThrownBy(
@@ -127,7 +127,7 @@ class OrderServiceTest {
 
   @Test
   void should_notCreateOrder_when_reservationIsNotActive() {
-    when(reservationService.findActiveForUser(RESERVATION_ID, USER_ID))
+    when(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
         .thenThrow(new BusinessRuleViolationException("Reservation expired"));
 
     assertThatThrownBy(

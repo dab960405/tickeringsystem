@@ -50,7 +50,8 @@ public class OrderService {
       return new OrderCreationResult(OrderResponse.from(order), false);
     }
 
-    Reservation reservation = reservationService.findActiveForUser(request.reservationId(), userId);
+    Reservation reservation =
+        reservationService.lockActiveForOrder(request.reservationId(), userId);
     if (orderRepository.existsByReservationId(reservation.getId())) {
       throw new DuplicateResourceException("An order already exists for this reservation");
     }

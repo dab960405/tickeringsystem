@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -78,10 +79,23 @@ public class ReservationService {
     inventoryService.release(ticketTypeId, reservation.getQuantity());
   }
 
-  @Transactional(readOnly = true)
-  public Reservation findActiveForUser(UUID id, UUID userId) {
-    Reservation reservation = findOwned(id, userId);
-    if (!reservation.isActiveAt(clock.instant())) {
+  /**
+   * Locks E FOR SHARE → R FOR UPDATE and revalidates both, so the caller can attach a new order (O)
+   * without racing a cancellation, expiration or release that resolves the reservation. T is
+   * skipped because order creation does not touch inventory.
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Reservation lockActiveForOrder(UUID id, UUID userId) {
+    UUID ticketTypeId = discoverTicketTypeId(id, userId);
+    EventStatus lockedEventStatus =
+        eventLockService.lockShared(inventoryService.findEventId(ticketTypeId));
+    Reservation reservation = findOwnedForUpdate(id, userId);
+    requireSameTicketType(reservation, ticketTypeId);
+    if (lockedEventStatus != EventStatus.PUBLISHED) {
+      throw new BusinessRuleViolationException("Orders require a published event");
+    }
+    if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD
+        || !reservation.isActiveAt(clock.instant())) {
       throw new BusinessRuleViolationException("Reservation is not active or has expired");
     }
     return reservation;
@@ -95,6 +109,8 @@ public class ReservationService {
   @Transactional
   public ReservationConfirmationResult confirmForPayment(UUID id, UUID userId) {
     UUID ticketTypeId = discoverTicketTypeId(id, userId);
+    EventStatus lockedEventStatus =
+        eventLockService.lockShared(inventoryService.findEventId(ticketTypeId));
     inventoryService.lockRequired(ticketTypeId);
     LockedReservation reservation =
         LockedReservation.of(findOwnedForUpdate(id, userId), ticketTypeId);
@@ -103,6 +119,10 @@ public class ReservationService {
     if (reservation.status() == ReservationStatus.CONFIRMED
         && reservation.disposition() == ReservationInventoryDisposition.CONSUMED) {
       return ReservationConfirmationResult.CONFIRMED;
+    }
+    if (lockedEventStatus != EventStatus.PUBLISHED) {
+      releaseHeldForUnpublishedEvent(id, userId, reservation);
+      return ReservationConfirmationResult.RECOVERY_NOT_ALLOWED;
     }
     if (reservation.status() == ReservationStatus.ACTIVE
         && reservation.disposition() == ReservationInventoryDisposition.HELD
@@ -169,6 +189,21 @@ public class ReservationService {
     }
   }
 
+  /**
+   * A payment that arrives after the event stopped selling must not consume stock: an active hold
+   * is cancelled and its inventory returned exactly once; resolved reservations stay untouched.
+   */
+  private void releaseHeldForUnpublishedEvent(UUID id, UUID userId, LockedReservation reservation) {
+    if (reservation.status() != ReservationStatus.ACTIVE
+        || reservation.disposition() != ReservationInventoryDisposition.HELD) {
+      return;
+    }
+    if (reservationRepository.cancelActive(id, userId) != 1) {
+      throw new InvalidStateTransitionException("Reservation could not be released for event");
+    }
+    inventoryService.release(reservation.ticketTypeId(), reservation.quantity());
+  }
+
   private void expireActiveReservation(LockedReservation reservation, Instant evaluationTime) {
     if (reservationRepository.expireActive(reservation.id(), evaluationTime) != 1) {
       throw new InvalidStateTransitionException("Reservation could not be expired for recovery");
@@ -177,8 +212,8 @@ public class ReservationService {
   }
 
   /**
-   * Values captured right after the T → R locks. Modifying queries clear the persistence context,
-   * so later decisions must not navigate lazy associations of the locked entity.
+   * Values captured right after the E → T → R locks. Modifying queries clear the persistence
+   * context, so later decisions must not navigate lazy associations of the locked entity.
    */
   private record LockedReservation(
       UUID id,

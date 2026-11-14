@@ -216,22 +216,55 @@ class ReservationServiceTest {
   }
 
   @Test
-  void should_returnActiveReservation_when_itBelongsToUserAndHasNotExpired() {
+  void should_lockEventBeforeReservation_when_lockingActiveReservationForOrder() {
     Reservation reservation = activeReservation();
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+    stubOrderLocks(reservation, EventStatus.PUBLISHED);
 
-    assertThat(reservationService.findActiveForUser(RESERVATION_ID, USER_ID)).isSameAs(reservation);
+    assertThat(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isSameAs(reservation);
+
+    InOrder lockOrder = inOrder(eventLockService, reservationRepository);
+    lockOrder.verify(eventLockService).lockShared(EVENT_ID);
+    lockOrder.verify(reservationRepository).findOwnedForUpdate(RESERVATION_ID, USER_ID);
+    verify(inventoryService, never()).lockRequired(any());
   }
 
   @Test
-  void should_rejectActiveReservation_when_itHasExpired() {
-    Reservation reservation = new Reservation(USER_ID, ticketTypeMock(), 2, NOW.minusSeconds(1));
-    when(reservationRepository.findByIdAndUserId(RESERVATION_ID, USER_ID))
-        .thenReturn(Optional.of(reservation));
+  void should_rejectOrderReservation_when_eventIsNoLongerPublished() {
+    stubOrderLocks(activeReservation(), EventStatus.CANCELLED);
 
-    assertThatThrownBy(() -> reservationService.findActiveForUser(RESERVATION_ID, USER_ID))
+    assertThatThrownBy(() -> reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isInstanceOf(BusinessRuleViolationException.class)
+        .hasMessage("Orders require a published event");
+  }
+
+  @Test
+  void should_rejectOrderReservation_when_itHasExpired() {
+    stubOrderLocks(
+        new Reservation(USER_ID, ticketTypeMock(), 2, NOW.minusSeconds(1)), EventStatus.PUBLISHED);
+
+    assertThatThrownBy(() -> reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isInstanceOf(BusinessRuleViolationException.class)
+        .hasMessage("Reservation is not active or has expired");
+  }
+
+  @Test
+  void should_rejectOrderReservation_when_itWasResolvedConcurrently() {
+    Reservation cancelled = activeReservation();
+    cancelled.cancel();
+    stubOrderLocks(cancelled, EventStatus.PUBLISHED);
+
+    assertThatThrownBy(() -> reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
         .isInstanceOf(BusinessRuleViolationException.class);
+  }
+
+  private void stubOrderLocks(Reservation reservation, EventStatus lockedEventStatus) {
+    when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(TICKET_TYPE_ID));
+    when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
+    when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
+    when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
+        .thenReturn(Optional.of(reservation));
   }
 
   private static Reservation activeReservation() {
