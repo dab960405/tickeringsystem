@@ -14,6 +14,9 @@ import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -83,8 +86,13 @@ public class EventCancellationService {
             FROM reservations r
             JOIN ticket_types t ON t.id = r.ticket_type_id
             WHERE t.event_id = ?
-              AND r.status = 'ACTIVE'
-              AND r.inventory_disposition = 'HELD'
+              AND (
+                (r.status = 'ACTIVE' AND r.inventory_disposition = 'HELD')
+                OR EXISTS (
+                  SELECT 1 FROM orders o
+                  WHERE o.reservation_id = r.id AND o.status = 'PENDING_PAYMENT'
+                )
+              )
             ORDER BY r.id
             FOR UPDATE OF r
             """,
@@ -92,7 +100,8 @@ public class EventCancellationService {
                 new ReservationCandidate(
                     row.getObject("id", UUID.class),
                     row.getObject("ticket_type_id", UUID.class),
-                    row.getInt("quantity")),
+                    row.getInt("quantity"),
+                    row.getBoolean("held")),
             eventId);
 
     if (reservations.isEmpty()) {
@@ -106,7 +115,14 @@ public class EventCancellationService {
           "One or more event reservations disappeared during cancellation");
     }
 
-    for (Reservation reservation : lockedReservations) {
+    Map<UUID, ReservationCandidate> candidatesById =
+        reservations.stream()
+            .collect(Collectors.toMap(ReservationCandidate::id, Function.identity()));
+    List<Reservation> activeReservations =
+        lockedReservations.stream()
+            .filter(reservation -> candidatesById.get(reservation.getId()).held())
+            .toList();
+    for (Reservation reservation : activeReservations) {
       if (reservation.getStatus() != ReservationStatus.ACTIVE
           || reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
         throw new BusinessRuleViolationException(
@@ -114,10 +130,14 @@ public class EventCancellationService {
       }
       reservation.expire();
     }
-    reservationRepository.saveAllAndFlush(lockedReservations);
+    if (!activeReservations.isEmpty()) {
+      reservationRepository.saveAllAndFlush(activeReservations);
+    }
 
     for (ReservationCandidate candidate : reservations) {
-      inventoryService.release(candidate.ticketTypeId(), candidate.quantity());
+      if (candidate.held()) {
+        inventoryService.release(candidate.ticketTypeId(), candidate.quantity());
+      }
     }
 
     String placeholders = String.join(",", Collections.nCopies(reservationIds.size(), "?"));
@@ -147,5 +167,5 @@ public class EventCancellationService {
     orderRepository.saveAll(pendingOrders);
   }
 
-  private record ReservationCandidate(UUID id, UUID ticketTypeId, int quantity) {}
+  private record ReservationCandidate(UUID id, UUID ticketTypeId, int quantity, boolean held) {}
 }
