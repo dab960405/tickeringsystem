@@ -187,20 +187,18 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
         .alias("operation waits for event row " + eventId)
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(25))
-        .until(
-            () -> {
-              Integer waiting =
-                  jdbcTemplate.queryForObject(
-                      """
-                      SELECT COUNT(*) FROM pg_stat_activity
-                      WHERE wait_event_type = 'Lock'
-                        AND ? = ANY(pg_blocking_pids(pid))
-                        AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
-                      """,
-                      Integer.class,
-                      blockerPid);
-              return waiting != null && waiting > 0;
-            });
+        .until(() -> {
+          Integer waiting =
+              jdbcTemplate.queryForObject(
+                  """
+                  SELECT COUNT(*) FROM pg_stat_activity
+                  WHERE wait_event_type = 'Lock'
+                    AND ? = ANY(pg_blocking_pids(pid))
+                    AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
+                  """,
+                  Integer.class, blockerPid);
+          return waiting != null && waiting > 0;
+        });
     assertThat(pending).as("operation must still wait on E").isNotDone();
   }
 
