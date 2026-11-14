@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
 
-> **Estado (2026-11-12):** Fases 0–2 completadas. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 está implementada y verificada por CI, pero su cierre formal espera confirmación explícita. Fase 5 no ha comenzado.
+> **Estado (2026-11-13):** Fases 0–1 completadas. Fase 2 implementada; su cierre formal está pendiente de validar en CI las nuevas pruebas de aislamiento y autorización. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado.
 
 ## Documentación
 
@@ -20,6 +20,8 @@ Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Bo
 - [ADR-013: caché Redis de metadatos del catálogo](docs/adr/ADR-013-redis-catalog-cache.md)
 - [ADR-014: resiliencia Redis y degradación de autenticación](docs/adr/ADR-014-redis-resilience-and-auth-degradation.md)
 - [ADR-015: una orden por reserva](docs/adr/ADR-015-one-order-per-reservation.md)
+- [ADR-021: ocultación de recursos ajenos](docs/adr/ADR-021-phase-2-authorization-resource-concealment.md)
+- [Matriz de autorización de Fase 2](docs/phase-2/authorization-matrix.md)
 
 ## Arquitectura y módulos
 
@@ -104,7 +106,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
-- [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting.
+- [ ] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; **cierre formal pendiente:** CI debe validar pruebas de aislamiento entre dos organizadores y dos usuarios con JWT reales.
 - [ ] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets implementado. **Fase pendiente de completar:** ejecutar y verificar el hardening del ciclo de cancelación de eventos.
 - [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
