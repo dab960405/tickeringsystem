@@ -2,6 +2,7 @@ package com.portfolio.ticketing.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
@@ -34,6 +35,7 @@ import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
@@ -46,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -485,6 +488,101 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
     assertThat(dispositionForEvent(refunded.providerEventId())).isEqualTo("APPLIED");
     assertThat(dispositionForEvent(pending.providerEventId())).isEqualTo("NO_OP");
+  }
+
+  @Test
+  void should_confirmRefundAfterFailedEvidenceForSameProviderOperation() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-failed"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest failed = refundWebhook(fixture, PaymentStatus.FAILED, "refund-h84-failed");
+    PaymentWebhookRequest refunded =
+        new PaymentWebhookRequest(
+            failed.orderId(),
+            PaymentStatus.REFUNDED,
+            failed.providerReference(),
+            UUID.randomUUID(),
+            failed.providerOperationId(),
+            failed.operationKind(),
+            failed.amount(),
+            failed.currency());
+
+    handle(failed);
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("FAILED");
+    assertThat(dispositionForEvent(failed.providerEventId())).isEqualTo("APPLIED");
+
+    handle(refunded);
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(dispositionForEvent(refunded.providerEventId())).isEqualTo("APPLIED");
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", failed.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @RepeatedTest(10)
+  void should_notLoseRefund_whenPendingAndRefundedArriveConcurrently() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-race"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest pending = refundWebhook(fixture, PaymentStatus.PENDING, "refund-h84-race");
+    PaymentWebhookRequest refunded =
+        new PaymentWebhookRequest(
+            pending.orderId(),
+            PaymentStatus.REFUNDED,
+            pending.providerReference(),
+            UUID.randomUUID(),
+            pending.providerOperationId(),
+            pending.operationKind(),
+            pending.amount(),
+            pending.currency());
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      Future<?> pendingResult =
+          executor.submit(() -> {
+            start.await();
+            handle(pending);
+            return null;
+          });
+      Future<?> refundedResult =
+          executor.submit(() -> {
+            start.await();
+            handle(refunded);
+            return null;
+          });
+
+      start.countDown();
+      pendingResult.get(60, TimeUnit.SECONDS);
+      refundedResult.get(60, TimeUnit.SECONDS);
+    }
+
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .untilAsserted(() -> {
+          assertThat(paymentFlowResult(fixture))
+              .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+          assertThat(dispositionForEvent(refunded.providerEventId())).isEqualTo("APPLIED");
+          assertThat(dispositionForEvent(pending.providerEventId())).isIn("APPLIED", "NO_OP");
+        });
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", pending.providerOperationId()))
+        .isEqualTo(1);
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("CANCELLED");
   }
 
   @Test
