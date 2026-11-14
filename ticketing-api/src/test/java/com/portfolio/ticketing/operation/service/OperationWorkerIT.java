@@ -276,6 +276,8 @@ class OperationWorkerIT extends AbstractIntegrationTest {
     paymentOperationService.apply(interrupted);
     paymentOperationService.processJob(jobId, "refund-recovery");
 
+    assertThatThrownBy(() -> paymentOperationService.project(interrupted))
+        .isInstanceOf(OperationFencingException.class);
     assertThat(orderStatus(fixture.orderId())).isEqualTo("REFUNDED");
     assertThat(paymentStatus(fixture.orderId())).isEqualTo("REFUNDED");
     assertThat(refundStatus(fixture.orderId())).isEqualTo("CONFIRMED");
