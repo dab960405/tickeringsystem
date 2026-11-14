@@ -10,6 +10,9 @@ Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Bo
 
 - [Progreso y evidencia de verificación](docs/PROGRESS.md)
 - [Guía de ejecución local](docs/LOCAL_RUN.md)
+- [F4-05 — expediente de revisión de cierre](docs/phase-4/F4-05-closure-review.md)
+- [ADR-022 — contrato de pagos simulados (propuesto)](docs/adr/ADR-022-simulated-refund-evidence-contract.md)
+- [F5-00 — plan de Fase 5 y primera prueba local (sin iniciar)](docs/phase-5/F5-00-plan-and-local-validation.md)
 - [Flujo HTTP de smoke test](docs/flow.http) — no se ejecuta en CI; requiere generar manualmente la firma HMAC del webhook.
 - [Arquitectura y flujo de negocio](docs/architecture.md)
 - [Diagrama ERD basado en migraciones Flyway](docs/erd.md)
@@ -113,8 +116,8 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: abierta. H75–H83 tienen evidencia CI; H84-01 corrigió disposiciones y probó progresión y diez carreras concurrentes de reembolso en CI #302. Quedan la referencia evolutiva de proveedor, conciliación anticipada, recuperación interrumpida y el dictamen del responsable.
-- [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
+- [ ] Fase 4: abierta. H75–H83 tienen evidencia CI; H84-01 validó progresión/carreras en CI #302 y recuperación/fencing en CI #306. El contrato mínimo del pago **simulado** se propone en ADR-022; la nueva prueba de conciliación mediante evento firmado está validada en CI #309 (`a8013f67`) y espera dictamen del Tech Lead. Ver expediente F4-05.
+- [ ] Fase 5: bloqueada. [F5-00](docs/phase-5/F5-00-plan-and-local-validation.md) prepara su ejecución; **primero** pruebas manuales en local, **después** outbox/Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
 - [ ] Fase 8: pulido, documentación de operación y mejoras finales.
@@ -130,7 +133,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
 
-La Fase 4 continúa abierta: CI #302 verificó 390 unitarias y 168 de integración (35 `OrderPaymentFlowIT`), incluidos `FAILED → REFUNDED` y diez casos concurrentes con identidad estable. H84-01 exige aún decisión sobre referencias evolutivas, conciliación de evidencia anticipada y recuperación/fencing de transiciones; no se autoriza Fase 5 antes del cierre formal.
+La Fase 4 continúa abierta: CI #302 verificó progresión y carreras de reembolso; CI #306 verificó la transición interrumpida con fencing. ADR-022 propone fijar el contrato sencillo de evidencia del proveedor **simulado** sin ampliación financiera; CI #309 verde; pendiente dictamen expreso. Fase 5 sigue bloqueada; las primeras pruebas manuales en local están planificadas para el inicio autorizado de esa fase.
 
 ## Auditoría de locks de Fase 4
 

@@ -85,7 +85,7 @@ Este flujo justificó la prueba que fallaría en el SHA anterior: **`NO_OP` con 
 2. **Reembolso anticipado:** decidir si una evidencia `REFUNDED` recibida antes de la captura debe conservarse como `NO_OP` definitivo o reexaminarse automáticamente después de una captura posterior. Definir autorización y orden de aplicación sin reembolso ficticio ni doble efecto.
 3. **Recuperación y fencing:** criterio técnico cubierto para interrupción controlada entre APPLY y PROJECT durante `PENDING → REFUNDED` en CI #306; no requiere ampliar contrato. Esto no sustituye las decisiones contractuales 1 y 2.
 
-**Ninguna alternativa de contrato se considera aprobada.** Las pruebas con referencia estable respetan el contrato vigente y pueden ejecutarse independientemente de estas decisiones. Estos puntos requieren contrato y dictamen específico del Tech Lead. La corrección de etiquetas y disposiciones no autoriza por sí sola el cierre de H84/Fase 4.
+**Propuesta para el portafolio:** [ADR-022](../adr/ADR-022-simulated-refund-evidence-contract.md) recomienda conservar HTTP 409 para cambio de referencia y usar nueva notificación HMAC con identidad semántica constante para reevaluar un `REFUNDED` anterior a la captura. Se añadió la regresión `should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture` en `8e2c8787a7fe5bb3c8c8d1571bf523295e413154`; CI #308 pasó todas las pruebas pero falló en Spotless. El commit de formato `a8013f67bffe3a5826606469485335b61e13a93d` pasó [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382): 390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, JaCoCo y Spotless correctos, `BUILD SUCCESS`. **Contrato propuesto, no aprobado por el Tech Lead.** La publicación documental no cierra H84/Fase 4.
 
 ## Dictamen de avance
 
@@ -93,6 +93,10 @@ Este flujo justificó la prueba que fallaría en el SHA anterior: **`NO_OP` con 
 - H79: captura tardía, gracia, inventario e imposibilidad de entrega probados en la suite de pago; la política sigue regida por ADR-019.
 - H80: identidades persistentes, append-only e idempotencia probadas; H84-01 ya registra disposiciones por efecto real sin romper unicidad de operación; falta la política de referencia mutable y conciliación.
 - H82: límites operativos y timeouts PostgreSQL verificados en CI #296 sobre el SHA exacto; queda la aceptación del expediente integral, no un defecto técnico detectado en H82.
-- H84: cuatro regresiones iniciales (CI #298), `FAILED → REFUNDED` y diez carreras de estado (`OrderPaymentFlowIT` 35/35 en CI #302), recuperación de reembolso directo/fencing (CI #304) e interrupción controlada de `PENDING → REFUNDED` (`OperationWorkerIT` 12/12 en CI #306); **no se propone cierre** sin dictamen del Tech Lead sobre referencia evolutiva y conciliación anticipada.
+- H84: regresiones CI #298/#302, carrera `PENDING`/`REFUNDED` y recuperación con fencing CI #304/#306. La prueba del reenvío firmado tras captura está verificada en CI #309 sobre `a8013f67`. **Se solicita dictamen** del contrato mínimo de simulación propuesto en ADR-022; no se declara cerrado.
 
 La excepción cross-module de `EventCancellationService` permanece pendiente del dictamen del Tech Lead para el cierre formal de Fase 3. Este documento no aprueba cambios de arquitectura, no cierra Fase 4 y no habilita Fase 5.
+
+## Expediente consolidado
+
+[F4-05 — revisión de cierre de Fase 4](F4-05-closure-review.md). La aprobación técnica del contrato mínimo y el cierre formal permanecen reservados al Tech Lead/responsable. Fase 5 bloqueada.

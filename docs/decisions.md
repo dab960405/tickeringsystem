@@ -156,7 +156,7 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 
 ## Pendientes de decidir
 
-- **H84-01 — estados sucesivos del mismo reembolso:** ADR-019 define identidad semántica única por `providerOperationId`, pero el digest excluye `status` y el servicio ejecuta los efectos antes de detectar una aplicación ya existente. El Tech Lead debe decidir si una operación puede evolucionar de `PENDING`/`FAILED` a `REFUNDED` con la misma identidad, o si toda repetición de identidad debe ser no-op estricto; la decisión debe mantener consistencia entre efectos comerciales, evidencia y `operation_dispositions`. [Análisis y escenarios pendientes en F4-04](phase-4/F4-04-integrated-payment-audit.md). **No implica aprobación de migraciones ni de cambios al contrato existente.**
+- **H84-01 — contrato mínimo del proveedor simulado:** la clasificación de efectos y la progresión `PENDING`/`FAILED → REFUNDED` con referencia estable ya están validadas en CI #302/#306. [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) propone conservar HTTP 409 para cambios de digest y revalidar reembolsos anticipados solo tras **nuevo evento firmado**, sin reconciliador automático. **Propuesto, pendiente de dictamen del Tech Lead**, sin cambios de migraciones ni contrato aprobado.
 - **Coordinación cross-module de cancelación de eventos:** `EventCancellationService` necesita coordinar en una única transacción el evento, inventario, reservas y órdenes pendientes, y actualmente utiliza repositorios y SQL directo sobre módulos vecinos. La especificación general exige comunicación entre módulos mediante servicios o eventos de aplicación. Antes del cierre formal de Fase 3, el Tech Lead debe decidir explícitamente entre aceptar una excepción transaccional estrecha y documentada para este coordinador o exigir un refactor que preserve el mismo protocolo de locks y atomicidad. **Esta entrada registra la decisión pendiente; no constituye aceptación de la excepción.**
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
 
@@ -166,3 +166,10 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Decisión:** los recursos privados ajenos e inexistentes responden ambos HTTP 404 en operaciones de propiedad; se conserva 403 cuando el usuario autenticado carece del rol funcional requerido. ADMIN mantiene gestión global y ORGANIZER solo gestiona eventos/tipos asociados a sus eventos.
 - **Documento:** [ADR-021](adr/ADR-021-phase-2-authorization-resource-concealment.md).
 - **Matriz:** [Matriz de autorización de Fase 2](phase-2/authorization-matrix.md).
+
+## ADR-022: Contrato mínimo de evidencia de reembolsos simulados (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 4
+- **Estado:** Propuesto para dictamen del Tech Lead. No constituye decisión arquitectónica aceptada ni cierre formal.
+- **Propuesta:** referencia estable por operación y `NO_OP` hasta nueva evidencia firmada tras captura, sin ampliación del sistema financiero simulado.
+- **Documento:** [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md).

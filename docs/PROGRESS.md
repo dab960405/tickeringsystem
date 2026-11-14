@@ -17,11 +17,11 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 | H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Integrar en expediente final |
 | H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Verificado en CI #306:** V15, RX/CLAIM/APPLY/PROJECT, recuperación, fencing y reemplazo; `OperationWorkerIT` 12/12, incluida transición `PENDING → REFUNDED` interrumpida entre APPLY y PROJECT | Consolidar expediente y aceptación |
 | H79 — pagos tardíos | **Probado en CI #296:** captura tardía, gracia, expiración concurrente, recuperación y `UNFULFILLABLE`/`REQUIRED` | Integración documental y dictamen de cierre |
-| H80 — identidades e idempotencia persistente | **Implementado y verificado en CI #298:** V14+V15, inbox, tres identidades, append-only, digest, duplicados y disposiciones según efecto real | Definir referencia de proveedor evolutiva y conciliación fuera de orden antes del cierre integral |
+| H80 — identidades e idempotencia persistente | **Implementado y verificado en CI #298/#306:** V14+V15, inbox, tres identidades, append-only, digest, duplicados y disposiciones según efecto real | Aprobación del contrato mínimo del proveedor simulado (ADR-022, propuesto) |
 | H81 — Redis | **Implementado y validado en CI:** caché de tipos/eventos, proyección de reservas, rate limiting login/reservas/órdenes y degradación | Cierre documental dentro del expediente integral de Fase 4 |
 | H82 — configuración operativa | **Verificado en CI #296:** límites, defaults y lectura real de lock/statement timeout en TX-RX/CLAIM/APPLY/PROJECT | Integrar en expediente final |
 | H83 — consistencia global de locks | **Validado en CI #292:** corregidas las inversiones implícitas EN → U en reemisión y R → T por FK en creación de orden | Reabrir ante cambios de esquema/locks/flush |
-| H84 — reembolsos | **Validado en CI #306:** 35/35 `OrderPaymentFlowIT`, 12/12 `OperationWorkerIT`, 10 carreras `PENDING`/`REFUNDED`, `FAILED → REFUNDED`, recuperación y fencing tras interrupción de transición; 169 integraciones | H84-01 abierto por decisiones contractuales: referencia null→no-null y conciliación anticipada |
+| H84 — reembolsos | **Validado en CI #306:** 35/35 `OrderPaymentFlowIT`, 12/12 `OperationWorkerIT`, 10 carreras `PENDING`/`REFUNDED`, `FAILED → REFUNDED`, recuperación y fencing; nueva regresión de reenvío firmado en CI #309 (`OrderPaymentFlowIT` 36/36, 170 integraciones) | Pendiente dictamen del Tech Lead sobre ADR-022; no cierre unilateral |
 
 ## Incremento H80 — V14
 
@@ -172,7 +172,7 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. H84-01: clasificación `APPLIED`/`NO_OP` corregida en `4acb8240`, ampliación de regresiones y diez carreras verificadas en CI #302 sobre `30517047`. Queda por decidir y probar la evolución de `providerReference` (nula→no nula) y la conciliación de eventos financieros fuera de orden; recuperación interrumpida y fencing de transición validados en CI #306.
+1. H84-01: clasificación y carreras verificadas en CI #302, recuperación/fencing en CI #306. ADR-022 propone el contrato mínimo de referencia estable y nueva notificación HMAC para el simulador, sin conciliación automática; aceptación del Tech Lead pendiente. La regresión del reenvío posterior a captura pasó en CI #309, SHA `a8013f67`, con 390 unitarias, 170 integraciones, Spotless y JaCoCo correctos.
 2. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
 3. Refresh token sin rotación y webhook sin timestamp anti-replay.
 4. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
@@ -187,10 +187,10 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Próximos pasos
 
 1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
-2. Solicitar dictamen del Tech Lead sobre `providerReference` evolutiva y conciliación anticipada para completar H84-01; evidencia de carrera en CI #302 y de recuperación/fencing en CI #306 incorporada al expediente F4-04.
-3. Sincronizar el resto de la documentación con la evidencia actual.
-4. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
-5. No iniciar Fase 5.
+2. Obtener dictamen del Tech Lead sobre el contrato mínimo simulado [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) y expediente [F4-05](phase-4/F4-05-closure-review.md), con regresión verificada en CI #309. No implementar reconciliador ni ampliar el esquema.
+3. Mantener pendiente el dictamen de la excepción de `EventCancellationService` para el cierre formal de Fase 3; no cambiar límites entre módulos sin aprobación.
+4. Solicitar resolución expresa de los cierres formales de Fase 3 y Fase 4.
+5. No iniciar Fase 5. Solo planificación [F5-00](phase-5/F5-00-plan-and-local-validation.md); su primer incremento autorizado comenzará con pruebas manuales locales.
 
 ## Comandos de referencia
 
