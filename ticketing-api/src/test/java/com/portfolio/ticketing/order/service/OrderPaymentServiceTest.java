@@ -128,7 +128,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
     when(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .thenReturn(ReservationConfirmationResult.OUT_OF_STOCK);
 
@@ -148,7 +148,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
 
     orderPaymentService.process(failureRequest());
 
@@ -164,7 +164,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     payment.markFailed();
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
 
     orderPaymentService.process(failureRequest());
 
@@ -187,7 +187,7 @@ class OrderPaymentServiceTest {
     order.cancel();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
 
     orderPaymentService.process(successRequest());
 
@@ -208,7 +208,7 @@ class OrderPaymentServiceTest {
     Payment payment = payment();
     payment.markSucceeded("provider-123");
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
 
     orderPaymentService.process(
         request(PaymentStatus.REFUNDED, ProviderOperationKind.PAYMENT_REFUND, "refund-123"));
