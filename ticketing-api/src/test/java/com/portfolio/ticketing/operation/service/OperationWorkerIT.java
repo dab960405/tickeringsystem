@@ -289,6 +289,76 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_recoverInterruptedPendingToRefundedTransitionAndFenceStaleProjection()
+      throws Exception {
+    OrderFixture fixture = createOrder();
+    PaymentWebhookRequest capture = webhook(fixture, new BigDecimal("40.00"));
+    String capturePayload = objectMapper.writeValueAsString(capture);
+    paymentWebhookService.handle(signature(capturePayload), capturePayload);
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest pending =
+        new PaymentWebhookRequest(
+            fixture.orderId(),
+            PaymentStatus.PENDING,
+            "refund-" + UUID.randomUUID(),
+            UUID.randomUUID(),
+            "refund-operation-" + UUID.randomUUID(),
+            ProviderOperationKind.PAYMENT_REFUND,
+            new BigDecimal("40.00"),
+            "USD");
+    String pendingPayload = objectMapper.writeValueAsString(pending);
+    paymentWebhookService.handle(signature(pendingPayload), pendingPayload);
+    assertThat(refundStatus(fixture.orderId())).isEqualTo("PENDING_RECONCILIATION");
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("SUCCEEDED");
+    assertThat(cancelledTicketCount(fixture.orderId())).isZero();
+
+    PaymentWebhookRequest refunded =
+        new PaymentWebhookRequest(
+            pending.orderId(),
+            PaymentStatus.REFUNDED,
+            pending.providerReference(),
+            UUID.randomUUID(),
+            pending.providerOperationId(),
+            pending.operationKind(),
+            pending.amount(),
+            pending.currency());
+    String refundedPayload = objectMapper.writeValueAsString(refunded);
+    ProviderEventReceipt receipt = inboxService.receive(refunded, refundedPayload);
+    UUID jobId = jobService.findEffectiveJobIdForEvent(receipt.eventId()).orElseThrow();
+    OperationClaim interrupted =
+        jobService.claim(jobId, "refund-transition-interrupted").orElseThrow();
+
+    paymentOperationService.apply(interrupted);
+    assertThat(refundStatus(fixture.orderId())).isEqualTo("CONFIRMED");
+    assertThat(dispositionTypes(jobId)).containsExactly("APPLIED");
+
+    paymentOperationService.processJob(jobId, "refund-transition-recovery");
+
+    assertThatThrownBy(() -> paymentOperationService.project(interrupted))
+        .isInstanceOf(OperationFencingException.class);
+    assertThat(orderStatus(fixture.orderId())).isEqualTo("REFUNDED");
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("REFUNDED");
+    assertThat(refundStatus(fixture.orderId())).isEqualTo("CONFIRMED");
+    assertThat(cancelledTicketCount(fixture.orderId())).isEqualTo(1);
+    assertThat(semanticCount(pending)).isEqualTo(1);
+    assertThat(semanticCount(refunded)).isEqualTo(1);
+    assertThat(executionCount(jobId)).isEqualTo(2);
+    assertThat(dispositionTypes(jobId)).containsExactlyInAnyOrder("APPLIED", "NO_OP");
+    assertThat(projectionStatus(jobId)).isEqualTo("COMPLETED");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT op.financial_status FROM operation_projections op"
+                    + " JOIN operation_jobs oj ON oj.participation_id = op.participation_id"
+                    + " WHERE oj.id = ?",
+                String.class,
+                jobId))
+        .isEqualTo("REFUNDED");
+  }
+
+  @Test
   void should_retryAndFailWithoutSemanticApplicationWhenEvidenceIsInvalid() {
     OrderFixture fixture = createOrder();
     PendingOperation pending = pendingOperation(fixture, new BigDecimal("41.00"));
