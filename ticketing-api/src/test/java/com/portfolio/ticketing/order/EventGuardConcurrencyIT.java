@@ -212,15 +212,13 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     eventCancellationService.cancel(fixture.reservation().eventId());
     PaymentWebhookRequest request = capture(fixture);
 
-    runConcurrently(
-        () -> {
-          orderPaymentService.process(request);
-          return null;
-        },
-        () -> {
-          orderPaymentService.process(request);
-          return null;
-        });
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      CompletableFuture<Void> first =
+          CompletableFuture.runAsync(() -> orderPaymentService.process(request), executor);
+      CompletableFuture<Void> second =
+          CompletableFuture.runAsync(() -> orderPaymentService.process(request), executor);
+      CompletableFuture.allOf(first, second).get(10, TimeUnit.SECONDS);
+    }
 
     assertThat(outcome(fixture))
         .isEqualTo(new Outcome("CANCELLED", "SUCCEEDED", "EXPIRED", "UNFULFILLABLE", 0, 2));
