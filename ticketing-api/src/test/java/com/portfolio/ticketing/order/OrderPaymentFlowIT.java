@@ -10,6 +10,9 @@ import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
 import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
+import com.portfolio.ticketing.order.repository.OrderExpirationCandidate;
+import com.portfolio.ticketing.order.repository.OrderRepository;
+import com.portfolio.ticketing.order.service.OrderExpirationProcessor;
 import com.portfolio.ticketing.order.service.OrderExpirationService;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.order.service.OrderService;
@@ -33,6 +36,11 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,6 +74,8 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
   @Autowired private OrderExpirationService orderExpirationService;
+  @Autowired private OrderExpirationProcessor orderExpirationProcessor;
+  @Autowired private OrderRepository orderRepository;
   @Autowired private PaymentWebhookService paymentWebhookService;
   @Autowired private OrderCancellationService orderCancellationService;
   @Autowired private ObjectMapper objectMapper;
@@ -158,6 +168,52 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "EXPIRED", 0, 1));
+  }
+
+  @Test
+  void should_releaseReservationOnlyOnce_when_twoWorkersExpireSameOrderConcurrently()
+      throws Exception {
+    OrderFixture fixture = createOrder(1);
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        fixture.reservationId());
+    expirationService.expireOverdue();
+
+    List<OrderExpirationCandidate> candidates =
+        orderRepository.findExpiredPendingOrderCandidates(10);
+    assertThat(candidates).hasSize(1);
+    OrderExpirationCandidate candidate = candidates.getFirst();
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      Future<?> first =
+          executor.submit(
+              () -> {
+                start.await();
+                orderExpirationProcessor.expire(candidate);
+                return null;
+              });
+      Future<?> second =
+          executor.submit(
+              () -> {
+                start.await();
+                orderExpirationProcessor.expire(candidate);
+                return null;
+              });
+
+      start.countDown();
+      first.get(60, TimeUnit.SECONDS);
+      second.get(60, TimeUnit.SECONDS);
+    }
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "PENDING", "EXPIRED", 0, 1));
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT inventory_disposition FROM reservations WHERE id = ?",
+                String.class,
+                fixture.reservationId()))
+        .isEqualTo("RELEASED");
   }
 
   @Test
