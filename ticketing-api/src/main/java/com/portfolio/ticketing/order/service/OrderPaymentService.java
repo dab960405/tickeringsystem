@@ -172,7 +172,9 @@ public class OrderPaymentService {
     if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
       return;
     }
-    if (order.getStatus() != OrderStatus.PAID && order.getStatus() != OrderStatus.CANCELLED) {
+    if (order.getStatus() != OrderStatus.PAID
+        && order.getStatus() != OrderStatus.CANCELLED
+        && order.getStatus() != OrderStatus.EXPIRED) {
       throw new InvalidStateTransitionException("Order cannot accept refund evidence");
     }
     payment.refund(request.providerReference());
