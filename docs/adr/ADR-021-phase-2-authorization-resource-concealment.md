@@ -38,6 +38,7 @@ Se adopta la ocultación mediante HTTP 404 para recursos privados existentes que
 
 - EventAuthorizationService aplica la decisión para eventos; TicketTypeAuthorizationService delega la comprobación de propiedad del evento asociado.
 - OrderService consulta por findByIdAndUserId; ReservationService consulta por ID y userId.
-- AuthenticationFlowIT incluye un escenario con dos organizadores que obtienen access tokens reales, uno crea el borrador y el otro intenta modificarlo. El escenario compara la respuesta para recurso ajeno e inexistente y comprueba que el propietario legítimo puede actualizar.
+- AuthenticationFlowIT incluye escenarios con dos organizadores y dos usuarios que obtienen access tokens reales. Se verifica que un organizador ajeno no modifica un borrador, que el propietario sí puede actualizarlo y que otro usuario no puede consultar/cancelar una orden ni cancelar una reserva ajena.
+- Los escenarios añadidos requieren ejecución de CI para convertirse en evidencia de aceptación.
 - La matriz completa de rutas y roles está en authorization-matrix.md.
 - La prueba de integración y las pruebas de regresión deben quedar verdes en CI del HEAD final. No se considera que la Fase 2 esté cerrada hasta verificar esa evidencia.
