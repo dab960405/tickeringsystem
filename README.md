@@ -113,7 +113,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: abierta. H75–H83 tienen evidencia CI y H84-01 corrigió la clasificación de disposiciones con efecto comercial real en CI #298. Quedan pendientes la referencia evolutiva de proveedor, conciliación fuera de orden, carreras y el dictamen del responsable.
+- [ ] Fase 4: abierta. H75–H83 tienen evidencia CI; H84-01 corrigió disposiciones y probó progresión y diez carreras concurrentes de reembolso en CI #302. Quedan la referencia evolutiva de proveedor, conciliación anticipada, recuperación interrumpida y el dictamen del responsable.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
@@ -130,7 +130,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
 
-La Fase 4 continúa abierta: CI #298 verificó 390 unitarias y 157 de integración (24 `OrderPaymentFlowIT`) y corrigió la auditoría de `PENDING → REFUNDED` con referencia estable. H84-01 todavía exige decisión sobre referencias evolutivas, conciliación de eventos fuera de orden y pruebas de concurrencia; no se autoriza Fase 5 antes del cierre formal.
+La Fase 4 continúa abierta: CI #302 verificó 390 unitarias y 168 de integración (35 `OrderPaymentFlowIT`), incluidos `FAILED → REFUNDED` y diez casos concurrentes con identidad estable. H84-01 exige aún decisión sobre referencias evolutivas, conciliación de evidencia anticipada y recuperación/fencing de transiciones; no se autoriza Fase 5 antes del cierre formal.
 
 ## Auditoría de locks de Fase 4
 
