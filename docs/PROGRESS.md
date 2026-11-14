@@ -286,6 +286,11 @@ El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma q
 
 **Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
 
+## Solicitudes de dictamen técnico
+
+- **Fase 3:** [issue #5](https://github.com/dab960405/tickeringsystem/issues/5), resolución ADR-024 y revisión de F3-01. **Abierta**, no equivale a aprobación.
+- **Fase 4:** [issue #6](https://github.com/dab960405/tickeringsystem/issues/6), resolución ADR-022/H84-01 y revisión de F4-05. **Abierta**, dependiente del dictamen y cierre de F3.
+
 ## Trabajo de cierre autorizado — 2026-11-14
 
 El responsable autorizó **ejecutar** la preparación y validación de cierres F3/F4; no se presume aceptada ninguna excepción arquitectónica por esa autorización. Se incorporan [F3-01](phase-3/F3-01-closure-review.md), [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), [ERD](erd.md) hasta V16 y las actualizaciones de [F4-05](phase-4/F4-05-closure-review.md). La prueba de rollback fue añadida en `4d381899`, corrigió el fixture en `c18d9f2` y la aserción de stock en `9d11d833`. CI #313/#314 fallaron respectivamente en SQL del fixture y expectativa de inventario; [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) terminó en `success`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless y JaCoCo. **Fases 3 y 4 abiertas hasta dictamen del Tech Lead y aprobación formal; F5 bloqueada.**

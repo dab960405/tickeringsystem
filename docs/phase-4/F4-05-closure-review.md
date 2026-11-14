@@ -1,6 +1,6 @@
 # F4-05 — Expediente de revisión final de Fase 4
 
-- **Estado:** expediente candidato a cierre, pendiente de dictamen del Tech Lead y responsable. Cierre formal NO aprobado.
+- **Estado:** expediente candidato a cierre, pendiente de dictamen del Tech Lead y responsable. Cierre formal NO aprobado. [Solicitud Tech Lead #6](https://github.com/dab960405/tickeringsystem/issues/6) abierta, dependiente de [Fase 3 #5](https://github.com/dab960405/tickeringsystem/issues/5).
 - **Fecha:** 2026-11-14
 - **Rama auditada:** `dev`.
 - **Base técnica validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success`: 390 unitarias, 171 integraciones, Spotless y JaCoCo. CI #309 conserva evidencia específica del reembolso.

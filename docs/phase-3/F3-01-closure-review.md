@@ -4,7 +4,7 @@
 - **Fecha:** 2026-11-14 · **Rama:** `dev`.
 - **Referencia técnica verificada:** `cde7ff1c30cf6ad1592caab3fedbbc27bf0e6ff7`, CI #312 `success`.
 - **Regresión de rollback validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success` (390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless/JaCoCo y BUILD SUCCESS).
-- **Decisión arquitectónica pendiente:** [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md).
+- **Decisión arquitectónica pendiente:** [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md); [solicitud de dictamen Tech Lead #5](https://github.com/dab960405/tickeringsystem/issues/5) abierta.
 
 ## A. Matriz de criterios funcionales
 
