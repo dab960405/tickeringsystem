@@ -26,6 +26,7 @@ import com.portfolio.ticketing.reservation.service.ReservationService;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,13 +45,15 @@ class OrderPaymentServiceTest {
   @Mock private PaymentService paymentService;
   @Mock private ReservationService reservationService;
   @Mock private TicketService ticketService;
+  @Mock private EntityManager entityManager;
 
   private OrderPaymentService orderPaymentService;
 
   @BeforeEach
   void setUp() {
     orderPaymentService =
-        new OrderPaymentService(orderRepository, paymentService, reservationService, ticketService);
+        new OrderPaymentService(
+            orderRepository, paymentService, reservationService, ticketService, entityManager);
   }
 
   @Test
@@ -263,7 +266,9 @@ class OrderPaymentServiceTest {
 
   private void stubOrderAndPayment(Order order, Payment payment) {
     when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
     when(paymentService.findRequiredByOrderId(ORDER_ID)).thenReturn(payment);
+    when(paymentService.lockRequiredByOrderId(ORDER_ID)).thenReturn(payment);
   }
 
   private static PaymentWebhookRequest successRequest() {
