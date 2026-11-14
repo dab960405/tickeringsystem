@@ -2,8 +2,8 @@
 
 - **Fecha:** 2026-11-14
 - **Alcance:** H78, H79, H80, H82 y H84; ADR-018/019 y F4-01/F4-02.
-- **Línea base de evidencia:** `88a8f717d4c3079d124166dff487167e373fec6d`, GitHub Actions CI #295; última validación ampliada: `30517047d80e7b861874b0a81284fe921ba1e068`, CI #302.
-- **Estado:** clasificación de disposiciones, progresión `FAILED → REFUNDED` y carrera `PENDING`/`REFUNDED` validadas en CI #302. Referencias evolutivas, conciliación fuera de orden y recuperación interrumpida permanecen pendientes. **No se declara H84 ni Fase 4 cerrados.**
+- **Línea base de evidencia:** `88a8f717d4c3079d124166dff487167e373fec6d`, GitHub Actions CI #295; última validación ampliada: `f12cc6c5ce9d48772c54dd729597d5f2ff51ce36`, CI #304 (sobre la cobertura financiera confirmada en CI #302).
+- **Estado:** clasificación de disposiciones, progresión `FAILED → REFUNDED` y carrera `PENDING`/`REFUNDED` validadas en CI #302. Referencias evolutivas y conciliación fuera de orden permanecen pendientes; la recuperación de reembolso tras APPLY y el rechazo de proyección obsoleta están validados, pero falta una regresión de interrupción específicamente en la transición `PENDING → REFUNDED`. **No se declara H84 ni Fase 4 cerrados.**
 
 ## Evidencia histórica y de la corrección
 
@@ -36,9 +36,15 @@ Se agregaron `should_confirmRefundAfterFailedEvidenceForSameProviderOperation` y
 
 La evidencia CI tiene trazabilidad completa: CI #300 falló por referencias fijas incompatibles con `uq_payments_provider_reference` entre repeticiones; CI #301 ejecutó **390 unitarias y 168 integraciones sin errores**, pero falló exclusivamente en un cambio de formato Spotless; se aplicó el diff exacto en `30517047d80e7b861874b0a81284fe921ba1e068`. [CI #302](https://github.com/dab960405/tickeringsystem/actions/runs/43642005154) terminó en **success** sobre este SHA: **390 unitarias, 168 integraciones, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`**. No se omitió ni debilitó ninguna prueba.
 
+### Recuperación financiera y fencing tras interrupción — CI #304
+
+El commit `f12cc6c5ce9d48772c54dd729597d5f2ff51ce36` amplió `should_recoverRefundProjectionWithoutRepeatingFinancialEffects` de `OperationWorkerIT` con una aserción que exige `OperationFencingException` si el worker interrumpido intenta proyectar después de que otro worker recupere la operación. La prueba ya verificaba estado de orden/pago/reembolso, cancelación de ticket exactamente una vez, una sola identidad semántica, dos ejecuciones, disposiciones `APPLIED` y `NO_OP`, y proyección `COMPLETED`. El escenario utiliza un evento `REFUNDED` directo; **no cubre por sí solo la interrupción del cambio `PENDING → REFUNDED` de una misma operación**.
+
+[CI #304](https://github.com/dab960405/tickeringsystem/actions/runs/43642792880) terminó en `success` sobre ese SHA: **390 unitarias, 168 integraciones, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`**, sin fallos, errores ni omitidos. También pasó [CI #303](https://github.com/dab960405/tickeringsystem/actions/runs/43642435399) para el commit documental anterior.
+
 ## H84-01 — identidad semántica y evolución de estado de reembolso
 
-**Estado:** el defecto original de clasificación y la carrera `PENDING`/`REFUNDED` están validados con PostgreSQL en CI #302; quedan la definición contractual de referencia mutable, conciliación de evidencia anticipada y prueba de recuperación interrumpida. Se conserva la criticidad original sin reclasificación unilateral.
+**Estado:** el defecto original de clasificación y la carrera `PENDING`/`REFUNDED` están validados con PostgreSQL en CI #302; quedan la definición contractual de referencia mutable, conciliación de evidencia anticipada y prueba específica de recuperación interrumpida durante la transición `PENDING → REFUNDED`. Se conserva la criticidad original sin reclasificación unilateral.
 
 ### Secuencia validada en CI #298
 
@@ -64,9 +70,16 @@ Este flujo justificó la prueba que fallaría en el SHA anterior: **`NO_OP` con 
 - **Pendiente de contrato externo:** `PENDING` con `providerReference=null` seguido de `REFUNDED` con referencia nueva actualmente se rechaza por digest distinto (HTTP 409). No se ha autorizado relajar esa protección ni definir una política de enriquecimiento de referencia.
 - **Pendiente de recuperación:** decidir si un `REFUNDED` anterior a la captura queda solo archivado o debe reconciliarse automáticamente al recibir evidencia de captura.
 - **Pruebas completadas en CI #302:** `FAILED → REFUNDED` con identidad estable y diez carreras `PENDING`/`REFUNDED`, sin duplicación de efecto financiero.
-- **Pruebas por completar:** recuperación/fencing durante la transición de estado y comprobación de disposición/proyección tras interrupción; además de los casos de referencia evolutiva cuando el Tech Lead defina el contrato.
+- **Validado en CI #304:** después de aplicar un reembolso directo, un worker posterior recupera la proyección sin duplicar efectos y el worker anterior queda impedido de proyectar con fencing obsoleto.
+- **Pruebas por completar:** interrupción entre APPLY y PROJECT durante una transición `PENDING → REFUNDED` de una misma operación, conservando identidad, disposiciones y proyección; además de los casos de referencia evolutiva cuando el Tech Lead defina el contrato.
 
-Estos puntos requieren contrato y dictamen específico del Tech Lead. La corrección de etiquetas y disposiciones no autoriza por sí sola el cierre de H84/Fase 4.
+### Decisiones contractuales requeridas al Tech Lead (sin implementación)
+
+1. **Referencia evolutiva:** decidir si `providerReference=null → referencia` para la **misma** operación puede aceptarse como enriquecimiento de evidencia bajo condiciones verificables, o si el HTTP 409 actual es el contrato definitivo. Debe explicitarse la protección frente a una referencia diferente/no autorizada y la inmutabilidad del digest de evidencia histórica.
+2. **Reembolso anticipado:** decidir si una evidencia `REFUNDED` recibida antes de la captura debe conservarse como `NO_OP` definitivo o reexaminarse automáticamente después de una captura posterior. Definir autorización y orden de aplicación sin reembolso ficticio ni doble efecto.
+3. **Criterio de cierre de recuperación:** exigir prueba integrada de interrupción durante `PENDING → REFUNDED` con recuperación idempotente, fencing obsoleto y proyección correcta.
+
+**Ninguna alternativa de contrato se considera aprobada.** Las pruebas con referencia estable respetan el contrato vigente y pueden ejecutarse independientemente de estas decisiones. Estos puntos requieren contrato y dictamen específico del Tech Lead. La corrección de etiquetas y disposiciones no autoriza por sí sola el cierre de H84/Fase 4.
 
 ## Dictamen de avance
 
@@ -74,6 +87,6 @@ Estos puntos requieren contrato y dictamen específico del Tech Lead. La correcc
 - H79: captura tardía, gracia, inventario e imposibilidad de entrega probados en la suite de pago; la política sigue regida por ADR-019.
 - H80: identidades persistentes, append-only e idempotencia probadas; H84-01 ya registra disposiciones por efecto real sin romper unicidad de operación; falta la política de referencia mutable y conciliación.
 - H82: límites operativos y timeouts PostgreSQL verificados en CI #296 sobre el SHA exacto; queda la aceptación del expediente integral, no un defecto técnico detectado en H82.
-- H84: cuatro regresiones iniciales (CI #298), `FAILED → REFUNDED` y diez carreras de estado (`OrderPaymentFlowIT` 35/35 en CI #302); **no se propone cierre** hasta definir referencia evolutiva, conciliación anticipada y recuperación interrumpida.
+- H84: cuatro regresiones iniciales (CI #298), `FAILED → REFUNDED` y diez carreras de estado (`OrderPaymentFlowIT` 35/35 en CI #302), además de recuperación de reembolso directo y fencing obsoleto (`OperationWorkerIT` 11/11 en CI #304); **no se propone cierre** hasta definir referencia evolutiva, conciliación anticipada y cubrir interrupción de la transición de estado.
 
 La excepción cross-module de `EventCancellationService` permanece pendiente del dictamen del Tech Lead para el cierre formal de Fase 3. Este documento no aprueba cambios de arquitectura, no cierra Fase 4 y no habilita Fase 5.
