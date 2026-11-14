@@ -157,3 +157,10 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 ## Pendientes de decidir
 
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
+
+## ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
+
+- **Fecha:** 2026-11-13 · **Fase:** 2
+- **Decisión:** los recursos privados ajenos e inexistentes responden ambos HTTP 404 en operaciones de propiedad; se conserva 403 cuando el usuario autenticado carece del rol funcional requerido. ADMIN mantiene gestión global y ORGANIZER solo gestiona eventos/tipos asociados a sus eventos.
+- **Documento:** [ADR-021](adr/ADR-021-phase-2-authorization-resource-concealment.md).
+- **Matriz:** [Matriz de autorización de Fase 2](phase-2/authorization-matrix.md).
