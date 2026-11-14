@@ -46,6 +46,7 @@ class EventServiceTest {
   @Mock private TicketTypeQueryService ticketTypeQueryService;
   @Mock private EventCatalogCacheService eventCatalogCacheService;
   @Mock private EventCancellationService eventCancellationService;
+  @Mock private EventLockService eventLockService;
   @InjectMocks private EventService eventService;
 
   private static Venue venue() {
@@ -76,6 +77,7 @@ class EventServiceTest {
   @Test
   void should_replaceDetails_when_updated() {
     Event event = draft();
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
     when(venueService.findVenue(VENUE_ID)).thenReturn(venue());
     when(eventRepository.saveAndFlush(event)).thenReturn(event);
@@ -89,6 +91,7 @@ class EventServiceTest {
 
   @Test
   void should_publish_when_eventHasTicketTypes() {
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(draft()));
     when(ticketTypeQueryService.existsForEvent(EVENT_ID)).thenReturn(true);
 
@@ -97,6 +100,7 @@ class EventServiceTest {
 
   @Test
   void should_rejectPublish_when_eventHasNoTicketTypes() {
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(draft()));
     when(ticketTypeQueryService.existsForEvent(EVENT_ID)).thenReturn(false);
 
