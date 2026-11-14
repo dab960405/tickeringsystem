@@ -21,6 +21,8 @@ public class SemanticApplicationService {
   public boolean apply(ProviderEventReceipt receipt, Runnable application) {
     PaymentWebhookRequest request = receipt.request();
     String scope = "order:" + request.orderId();
+    application.run();
+
     List<UUID> inserted =
         jdbcTemplate.query(
             """
@@ -38,7 +40,6 @@ public class SemanticApplicationService {
             request.providerOperationId(),
             receipt.payloadDigest());
     if (!inserted.isEmpty()) {
-      application.run();
       return true;
     }
 
