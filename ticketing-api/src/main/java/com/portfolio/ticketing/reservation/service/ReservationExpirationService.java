@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.reservation.service;
 
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
@@ -25,14 +26,17 @@ public class ReservationExpirationService {
 
   private final ReservationRepository reservationRepository;
   private final TicketTypeInventoryService inventoryService;
+  private final EventLockService eventLockService;
   private final Clock clock;
 
   public ReservationExpirationService(
       ReservationRepository reservationRepository,
       TicketTypeInventoryService inventoryService,
+      EventLockService eventLockService,
       Clock clock) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
+    this.eventLockService = eventLockService;
     this.clock = clock;
   }
 
@@ -46,6 +50,14 @@ public class ReservationExpirationService {
     if (candidates.isEmpty()) {
       return;
     }
+
+    List<UUID> eventIds =
+        candidates.stream()
+            .map(ReservationExpirationCandidate::getEventId)
+            .distinct()
+            .sorted(Comparator.comparing(UUID::toString))
+            .toList();
+    eventIds.forEach(eventLockService::lockShared);
 
     List<UUID> ticketTypeIds =
         candidates.stream()
