@@ -15,13 +15,13 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 | H75 — orden global de locks | **Validado en CI #292:** auditoría de locks explícitos, FK implícitas y flushes JPA; secuencias existentes compatibles tras dos correcciones | Reabrir si cambian FK, locks o materialización de flush |
 | H76 — protocolo T → R | **Validado en CI #292:** creación, cancelación, confirmación, recuperación, expiración y creación de orden mantienen T antes de R | Integrar en expediente final |
 | H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Integrar en expediente final |
-| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y probado localmente:** V15, TX-RX/CLAIM/APPLY/PROJECT, renovación, reemplazo y recuperación | Validación integral final |
-| H79 — pagos tardíos | Recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED`, integrados con workers | Validación integral con idempotencia global |
-| H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14+V15, inbox, tres identidades, digest, aplicación global única y webhooks concurrentes | Validación integral final |
+| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y verificado en CI #296:** V15, RX/CLAIM/APPLY/PROJECT, recuperación, fencing y reemplazo; `OperationWorkerIT` 11/11 | Consolidar expediente y aceptación |
+| H79 — pagos tardíos | **Probado en CI #296:** captura tardía, gracia, expiración concurrente, recuperación y `UNFULFILLABLE`/`REQUIRED` | Integración documental y dictamen de cierre |
+| H80 — identidades e idempotencia persistente | **Implementado y verificado en CI #296:** V14+V15, inbox, tres identidades, append-only, digest y duplicados concurrentes | Resolver inconsistencia de evolución de estado H84-01 antes del dictamen integral |
 | H81 — Redis | **Implementado y validado en CI:** caché de tipos/eventos, proyección de reservas, rate limiting login/reservas/órdenes y degradación | Cierre documental dentro del expediente integral de Fase 4 |
-| H82 — configuración operativa | **Integrada:** timeouts, lock/statement timeout, lease, lote, reintentos, backoff y recuperación se consumen en procesos reales | Validación integral final |
+| H82 — configuración operativa | **Verificado en CI #296:** límites, defaults y lectura real de lock/statement timeout en TX-RX/CLAIM/APPLY/PROJECT | Integrar en expediente final |
 | H83 — consistencia global de locks | **Validado en CI #292:** corregidas las inversiones implícitas EN → U en reemisión y R → T por FK en creación de orden | Reabrir ante cambios de esquema/locks/flush |
-| H84 — reembolsos | Parcial: solicitud y confirmación con evidencia | Integración con identidades, inbox, reintentos y workers |
+| H84 — reembolsos | **Escenarios actuales probados en CI #296:** solicitud, confirmación, FAILED, PENDING, fuera de orden y recuperación worker | H84-01: resolver idempotencia ante cambio de estado con el mismo `providerOperationId` |
 
 ## Incremento H80 — V14
 
@@ -68,6 +68,14 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 - `TicketServiceTest` fija el orden de reemisión y `ReservationServiceTest` fija E → T → R. `OrderCreationIntegrityIT` usa PostgreSQL real para demostrar que creación de orden espera en T antes de adquirir R.
 - CI #292, SHA `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`: 390 unitarios y 148 integraciones de `ticketing-api`, 0 fallos, 0 errores y 0 omitidos; `OrderCreationIntegrityIT` 5/5, `CommercialIssuanceIT` 14/14, `EventGuardConcurrencyIT` 9/9, `OperationWorkerIT` 9/9, `ReservationConcurrencyIT` 20/20 y `ReservationHttpConcurrencyIT` 20/20. Spotless y JaCoCo correctos; `BUILD SUCCESS`.
 - **Dictamen técnico:** H75, H76 y H83 quedan validados para el modelo del SHA auditado. Deben reabrirse si una nueva migración añade FK relevantes, si aparece un nuevo lock explícito o si cambia el orden de flush de escrituras relacionadas.
+
+## Validación integral H78/H79/H80/H82/H84 — F4-04
+
+- CI #295 sobre `88a8f717d4c3079d124166dff487167e373fec6d` ejecutó 390 unitarios y 152 integraciones de `ticketing-api`, con `OrderPaymentFlowIT` 20/20, `OperationWorkerIT` 10/10, Spotless limpio y `BUILD SUCCESS`.
+- CI #296 sobre `522a2dcf706122760ffee4fd46e8027e41e2723d` ejecutó 390 unitarios y 153 integraciones, con `OperationWorkerIT` 11/11. La nueva prueba verificó directamente en PostgreSQL los `lock_timeout` y `statement_timeout` aplicados por TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT. Spotless y JaCoCo correctos; `BUILD SUCCESS`.
+- La evidencia incluye reembolsos fallidos y pendientes sin declarar confirmación, evidencia fuera de orden y recuperación de reembolso tras interrupción del worker, además de idempotencia, fencing y pagos tardíos.
+- [F4-04](phase-4/F4-04-integrated-payment-audit.md) documenta el **hallazgo técnico H84-01**: `PaymentEvidenceDigest.semantic` omite `status`, mientras `SemanticApplicationService.apply` invoca el negocio antes de comprobar la unicidad. Dos eventos de la misma operación financiera con estados sucesivos `PENDING → REFUNDED` pueden dejar una disposición `NO_OP` junto a un efecto financiero nuevo. El flujo se deduce del código; exige prueba de integración específica y dictamen del Tech Lead sobre la semántica de una identidad evolutiva.
+- **Dictamen:** implementación y escenarios actuales validados; no se declara H84 cerrado ni Fase 4 formalmente cerrada hasta resolver H84-01 y obtener aceptación expresa.
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -164,7 +172,7 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. H78/H79/H80/H82/H84: validación integral final de workers, pagos tardíos, identidades, configuración operativa y reembolsos.
+1. H84-01: decidir y probar el tratamiento de estados sucesivos de una misma operación de reembolso, manteniendo consistencia entre efectos financieros y `operation_dispositions`. La implementación actual y los escenarios existentes de H78/H79/H80/H82/H84 pasaron CI #296, pero esto no elimina la decisión pendiente.
 2. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
 3. Refresh token sin rotación y webhook sin timestamp anti-replay.
 4. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
@@ -179,7 +187,7 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Próximos pasos
 
 1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
-2. Validar integralmente H78/H79/H80/H82/H84 con la infraestructura y locks ya auditados.
+2. Resolver H84-01 con el Tech Lead y añadir pruebas de progreso de reembolsos sobre identidad estable, antes del dictamen integral.
 3. Sincronizar el resto de la documentación con la evidencia actual.
 4. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
 5. No iniciar Fase 5.
