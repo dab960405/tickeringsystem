@@ -197,6 +197,48 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_rollbackEventReservationAndOrder_when_stockRestorationFails() {
+    OrderFixture fixture = createOrder(createReservation(2));
+    UUID eventId = fixture.reservation().eventId();
+    UUID ticketTypeId = fixture.reservation().ticketTypeId();
+    String projectionKey =
+        ReservationRedisProjectionService.KEY_PREFIX + fixture.reservation().reservationId();
+
+    jdbcTemplate.execute(
+        """
+        CREATE OR REPLACE FUNCTION fail_event_stock_restore() RETURNS trigger AS $
+        BEGIN
+          IF NEW.id = TG_ARGV[0]::uuid
+              AND NEW.available_quantity > OLD.available_quantity THEN
+            RAISE EXCEPTION 'forced event cancellation stock failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $ LANGUAGE plpgsql
+        """);
+    jdbcTemplate.execute(
+        "CREATE TRIGGER fail_event_stock_restore_trigger BEFORE UPDATE ON ticket_types "
+            + "FOR EACH ROW EXECUTE FUNCTION fail_event_stock_restore('"
+            + ticketTypeId
+            + "')");
+
+    try {
+      assertThatThrownBy(() -> eventCancellationService.cancel(eventId))
+          .hasMessageContaining("forced event cancellation stock failure");
+      assertThat(jdbcTemplate.queryForObject(
+              "SELECT status FROM events WHERE id = ?", String.class, eventId))
+          .isEqualTo("PUBLISHED");
+      assertThat(outcome(fixture))
+          .isEqualTo(new Outcome("PENDING_PAYMENT", "PENDING", "ACTIVE", "PENDING", 0, 0));
+      assertThat(redisTemplate.hasKey(projectionKey)).isTrue();
+    } finally {
+      jdbcTemplate.execute(
+          "DROP TRIGGER IF EXISTS fail_event_stock_restore_trigger ON ticket_types");
+      jdbcTemplate.execute("DROP FUNCTION IF EXISTS fail_event_stock_restore()");
+    }
+  }
+
+  @Test
   void should_cancelPendingOrder_when_itsReservationExpiredBeforeEventCancellation() {
     OrderFixture fixture = createOrder(createReservation(2));
     jdbcTemplate.update(
