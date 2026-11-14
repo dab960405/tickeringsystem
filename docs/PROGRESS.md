@@ -226,4 +226,19 @@ La brecha de ocultación de eventos ajenos quedó corregida en código y se aña
   - \`460506a560470b4e96aba896046798db9f84f593\` — formato de \`EventAuthorizationServiceTest.java\`.
   - \`06490392e86866094ee9dddbff450f4e76e646ad\` — formato de \`EventAuthorizationService.java\`.
 
+**Conteos verificados desde el artefacto `test-reports` del run #154:**
+
+| Suite | Ejecutados | Fallidos | Errores | Omitidos |
+| --- | ---: | ---: | ---: | ---: |
+| Surefire — `ticketing-api` | 373 | 0 | 0 | 0 |
+| Surefire — `common-events` | 5 | 0 | 0 | 0 |
+| Surefire — `notification-service` | 1 | 0 | 0 | 0 |
+| **Surefire total** | **379** | **0** | **0** | **0** |
+| Failsafe — `ticketing-api` | 100 | 0 | 0 | 0 |
+| **Total general** | **479** | **0** | **0** | **0** |
+
+El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma que los checks de cobertura JaCoCo se cumplieron en los módulos y que `spotless:check` finalizó correctamente. No se trasladan porcentajes históricos de cobertura al run #154.
+
+**Estado de referencias:** el run #154 probó el SHA de código `06490392e86866094ee9dddbff450f4e76e646ad`. El HEAD de `dev` observado antes de esta actualización documental era `c25e0d323edf32e86b3590df0131d0fe87181b29`, que solo añadía este resultado al propio `docs/PROGRESS.md`; la comparación entre ambos SHA mostró exactamente ese único archivo modificado. Los commits documentales posteriores también requieren comprobar su CI antes de afirmar que el HEAD final está validado.
+
 **Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
