@@ -173,3 +173,11 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Estado:** Propuesto para dictamen del Tech Lead. No constituye decisión arquitectónica aceptada ni cierre formal.
 - **Propuesta:** referencia estable por operación y `NO_OP` hasta nueva evidencia firmada tras captura, sin ampliación del sistema financiero simulado.
 - **Documento:** [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md).
+
+## ADR-023: Outbox y entrega idempotente de notificaciones (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 5 (solo diseño).
+- **Estado:** Propuesto al Tech Lead; NO aprobado ni implementado.
+- **Alternativas:** publicación directa (rechazada), relay limitado con SKIP LOCKED sobre V10 (propuesto), claim/lease con nueva migración (condicionado a evidencia), CDC/2PC (fuera de alcance).
+- **Documento:** [ADR-023](adr/ADR-023-phase-5-outbox-and-notification-delivery.md).
+- **Plan y pruebas:** [F5-01](phase-5/F5-01-technical-design.md) y [F5-02](phase-5/F5-02-test-and-acceptance-plan.md).

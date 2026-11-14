@@ -1,6 +1,7 @@
 # F5-00 — Plan de Fase 5 y primera validación local
 
 - **Estado:** planificación exclusivamente documental. **Fase 5 no iniciada**.
+- **Diseño propuesto:** [F5-01](F5-01-technical-design.md), [F5-02](F5-02-test-and-acceptance-plan.md), [ADR-023](../adr/ADR-023-phase-5-outbox-and-notification-delivery.md). Pendiente de aprobación del Tech Lead.
 - **Requisito de entrada:** cierres expresos de Fase 3 y Fase 4 y autorización independiente del Tech Lead/responsable para implementar Fase 5.
 - **Objetivo:** probar primero la aplicación actual en local; después incorporar Transactional Outbox, Kafka y notificaciones simuladas con MongoDB.
 
