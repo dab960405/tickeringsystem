@@ -267,7 +267,8 @@ class ReservationServiceTest {
         .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
     when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
-    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketTypeMock());
+    TicketType lockedTicketType = ticketTypeMock();
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(lockedTicketType);
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
   }
