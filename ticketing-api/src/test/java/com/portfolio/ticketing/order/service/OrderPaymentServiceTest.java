@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
+import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.order.domain.FulfillmentStatus;
 import com.portfolio.ticketing.order.domain.Order;
@@ -155,6 +157,30 @@ class OrderPaymentServiceTest {
     assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
     verify(reservationService).releaseForPayment(RESERVATION_ID, USER_ID);
+  }
+
+  @Test
+  void should_ignoreFailureWebhook_when_captureWonReservationRace() {
+    Order order = order();
+    Payment payment = payment();
+    stubOrderAndPayment(order, payment);
+    stubLocks(payment);
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              order.markPaid();
+              order.markFulfilled();
+              payment.markSucceeded("provider-123");
+              throw new InvalidStateTransitionException("Reservation is already confirmed");
+            })
+        .when(reservationService)
+        .releaseForPayment(RESERVATION_ID, USER_ID);
+
+    orderPaymentService.process(failureRequest());
+
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+    verify(orderRepository, never()).save(any());
+    verify(paymentService, never()).save(any());
   }
 
   @Test
