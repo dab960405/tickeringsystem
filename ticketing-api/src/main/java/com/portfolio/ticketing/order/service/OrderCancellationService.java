@@ -7,6 +7,7 @@ import com.portfolio.ticketing.order.api.OrderResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.reservation.domain.Reservation;
+import com.portfolio.ticketing.reservation.service.ReservationReleaseResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
@@ -43,7 +44,11 @@ public class OrderCancellationService {
             .findByIdAndUserId(id, userId)
             .orElseThrow(() -> new ResourceNotFoundException("Order " + id + " not found"));
     if (order.getStatus() == com.portfolio.ticketing.order.domain.OrderStatus.PENDING_PAYMENT) {
-      reservationService.releaseForPayment(order.getReservationId(), userId);
+      ReservationReleaseResult releaseResult =
+          reservationService.releaseForPayment(order.getReservationId(), userId);
+      if (releaseResult == ReservationReleaseResult.CONFIRMED) {
+        throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
+      }
     }
     order = lockOrder(id, userId);
     return switch (order.getStatus()) {
