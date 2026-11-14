@@ -6,9 +6,6 @@ import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.OrderStatus;
 import com.portfolio.ticketing.order.repository.OrderExpirationCandidate;
 import com.portfolio.ticketing.order.repository.OrderRepository;
-import com.portfolio.ticketing.payment.domain.Payment;
-import com.portfolio.ticketing.payment.domain.PaymentStatus;
-import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
@@ -27,7 +24,6 @@ public class OrderExpirationProcessor {
   private final TicketTypeInventoryService inventoryService;
   private final ReservationRepository reservationRepository;
   private final OrderRepository orderRepository;
-  private final PaymentService paymentService;
   private final EntityManager entityManager;
 
   public OrderExpirationProcessor(
@@ -35,13 +31,11 @@ public class OrderExpirationProcessor {
       TicketTypeInventoryService inventoryService,
       ReservationRepository reservationRepository,
       OrderRepository orderRepository,
-      PaymentService paymentService,
       EntityManager entityManager) {
     this.eventLockService = eventLockService;
     this.inventoryService = inventoryService;
     this.reservationRepository = reservationRepository;
     this.orderRepository = orderRepository;
-    this.paymentService = paymentService;
     this.entityManager = entityManager;
   }
 
@@ -99,17 +93,8 @@ public class OrderExpirationProcessor {
       return;
     }
 
-    Payment payment = paymentService.lockRequiredByOrderId(order.getId());
-    entityManager.refresh(payment);
-    if (payment.getStatus() == PaymentStatus.SUCCEEDED
-        || payment.getStatus() == PaymentStatus.REFUNDED) {
-      throw new InvalidStateTransitionException(
-          "A pending order cannot expire after its payment was captured");
-    }
-    if (payment.getStatus() == PaymentStatus.PENDING) {
-      payment.markFailed();
-      paymentService.save(payment);
-    }
+    // No payment failure is inferred from the absence of a webhook. A later provider
+    // capture must still be recorded and reconciled as unfulfillable/refundable.
     order.expire();
     orderRepository.save(order);
   }
