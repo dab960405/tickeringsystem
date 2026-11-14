@@ -5,15 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.portfolio.ticketing.auth.api.LoginRequest;
 import com.portfolio.ticketing.auth.api.RefreshTokenRequest;
 import com.portfolio.ticketing.auth.api.TokenResponse;
+import com.portfolio.ticketing.event.api.EventDetailResponse;
+import com.portfolio.ticketing.event.api.EventRequest;
 import com.portfolio.ticketing.order.api.OrderRequest;
 import com.portfolio.ticketing.order.api.OrderResponse;
 import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
+import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.api.TicketTypeResponse;
-import com.portfolio.ticketing.event.api.EventDetailResponse;
-import com.portfolio.ticketing.event.api.EventRequest;
-import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.user.domain.User;
 import com.portfolio.ticketing.user.domain.UserRole;
 import com.portfolio.ticketing.user.repository.UserRepository;
@@ -132,13 +132,13 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
         restTemplate.exchange(
             "/api/v1/events/" + eventId,
             HttpMethod.PUT,
-            new HttpEntity<>(eventRequest(venue.getId(), "Updated by owner"), bearerHeaders(ownerTokens)),
+            new HttpEntity<>(
+                eventRequest(venue.getId(), "Updated by owner"), bearerHeaders(ownerTokens)),
             EventDetailResponse.class);
 
     assertThat(ownerUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(ownerUpdate.getBody().title()).isEqualTo("Updated by owner");
   }
-
 
   @Test
   void should_isolateReservationsAndOrdersBetweenTwoRealUserTokens() {
@@ -148,7 +148,8 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     saveOrganizer(organizerEmail, "Sales Owner");
     saveUser(buyerAEmail, "Buyer A");
     saveUser(buyerBEmail, "Buyer B");
-    Venue venue = venueRepository.save(new Venue("Order Isolation Arena", "Lima", "Main St 3", 500));
+    Venue venue =
+        venueRepository.save(new Venue("Order Isolation Arena", "Lima", "Main St 3", 500));
 
     TokenResponse organizerTokens = login(organizerEmail);
     TokenResponse buyerATokens = login(buyerAEmail);
@@ -158,7 +159,8 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
         restTemplate.exchange(
             "/api/v1/events",
             HttpMethod.POST,
-            new HttpEntity<>(eventRequest(venue.getId(), "Isolation Event"), bearerHeaders(organizerTokens)),
+            new HttpEntity<>(
+                eventRequest(venue.getId(), "Isolation Event"), bearerHeaders(organizerTokens)),
             EventDetailResponse.class);
     assertThat(event.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
