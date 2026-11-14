@@ -159,3 +159,16 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 docker compose --profile infra up -d
 docker compose ps
 ```
+
+## Incremento de caché del catálogo público — commit 889a5c5
+
+Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante avance fast-forward desde el HEAD anterior de `dev` (`5e9616458230c0ec5da49194854ff26c7afb7cf0`).
+
+- Se añade caché Redis de metadatos de eventos publicados y de la primera página del catálogo público sin filtros, con TTL configurable de 60 segundos por defecto.
+- La disponibilidad/cantidad de inventario no se almacena en caché: los tipos de entrada se consultan nuevamente.
+- Se invalida la caché tras operaciones de escritura de eventos y tipos de entrada, respetando el commit transaccional.
+- Se incorpora `ResilientRedisCacheWriter` para que fallos de operaciones Redis de caché no interrumpan el flujo de negocio.
+- Se añade `EventCatalogCacheIT` con cobertura de TTL, lecturas cacheadas, invalidación tras commit y exclusión de consultas filtradas.
+- CI del commit original: run #43532844492 reportado como exitoso en la verificación previa. La integración en `dev` requiere su propia ejecución CI; no se considera validada hasta que finalice en verde.
+
+**Alcance y limitaciones:** este incremento no completa H81 ni Fase 4. Permanecen pendientes las claves de reservas temporales y los límites de reservas/órdenes de ADR-020. También debe revisarse la invalidación ante cambios de venue, dado que `EventMetadata` incluye datos del venue y el cambio no evidencia invalidación desde `VenueService.update`; el TTL limita temporalmente la obsolescencia, pero no sustituye la decisión funcional correspondiente.
