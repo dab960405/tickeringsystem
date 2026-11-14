@@ -199,6 +199,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   @Test
   void should_rollbackEventReservationAndOrder_when_stockRestorationFails() {
     OrderFixture fixture = createOrder(createReservation(2));
+    Outcome baseline = outcome(fixture);
     UUID eventId = fixture.reservation().eventId();
     UUID ticketTypeId = fixture.reservation().ticketTypeId();
     String projectionKey =
@@ -225,11 +226,11 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     try {
       assertThatThrownBy(() -> eventCancellationService.cancel(eventId))
           .hasMessageContaining("forced event cancellation stock failure");
-      assertThat(jdbcTemplate.queryForObject(
-              "SELECT status FROM events WHERE id = ?", String.class, eventId))
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT status FROM events WHERE id = ?", String.class, eventId))
           .isEqualTo("PUBLISHED");
-      assertThat(outcome(fixture))
-          .isEqualTo(new Outcome("PENDING_PAYMENT", "PENDING", "ACTIVE", "PENDING", 0, 0));
+      assertThat(outcome(fixture)).isEqualTo(baseline);
       assertThat(redisTemplate.hasKey(projectionKey)).isTrue();
     } finally {
       jdbcTemplate.execute(
