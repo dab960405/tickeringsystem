@@ -5,6 +5,7 @@
 - **Fase:** 4
 - **Resuelve:** H-79 y H-80
 - **Relación:** evoluciona ADR-011 y sustituye el reembolso local inmediato de ADR-009.
+- **Aclaración H84-01 (2026-11-14):** diferencia identidad semántica de operación y efecto de cada ejecución, sin alterar V14/V15.
 
 ## Tres identidades independientes
 
@@ -20,10 +21,18 @@ Para el proveedor simulado, `provider_code=SIMULATED`, `merchant_account_id=defa
 
 `operation_kind` admite `PAYMENT_CAPTURE`, `PAYMENT_FAILURE` y `PAYMENT_REFUND`. El ámbito es `order:{orderId}` y la clave semántica estable es `providerOperationId`. El digest se calcula sobre una representación canónica de orden, tipo, referencia, importe y moneda.
 
-- Misma identidad y digest: reproducción/no-op.
+- Misma identidad y digest: la operación es conocida, pero un nuevo evento debe revalidarse frente al estado comercial actual. Puede aplicar una transición nueva (por ejemplo, `PENDING → REFUNDED`) o producir `NO_OP` si no cambia el negocio; no se infiere el resultado de la unicidad de `semantic_applications`.
 - Misma identidad y digest distinto: HTTP 409, sin aplicar efectos.
 - Nuevo evento para operación conocida: evidencia de recepción nueva, aplicación semántica única.
 - Nuevo ciclo, participación, worker o ejecución: no cambia la identidad semántica.
+
+### Disposición de la ejecución y estado comercial (aclaración H84-01)
+
+`semantic_applications` registra una sola identidad semántica por `providerOperationId`: su inserción, repetición o conflicto no determina por sí sola si un evento aplicó efectos de negocio. `OrderPaymentService.processWithOutcome` devuelve `PaymentEffectOutcome.APPLIED` cuando una transición comercial/financiera válida cambia el estado y `NO_OP` cuando no se produce efecto. `PaymentOperationService` persiste esa clasificación y el campo JSON `result` en `operation_dispositions` para cada ejecución.
+
+Una misma operación de reembolso, con referencia, importe y moneda constantes, puede producir `APPLIED` para `PENDING` y después `APPLIED` para `REFUNDED`. Otro evento `REFUNDED` equivalente no repite el cambio y recibe `NO_OP`. `REFUNDED` recibido antes de poder aplicar un reembolso se conserva como evidencia con `NO_OP`, no como reembolso ejecutado. La sincronización conserva E→J→XA→O→P→EN→IS→K de ADR-016; no cambia el índice único por operación ni el esquema.
+
+**Límite pendiente:** el digest estable sigue incluyendo `providerReference`. Una operación inicialmente informada como `PENDING` con referencia nula y posteriormente `REFUNDED` con referencia nueva produce conflicto de digest. El proveedor simulado requiere un contrato expreso para ese caso antes del cierre integral de H84. Asimismo debe definirse la conciliación de evidencia `REFUNDED` recibida antes de la captura. Este complemento no constituye aprobación del cierre de Fase 4.
 
 Las filas de evento, operación, aplicación y disposición son append-only mediante triggers que rechazan UPDATE/DELETE. Los estados cambiantes viven en jobs/ejecuciones y entidades de negocio.
 
