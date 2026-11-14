@@ -14,7 +14,7 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 | --- | --- | --- |
 | H75 — orden global de locks | Parcial: T → R en reservas; J → XA todavía no existe | Auditoría de todos los flujos y nuevos workers |
 | H76 — protocolo T → R | Implementado en confirmación, expiración, liberación y recuperación; pruebas de carreras presentes | Validación integral con los componentes nuevos |
-| H77 — unidades y generaciones | Pendiente | Modelo, backfill, emisión y reemisión |
+| H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Auditoría transversal con H75/H83 y cierre documental |
 | H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y probado localmente:** V15, TX-RX/CLAIM/APPLY/PROJECT, renovación, reemplazo y recuperación | Validación integral final |
 | H79 — pagos tardíos | Recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED`, integrados con workers | Validación integral con idempotencia global |
 | H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14+V15, inbox, tres identidades, digest, aplicación global única y webhooks concurrentes | Validación integral final |
@@ -39,7 +39,16 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 - `OperationJobService` implementa claims J → XA, renovación y expiración de leases, fencing, reemplazo de generaciones, backoff y agotamiento de intentos.
 - `PaymentOperationService` aplica la identidad semántica y el negocio en una sola transacción; la recuperación proyecta evidencia sin repetir efectos.
 - `OperationRecoveryWorker` procesa lotes configurables; el webhook conserva procesamiento síncrono y una ejecución superada por otro worker se trata como duplicado seguro.
-- Validación específica: `OperationWorkerIT` **8 tests** y `OrderPaymentFlowIT` **10 tests**, todos sin fallos con PostgreSQL/Testcontainers. Detalles en [F4-02](phase-4/F4-02-worker-processing.md).
+- Validación específica actual: `OperationWorkerIT` **9 tests** y `OrderPaymentFlowIT` **16 tests**, todos sin fallos con PostgreSQL/Testcontainers en CI #278. Detalles históricos en [F4-02](phase-4/F4-02-worker-processing.md), cuya cifra de casos debe sincronizarse.
+
+## Incremento H77 — V16
+
+- V16 crea `commercial_generations`, `commercial_units` y `commercial_unit_generations`, añade identidad de unidad/generación a `tickets` y realiza backfill de tickets existentes.
+- `TicketService` emite la generación inicial por unidad comercial, preserva la identidad de la unidad en reemisiones y cancela la generación activa al confirmar un reembolso.
+- Las restricciones de base de datos impiden enlaces cruzados entre órdenes, más de una generación activa por orden y más de un ticket por unidad/generación.
+- `CommercialIssuanceIT` contiene **14 tests** para compra multiunidad, idempotencia, emisión concurrente, reemisión, carreras con reembolso, restricciones y migración desde V15.
+- CI #278, SHA `715af51fad107ede9e152e0ae7b63f151a806133`: `CommercialIssuanceIT` 14/14, `OperationWorkerIT` 9/9, `OrderPaymentFlowIT` 16/16; suite de integración 140/140 y Surefire de `ticketing-api` 388/388, sin fallos, errores ni omitidos. JaCoCo y Spotless correctos.
+- H77 deja de clasificarse como “pendiente de implementación”; todavía participa en la auditoría global de locks H75/H83 y no implica cierre de Fase 4.
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -127,13 +136,12 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. H77: unidades comerciales y generaciones individuales.
-2. H81: alcance Redis de ADR-020.
-3. H75/H76/H83: auditoría global de locks después de incorporar los componentes estructurales.
-4. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
-7. Cancelación de eventos y transición de órdenes pendientes a `EXPIRED`, conservadas como deuda previa por resolver dentro del alcance autorizado cuando corresponda.
-8. Refresh token sin rotación y webhook sin timestamp anti-replay.
-9. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
+1. H81: alcance Redis de ADR-020.
+2. H75/H76/H83: auditoría global de locks con V16 y los workers ya integrados.
+3. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
+4. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
+5. Refresh token sin rotación y webhook sin timestamp anti-replay.
+6. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
 
 ## Verificación local y limitaciones
 
@@ -144,11 +152,12 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Próximos pasos
 
-1. Implementar H77 y conectar emisión/reemisión a la aplicación de pagos.
-2. Completar H81 y auditar H75/H76/H83.
+1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
+2. Completar H81 y auditar H75/H76/H83 con H77/H78/H80 ya presentes.
 3. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
-4. Preparar el expediente de cierre; la aprobación formal sigue reservada al responsable del proyecto.
-5. No iniciar Fase 5.
+4. Sincronizar F4-02 y el resto de la documentación con V16 y los 9 casos actuales de `OperationWorkerIT`.
+5. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
+6. No iniciar Fase 5.
 
 ## Comandos de referencia
 
