@@ -3,6 +3,7 @@ package com.portfolio.ticketing.order.service;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
+import jakarta.persistence.EntityManager;
 import com.portfolio.ticketing.order.api.OrderResponse;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.repository.OrderRepository;
@@ -22,12 +23,17 @@ public class OrderCancellationService {
   private final OrderRepository orderRepository;
   private final ReservationService reservationService;
   private final Clock clock;
+  private final EntityManager entityManager;
 
   public OrderCancellationService(
-      OrderRepository orderRepository, ReservationService reservationService, Clock clock) {
+      OrderRepository orderRepository,
+      ReservationService reservationService,
+      Clock clock,
+      EntityManager entityManager) {
     this.orderRepository = orderRepository;
     this.reservationService = reservationService;
     this.clock = clock;
+    this.entityManager = entityManager;
   }
 
   @PreAuthorize("hasRole('USER')")
@@ -36,8 +42,12 @@ public class OrderCancellationService {
         orderRepository
             .findByIdAndUserId(id, userId)
             .orElseThrow(() -> new ResourceNotFoundException("Order " + id + " not found"));
+    if (order.getStatus() == com.portfolio.ticketing.order.domain.OrderStatus.PENDING_PAYMENT) {
+      reservationService.releaseForPayment(order.getReservationId(), userId);
+    }
+    order = lockOrder(id, userId);
     return switch (order.getStatus()) {
-      case PENDING_PAYMENT -> cancelPending(order, userId);
+      case PENDING_PAYMENT -> cancelPending(order);
       case PAID -> refundPaid(order, userId);
       case CANCELLED, EXPIRED, REFUNDED ->
           throw new InvalidStateTransitionException(
@@ -45,10 +55,21 @@ public class OrderCancellationService {
     };
   }
 
-  private OrderResponse cancelPending(Order order, UUID userId) {
-    reservationService.releaseForPayment(order.getReservationId(), userId);
+  private OrderResponse cancelPending(Order order) {
     order.cancel();
     return OrderResponse.from(orderRepository.save(order));
+  }
+
+  private Order lockOrder(UUID id, UUID userId) {
+    orderRepository
+        .lockById(id)
+        .orElseThrow(() -> new ResourceNotFoundException("Order " + id + " not found"));
+    Order locked =
+        orderRepository
+            .findByIdAndUserId(id, userId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order " + id + " not found"));
+    entityManager.refresh(locked);
+    return locked;
   }
 
   private OrderResponse refundPaid(Order order, UUID userId) {
