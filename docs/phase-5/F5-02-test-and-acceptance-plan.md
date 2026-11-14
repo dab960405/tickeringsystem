@@ -49,9 +49,11 @@ curl -i http://localhost:8080/api/v1/events
 | F5-T23 | Aplicación sin `NOTIFICATION_API_KEY` | No arranca en modo funcional abierto | Spring configuration test |
 | F5-T24 | Flujo íntegro del usuario | Eventos Kafka → notificación en Mongo mediante Awaitility | Testcontainers PG/Redis/Kafka/Mongo |
 | F5-T25 | Regresión completa | Tests existentes y ≥70 % JaCoCo en service/domain, Spotless | `./mvnw -B clean verify` |
+| F5-T26 | Compatibilidad con Java 21 virtual threads | Listener Kafka procesa en virtual thread compatible y ACK sigue correcto | Kafka IT |
+| F5-T27 | Aislamiento de dependencias de tests previos | Las 170 integraciones actuales no requieren Kafka/Mongo; outbox writer sí opera en TX test | Maven Failsafe / Spring context |
 
 **Ejecución**: usar `*Test` con Surefire y `*IT` con Failsafe; no desactivar ni reescribir los 390 unitarios/170 IT actuales. Los contenedores Kafka y Mongo solo en las suites nuevas; no iniciar cuatro contenedores para cada test existente. `@ServiceConnection` cuando sea compatible y propiedades dinámicas si hace falta. Evitar `Thread.sleep`: Awaitility/CountDownLatch y tiempos acotados.
 
 **Reporte obligatorio**: SHA exacto, comando, conteos por suite, CI run, casos fallidos, warnings reales, scripts del smoke local con credenciales ocultas, evidencia Kafka/Mongo y decisión formal de cierre.
 
-**Criterio de aceptación formal**: T01–T25 implementados/pasados o excepción explícita aprobada; prueba local completa documentada; todas las notificaciones simuladas; cero dependencias AWS/pasarelas reales/correo real; Fase 5 no se declara cerrada sin dictamen del Tech Lead.
+**Criterio de aceptación formal**: T01–T27 implementados/pasados o excepción explícita aprobada; prueba local completa documentada; todas las notificaciones simuladas; cero dependencias AWS/pasarelas reales/correo real; Fase 5 no se declara cerrada sin dictamen del Tech Lead.

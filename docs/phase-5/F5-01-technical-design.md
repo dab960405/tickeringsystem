@@ -107,6 +107,23 @@ Reutilizar `EventEnvelope<T>` en `common-events` (no añadir brokers como depend
 
 **Correlación:** datos de evento contienen `correlationId`. Si la acción empieza por HTTP, registrar/capturar `X-Correlation-Id` mediante un filtro mínimo; en tareas programadas generar un UUID técnico. El relay lo transmite también como header Kafka, recuperándolo del payload persistido; la notificación registra solo IDs técnicos en logs.
 
+**Ejemplo del contrato JSON V1** (IDs ficticios; la referencia de pago simulado no se transmite):
+
+```json
+{
+  "eventId": "a2c20000-0000-4000-8000-000000000001",
+  "eventType": "OrderConfirmed",
+  "occurredAt": "2026-11-14T18:00:00Z",
+  "version": 1,
+  "data": {
+    "orderId": "b2c20000-0000-4000-8000-000000000002",
+    "recipientUserId": "c2c20000-0000-4000-8000-000000000003",
+    "recipientEmail": "demo@example.com",
+    "correlationId": "f5-local-demo-0001"
+  }
+}
+```
+
 **Compatibilidad:** `EventEnvelope` conserva sus cinco campos y los contratos públicos actuales no cambian. Un consumidor valida `version` y `eventType` y redirige evidencia no reconocida a DLT sin inventar notificaciones. Es posible agregar records sin cambiar el POM padre.
 
 ## 5. Escritura del outbox dentro de la transacción del negocio
@@ -163,11 +180,15 @@ Agregar a `notification-service` `spring-kafka`, `spring-boot-starter-data-mongo
 - `DefaultErrorHandler` + `FixedBackOff(1000,2)`: **tres entregas totales** (inicial + dos reintentos), luego `DeadLetterPublishingRecoverer` con destino explícito `<topic>.DLT` (no confiar en sufijo predeterminado `-dlt`). Confirmar recuperación solo después del ACK de publicación a DLT; probar esta interacción con `MANUAL_IMMEDIATE`.
 - No implementar reenvío automático de DLT en Fase 5; documentar inspección/reprocesamiento manual seguro. Si la caída Mongo es temporal y supera los reintentos, la notificación queda en DLT y requiere intervención; no declarar recuperación automática.
 
+**Virtual threads (Java 21):** el proyecto ya tiene `spring.threads.virtual.enabled=true` en `notification-service`, pero **Spring Boot no garantiza que ese ajuste cambie automáticamente el executor interno de los Kafka listeners**. Spring Kafka 3.3 permite configurar `ContainerProperties.consumerExecutor`; para cumplir la especificación, diseñar un `SimpleAsyncTaskExecutor` con `setVirtualThreads(true)` para el listener cuando resulte compatible, mantener procesamiento y `acknowledge()` en el mismo hilo de consumo, y probarlo mediante `Thread.currentThread().isVirtual()` y redeliveries. No usar `@Async` sobre el método listener ni ACK desde otro thread sin validación. Con virtual threads, considerar `spring.main.keep-alive=true` para evitar salida de JVM cuando solo queden hilos daemon. Validar en integración en vez de asumir compatibilidad.
+
 **Endpoint requerido:** `GET /notifications?userId=<UUID>&page=0&size=20`, limitado a 100, orden `createdAt DESC, eventId`, autenticado mediante `X-Api-Key` de `NOTIFICATION_API_KEY` por variable entorno y comparación de tiempo constante. Acceso mínimo: no exponer colección sin API key; pruebas de 401, paginación y aislamiento por userId. Documentar que una **API key compartida no proporciona aislamiento por usuario**: se considera endpoint interno de desarrollo, nunca API pública multiusuario.
 
 ## 8. Infraestructura de desarrollo y observabilidad
 
 Conservar `docker-compose.yml` perfil `infra` con PostgreSQL 17, Redis 7, Kafka 4 KRaft y MongoDB 7. En esta fase **las aplicaciones se ejecutan en el host**, con `KAFKA_BOOTSTRAP_SERVERS=localhost:9092` y `MONGODB_URI` apuntando a `localhost`. Los contenedores usan listeners internos separados; no intentar resolver `localhost` desde un contenedor como si fuera el broker.
+
+**Aislamiento de pruebas existentes:** no iniciar Kafka en las 170 integraciones anteriores por añadir `spring-kafka`. Proponer `ticketing.messaging.enabled=false` en el perfil `test` heredado, condicionado solo al relay/KafkaAdmin/listeners, **no** al `OutboxWriter` transaccional. Habilitarlo explícitamente en los nuevos `*IT` con KafkaContainer; para `notification-service`, usar perfil/test slice apropiado para que su actual prueba de contexto no requiera Mongo/Kafka accidentalmente. Verificar Spring Boot `@ServiceConnection` y el arranque de topics en test. No cambiar el comportamiento de `dev` a modo silencioso por una prueba.
 
 El perfil `full`, Dockerfiles multi-stage, Grafana, Prometheus y AWS pertenecen a fases posteriores. Proponer métricas básicas de outbox pendiente, publicación con fallo, eventos consumidos, duplicados y DLT, junto con logs por `eventId`/`correlationId`, sin correos completos ni secretos. No exigir Grafana para aprobar Fase 5.
 
@@ -203,7 +224,7 @@ El Tech Lead debe aprobar expresamente: (1) un registro por transacción con ACK
 - [PostgreSQL 17 — SELECT y SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html); [restricciones](https://www.postgresql.org/docs/17/ddl-constraints.html).
 - [Spring Kafka 3.3 — KafkaTemplate](https://docs.spring.io/spring-kafka/reference/3.3/kafka/sending-messages.html), [listeners y ACK](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html), [errores y DLT](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html).
 - [Spring Data MongoDB — creación de índices](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html).
-- [Spring Boot 3.5 — Testcontainers y ServiceConnection](https://docs.spring.io/spring-boot/3.5/reference/testing/testcontainers.html).
+- [Spring Boot 3.5 — Testcontainers y ServiceConnection](https://docs.spring.io/spring-boot/3.5/reference/testing/testcontainers.html); [virtual threads y keep-alive](https://docs.spring.io/spring-boot/3.5/reference/features/spring-application.html); [task execution](https://docs.spring.io/spring-boot/3.5/reference/features/task-execution-and-scheduling.html); [Spring Kafka — consumer executor](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/container-thread-naming.html).
 - [Testcontainers — Apache Kafka](https://java.testcontainers.org/modules/kafka/).
 - [Docker Compose — perfiles](https://docs.docker.com/compose/how-tos/profiles/).
 - [Apache Kafka — producer config](https://kafka.apache.org/40/configuration/producer-configs/).
