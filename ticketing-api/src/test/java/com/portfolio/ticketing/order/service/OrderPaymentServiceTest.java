@@ -61,7 +61,7 @@ class OrderPaymentServiceTest {
     Order order = order();
     Payment payment = payment();
     stubOrderAndPayment(order, payment);
-    stubLocks();
+    stubLocks(payment);
     when(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
         .thenReturn(ReservationConfirmationResult.CONFIRMED);
     when(orderRepository.save(order)).thenReturn(order);
@@ -275,10 +275,9 @@ class OrderPaymentServiceTest {
     when(paymentService.findRequiredByOrderId(ORDER_ID)).thenReturn(payment);
   }
 
-  private void stubLocks() {
+  private void stubLocks(Payment payment) {
     when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
-    when(paymentService.lockRequiredByOrderId(ORDER_ID))
-        .thenReturn(paymentService.findRequiredByOrderId(ORDER_ID).orElseThrow());
+    when(paymentService.lockRequiredByOrderId(ORDER_ID)).thenReturn(payment);
   }
 
   private static PaymentWebhookRequest successRequest() {
