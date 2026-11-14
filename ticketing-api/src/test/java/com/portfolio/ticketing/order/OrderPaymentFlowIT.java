@@ -33,6 +33,11 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -294,6 +299,65 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
                 Integer.class,
                 first.providerOperationId()))
         .isEqualTo(2);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", first.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_applySemanticOperationOnce_when_distinctProviderEventsArriveConcurrently()
+      throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest first =
+        webhook(fixture, PaymentStatus.SUCCEEDED, "provider-concurrent-events");
+    PaymentWebhookRequest second =
+        new PaymentWebhookRequest(
+            first.orderId(),
+            first.status(),
+            first.providerReference(),
+            UUID.randomUUID(),
+            first.providerOperationId(),
+            first.operationKind(),
+            first.amount(),
+            first.currency());
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      Future<?> firstResult =
+          executor.submit(
+              () -> {
+                start.await();
+                handle(first);
+                return null;
+              });
+      Future<?> secondResult =
+          executor.submit(
+              () -> {
+                start.await();
+                handle(second);
+                return null;
+              });
+
+      start.countDown();
+      firstResult.get(60, TimeUnit.SECONDS);
+      secondResult.get(60, TimeUnit.SECONDS);
+    }
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM provider_events pe"
+                    + " JOIN provider_operations po ON pe.provider_operation_id = po.id"
+                    + " WHERE po.provider_operation_id = ?",
+                Integer.class,
+                first.providerOperationId()))
+        .isEqualTo(2);
+    assertThat(
+            countRowsByString(
+                "provider_operations", "provider_operation_id", first.providerOperationId()))
+        .isEqualTo(1);
     assertThat(
             countRowsByString(
                 "semantic_applications", "idempotency_key", first.providerOperationId()))
