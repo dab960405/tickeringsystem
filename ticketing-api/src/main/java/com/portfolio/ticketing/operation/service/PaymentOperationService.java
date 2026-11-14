@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
+import com.portfolio.ticketing.payment.domain.PaymentEffectOutcome;
 import com.portfolio.ticketing.payment.service.ProviderEventReceipt;
 import com.portfolio.ticketing.payment.service.SemanticApplicationService;
 import java.time.Instant;
@@ -80,8 +81,10 @@ public class PaymentOperationService {
       ProviderEventReceipt receipt =
           new ProviderEventReceipt(
               claim.eventId(), claim.operationId(), claim.payloadDigest(), request);
-      boolean applied =
-          semanticApplicationService.apply(receipt, () -> orderPaymentService.process(request));
+      PaymentEffectOutcome outcome =
+          semanticApplicationService.apply(
+              receipt, () -> orderPaymentService.processWithOutcome(request));
+      boolean applied = outcome == PaymentEffectOutcome.APPLIED;
       jdbcTemplate.update(
           """
           INSERT INTO operation_dispositions (execution_id, disposition_type, payload)
@@ -238,7 +241,7 @@ public class PaymentOperationService {
           Map.of(
               "eventId", claim.eventId(),
               "operationId", claim.operationId(),
-              "result", applied ? "APPLIED" : "ALREADY_APPLIED"));
+              "result", applied ? "APPLIED" : "NO_OP"));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Could not serialize operation disposition", exception);
     }

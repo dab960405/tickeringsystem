@@ -370,6 +370,124 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_recordActualEffect_whenSameRefundOperationAdvancesToRefunded() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-pending"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest pending = refundWebhook(fixture, PaymentStatus.PENDING, "refund-h84");
+    PaymentWebhookRequest refunded =
+        new PaymentWebhookRequest(
+            pending.orderId(),
+            PaymentStatus.REFUNDED,
+            pending.providerReference(),
+            UUID.randomUUID(),
+            pending.providerOperationId(),
+            pending.operationKind(),
+            pending.amount(),
+            pending.currency());
+
+    handle(pending);
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("PENDING_RECONCILIATION");
+
+    handle(refunded);
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("CANCELLED");
+    assertThat(dispositionForEvent(pending.providerEventId())).isEqualTo("APPLIED");
+    assertThat(dispositionForEvent(refunded.providerEventId())).isEqualTo("APPLIED");
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", pending.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_recordNoOp_whenRefundArrivesBeforeCapture() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest earlyRefund =
+        refundWebhook(fixture, PaymentStatus.REFUNDED, "refund-before-capture-h84");
+
+    handle(earlyRefund);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "ACTIVE", 0, 0));
+    assertThat(dispositionForEvent(earlyRefund.providerEventId())).isEqualTo("NO_OP");
+    assertThat(dispositionPayloadForEvent(earlyRefund.providerEventId())).isEqualTo("NO_OP");
+  }
+
+  @Test
+  void should_recordNoOp_whenRefundedEventIsRepeatedWithNewEventId() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-repeat"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest first = refundWebhook(fixture, PaymentStatus.REFUNDED, "refund-repeat");
+    PaymentWebhookRequest repeated =
+        new PaymentWebhookRequest(
+            first.orderId(),
+            first.status(),
+            first.providerReference(),
+            UUID.randomUUID(),
+            first.providerOperationId(),
+            first.operationKind(),
+            first.amount(),
+            first.currency());
+
+    handle(first);
+    handle(repeated);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(dispositionForEvent(first.providerEventId())).isEqualTo("APPLIED");
+    assertThat(dispositionForEvent(repeated.providerEventId())).isEqualTo("NO_OP");
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", first.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_notRegressRefund_whenPendingArrivesAfterRefunded() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-out-of-order"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest refunded =
+        refundWebhook(fixture, PaymentStatus.REFUNDED, "refund-h84-out-of-order");
+    PaymentWebhookRequest pending =
+        new PaymentWebhookRequest(
+            refunded.orderId(),
+            PaymentStatus.PENDING,
+            refunded.providerReference(),
+            UUID.randomUUID(),
+            refunded.providerOperationId(),
+            refunded.operationKind(),
+            refunded.amount(),
+            refunded.currency());
+
+    handle(refunded);
+    handle(pending);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(dispositionForEvent(refunded.providerEventId())).isEqualTo("APPLIED");
+    assertThat(dispositionForEvent(pending.providerEventId())).isEqualTo("NO_OP");
+  }
+
+  @Test
   void should_recordFailedRefundEvidenceWithoutChangingPaymentOrTickets() throws Exception {
     OrderFixture fixture = createOrder(1);
     handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-refund-failed"));
@@ -719,6 +837,36 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
             "SELECT available_quantity FROM ticket_types WHERE id = ?",
             Integer.class,
             fixture.ticketTypeId()));
+  }
+
+  private String dispositionPayloadForEvent(UUID providerEventId) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT od.payload ->> 'result'
+        FROM operation_dispositions od
+        JOIN operation_executions x ON x.id = od.execution_id
+        JOIN operation_jobs j ON j.id = x.job_id
+        JOIN operation_participations p ON p.id = j.participation_id
+        JOIN provider_events e ON e.id = p.provider_event_id
+        WHERE e.provider_event_id = ?
+        """,
+        String.class,
+        providerEventId);
+  }
+
+  private String dispositionForEvent(UUID providerEventId) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT od.disposition_type
+        FROM operation_dispositions od
+        JOIN operation_executions x ON x.id = od.execution_id
+        JOIN operation_jobs j ON j.id = x.job_id
+        JOIN operation_participations p ON p.id = j.participation_id
+        JOIN provider_events e ON e.id = p.provider_event_id
+        WHERE e.provider_event_id = ?
+        """,
+        String.class,
+        providerEventId);
   }
 
   private String queryString(String sql, UUID id) {

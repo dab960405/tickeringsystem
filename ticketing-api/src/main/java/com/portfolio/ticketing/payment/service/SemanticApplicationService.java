@@ -2,8 +2,10 @@ package com.portfolio.ticketing.payment.service;
 
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
+import com.portfolio.ticketing.payment.domain.PaymentEffectOutcome;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,11 +19,13 @@ public class SemanticApplicationService {
     this.jdbcTemplate = jdbcTemplate;
   }
 
+  /** Records the operation identity once; returns whether this event changed business state. */
   @Transactional
-  public boolean apply(ProviderEventReceipt receipt, Runnable application) {
+  public PaymentEffectOutcome apply(
+      ProviderEventReceipt receipt, Supplier<PaymentEffectOutcome> application) {
     PaymentWebhookRequest request = receipt.request();
     String scope = "order:" + request.orderId();
-    application.run();
+    PaymentEffectOutcome outcome = application.get();
 
     List<UUID> inserted =
         jdbcTemplate.query(
@@ -40,14 +44,14 @@ public class SemanticApplicationService {
             request.providerOperationId(),
             receipt.payloadDigest());
     if (!inserted.isEmpty()) {
-      return true;
+      return outcome;
     }
 
     String existingDigest = findDigest(scope, request);
     if (!existingDigest.equals(receipt.payloadDigest())) {
       throw new DuplicateResourceException("Semantic operation identity has different evidence");
     }
-    return false;
+    return outcome;
   }
 
   private String findDigest(String scope, PaymentWebhookRequest request) {

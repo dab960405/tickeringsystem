@@ -10,6 +10,7 @@ import com.portfolio.ticketing.order.domain.RefundStatus;
 import com.portfolio.ticketing.order.repository.OrderRepository;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import com.portfolio.ticketing.payment.domain.Payment;
+import com.portfolio.ticketing.payment.domain.PaymentEffectOutcome;
 import com.portfolio.ticketing.payment.domain.PaymentStatus;
 import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.payment.service.PaymentWebhookRequestValidator;
@@ -46,6 +47,10 @@ public class OrderPaymentService {
   }
 
   public void process(PaymentWebhookRequest request) {
+    processWithOutcome(request);
+  }
+
+  public PaymentEffectOutcome processWithOutcome(PaymentWebhookRequest request) {
     PaymentWebhookRequestValidator.validate(request);
     Order order =
         orderRepository
@@ -54,23 +59,24 @@ public class OrderPaymentService {
                 () -> new ResourceNotFoundException("Order " + request.orderId() + " not found"));
     Payment payment = paymentService.findRequiredByOrderId(order.getId());
     validateFinancialEvidence(order, payment, request);
-    switch (request.operationKind()) {
+    return switch (request.operationKind()) {
       case PAYMENT_CAPTURE -> processSuccess(order, payment, request);
       case PAYMENT_FAILURE -> processFailure(order, payment);
       case PAYMENT_REFUND -> processRefund(order, payment, request);
-    }
+    };
   }
 
-  private void processSuccess(Order order, Payment payment, PaymentWebhookRequest request) {
+  private PaymentEffectOutcome processSuccess(
+      Order order, Payment payment, PaymentWebhookRequest request) {
     if (payment.getStatus() == PaymentStatus.REFUNDED) {
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         && (order.getStatus() == OrderStatus.PAID
             || order.getStatus() == OrderStatus.CANCELLED
             || order.getStatus() == OrderStatus.EXPIRED)) {
       requireSameProviderReference(payment, request.providerReference());
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     UUID orderId = order.getId();
     ReservationConfirmationResult confirmation =
@@ -82,14 +88,14 @@ public class OrderPaymentService {
     payment = locked.payment();
 
     if (payment.getStatus() == PaymentStatus.REFUNDED) {
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         && (order.getStatus() == OrderStatus.PAID
             || order.getStatus() == OrderStatus.CANCELLED
             || order.getStatus() == OrderStatus.EXPIRED)) {
       requireSameProviderReference(payment, request.providerReference());
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (payment.getStatus() != PaymentStatus.PENDING
         || (order.getStatus() != OrderStatus.PENDING_PAYMENT
@@ -113,9 +119,10 @@ public class OrderPaymentService {
       orderRepository.save(order);
     }
     paymentService.save(payment);
+    return PaymentEffectOutcome.APPLIED;
   }
 
-  private void processFailure(Order order, Payment payment) {
+  private PaymentEffectOutcome processFailure(Order order, Payment payment) {
     ReservationReleaseResult releaseResult = null;
     if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
       releaseResult =
@@ -127,50 +134,53 @@ public class OrderPaymentService {
 
     if (payment.getStatus() == PaymentStatus.SUCCEEDED
         || payment.getStatus() == PaymentStatus.REFUNDED) {
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (releaseResult == ReservationReleaseResult.CONFIRMED) {
       throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
     }
     if ((order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED)
         && payment.getStatus() == PaymentStatus.FAILED) {
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if ((order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED)
         && payment.getStatus() == PaymentStatus.PENDING) {
       payment.markFailed();
       paymentService.save(payment);
-      return;
+      return PaymentEffectOutcome.APPLIED;
     }
     requirePending(order, payment);
     order.cancel();
     payment.markFailed();
     orderRepository.save(order);
     paymentService.save(payment);
+    return PaymentEffectOutcome.APPLIED;
   }
 
-  private void processRefund(Order order, Payment payment, PaymentWebhookRequest request) {
+  private PaymentEffectOutcome processRefund(
+      Order order, Payment payment, PaymentWebhookRequest request) {
     LockedOrderPayment locked = lockOrderAndPayment(order.getId());
     order = locked.order();
     payment = locked.payment();
-    switch (request.status()) {
+    return switch (request.status()) {
       case REFUNDED -> confirmRefund(order, payment, request);
       case FAILED -> recordRefundFailure(order, payment);
       case PENDING -> recordRefundPending(order, payment);
       case SUCCEEDED ->
           throw new BusinessRuleViolationException("A refund cannot have SUCCEEDED status");
-    }
+    };
   }
 
-  private void confirmRefund(Order order, Payment payment, PaymentWebhookRequest request) {
+  private PaymentEffectOutcome confirmRefund(
+      Order order, Payment payment, PaymentWebhookRequest request) {
     if (payment.getStatus() == PaymentStatus.REFUNDED) {
       if (!Objects.equals(payment.getRefundProviderReference(), request.providerReference())) {
         throw new DuplicateResourceException("Refund was already confirmed with another reference");
       }
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
-      return;
+      return PaymentEffectOutcome.NO_OP;
     }
     if (order.getStatus() != OrderStatus.PAID
         && order.getStatus() != OrderStatus.CANCELLED
@@ -182,24 +192,29 @@ public class OrderPaymentService {
     ticketService.cancelForOrder(order.getId());
     orderRepository.save(order);
     paymentService.save(payment);
+    return PaymentEffectOutcome.APPLIED;
   }
 
-  private void recordRefundFailure(Order order, Payment payment) {
+  private PaymentEffectOutcome recordRefundFailure(Order order, Payment payment) {
     if (payment.getStatus() != PaymentStatus.SUCCEEDED
-        || order.getRefundStatus() == RefundStatus.NONE) {
-      return;
+        || order.getRefundStatus() == RefundStatus.NONE
+        || order.getRefundStatus() == RefundStatus.FAILED) {
+      return PaymentEffectOutcome.NO_OP;
     }
     order.markRefundFailed();
     orderRepository.save(order);
+    return PaymentEffectOutcome.APPLIED;
   }
 
-  private void recordRefundPending(Order order, Payment payment) {
+  private PaymentEffectOutcome recordRefundPending(Order order, Payment payment) {
     if (payment.getStatus() != PaymentStatus.SUCCEEDED
-        || order.getRefundStatus() == RefundStatus.NONE) {
-      return;
+        || order.getRefundStatus() == RefundStatus.NONE
+        || order.getRefundStatus() == RefundStatus.PENDING_RECONCILIATION) {
+      return PaymentEffectOutcome.NO_OP;
     }
     order.markRefundPendingReconciliation();
     orderRepository.save(order);
+    return PaymentEffectOutcome.APPLIED;
   }
 
   /**
