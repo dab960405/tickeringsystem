@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.event.service;
 
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
+import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.domain.EventStatus;
 import com.portfolio.ticketing.event.repository.EventRepository;
@@ -15,9 +16,9 @@ import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,9 +61,7 @@ public class EventCancellationService {
     Event event =
         eventRepository
             .findById(eventId)
-            .orElseThrow(
-                () -> new com.portfolio.ticketing.common.exception.ResourceNotFoundException(
-                    "Event " + eventId + " not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Event " + eventId + " not found"));
 
     if (lockedStatus != EventStatus.CANCELLED) {
       event.cancel();
