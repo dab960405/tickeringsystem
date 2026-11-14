@@ -22,6 +22,7 @@ import com.portfolio.ticketing.payment.domain.PaymentStatus;
 import com.portfolio.ticketing.payment.service.PaymentWebhookService;
 import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
+import com.portfolio.ticketing.reservation.config.ReservationProperties;
 import com.portfolio.ticketing.reservation.service.ReservationExpirationService;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
@@ -60,12 +61,14 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(
     properties = {
       "ticketing.reservation.expiration-fixed-delay-ms=600000",
+      "ticketing.reservation.recovery-grace=2m",
       "ticketing.order.expiration-fixed-delay-ms=600000"
     })
 class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
   @Autowired private ReservationService reservationService;
   @Autowired private ReservationExpirationService expirationService;
+  @Autowired private ReservationProperties reservationProperties;
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
   @Autowired private OrderExpirationService orderExpirationService;
@@ -152,10 +155,10 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_notExpirePendingOrderBeforeFifteenMinuteGracePeriod() {
+  void should_notExpirePendingOrderBeforeConfiguredGracePeriod() {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
-        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '14 minutes' WHERE id = ?",
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '1 minute' WHERE id = ?",
         fixture.reservationId());
     expirationService.expireOverdue();
 
@@ -170,12 +173,13 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
       throws Exception {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
-        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
         fixture.reservationId());
     expirationService.expireOverdue();
 
     List<OrderExpirationCandidate> candidates =
-        orderRepository.findExpiredPendingOrderCandidates(10);
+        orderRepository.findExpiredPendingOrderCandidates(
+            reservationProperties.getRecoveryGrace().toSeconds(), 10);
     assertThat(candidates).hasSize(1);
     OrderExpirationCandidate candidate = candidates.getFirst();
     CountDownLatch start = new CountDownLatch(1);
@@ -214,12 +218,13 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
       throws Exception {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
-        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
         fixture.reservationId());
     expirationService.expireOverdue();
 
     OrderExpirationCandidate candidate =
-        orderRepository.findExpiredPendingOrderCandidates(10).getFirst();
+        orderRepository.findExpiredPendingOrderCandidates(
+            reservationProperties.getRecoveryGrace().toSeconds(), 10).getFirst();
     PaymentWebhookRequest lateCapture =
         webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-expiration-race");
     CountDownLatch start = new CountDownLatch(1);
@@ -259,7 +264,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   void should_expirePendingOrderAfterGraceAndRequireRefundForLateCapture() {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
-        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
         fixture.reservationId());
     expirationService.expireOverdue();
 
@@ -294,7 +299,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   void should_recordFailedPaymentEvidenceWithoutChangingExpiredOrder() {
     OrderFixture fixture = createOrder(1);
     jdbcTemplate.update(
-        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '16 minutes' WHERE id = ?",
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
         fixture.reservationId());
     expirationService.expireOverdue();
 

@@ -21,8 +21,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   Page<Order> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
   /**
-   * Finds pending orders whose reservation expired more than 15 minutes ago. This is an unlocked
-   * candidate scan; the processor acquires E → T → R → O → P before changing any state.
+   * Finds pending orders whose reservation exceeded the configured recovery grace. This is an
+   * unlocked candidate scan; the processor acquires E → T → R → O → P before changing any state.
    */
   @Query(
       value =
@@ -33,13 +33,16 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
           JOIN reservations r ON r.id = o.reservation_id
           JOIN ticket_types tt ON tt.id = r.ticket_type_id
           WHERE o.status = 'PENDING_PAYMENT'
-            AND r.expires_at < clock_timestamp() - INTERVAL '15 minutes'
+            AND r.expires_at
+                < clock_timestamp()
+                    - (CAST(:graceSeconds AS double precision) * INTERVAL '1 second')
             AND r.status IN ('ACTIVE', 'EXPIRED')
           ORDER BY r.expires_at, o.id
           LIMIT :limit
           """,
       nativeQuery = true)
-  List<OrderExpirationCandidate> findExpiredPendingOrderCandidates(@Param("limit") int limit);
+  List<OrderExpirationCandidate> findExpiredPendingOrderCandidates(
+      @Param("graceSeconds") long graceSeconds, @Param("limit") int limit);
 
   /** Acquires lock O of ADR-016; returns the id so callers revalidate managed state. */
   @Query(value = "SELECT id FROM orders WHERE id = :id FOR UPDATE", nativeQuery = true)
