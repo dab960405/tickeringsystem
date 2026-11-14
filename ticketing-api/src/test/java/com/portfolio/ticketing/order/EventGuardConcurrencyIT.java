@@ -204,7 +204,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     assertThat(pending).as("operation must still wait on E").isNotDone();
   }
 
-  ate ReservationFixture createReservation(int stock) {
+  private ReservationFixture createReservation(int stock) {
     Instant now = Instant.now();
     UUID userId =
         jdbcTemplate.queryForObject(
