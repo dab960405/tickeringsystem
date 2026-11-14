@@ -13,7 +13,9 @@ import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeService;
+import com.portfolio.ticketing.venue.api.VenueRequest;
 import com.portfolio.ticketing.venue.domain.Venue;
+import com.portfolio.ticketing.venue.service.VenueService;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -50,6 +52,7 @@ class EventCatalogCacheIT extends AbstractIntegrationTest {
 
   @Autowired private EventService eventService;
   @Autowired private TicketTypeService ticketTypeService;
+  @Autowired private VenueService venueService;
   @Autowired private EntityManager entityManager;
   @Autowired private PlatformTransactionManager transactionManager;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -158,6 +161,34 @@ class EventCatalogCacheIT extends AbstractIntegrationTest {
     assertThat(detail.get(eventId)).isNull();
     assertThat(popular.get(EventCatalogCacheService.POPULAR_KEY)).isNull();
     assertThat(eventService.getPublished(eventId).ticketTypes().getFirst().name()).isEqualTo("VIP");
+  }
+
+  @Test
+  void should_invalidateEventCachesOnlyAfterVenueUpdateCommits() {
+    eventService.getPublished(eventId);
+    eventService.listPublished(NO_FILTER, POPULAR_PAGE);
+    Cache detail = detailCache();
+    Cache popular = popularCache();
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                UUID.randomUUID().toString(),
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(status -> {
+          venueService.update(
+              venueId, new VenueRequest("Renamed Arena", "Bogota", "New St 2", 750));
+          assertThat(detail.get(eventId)).isNotNull();
+          assertThat(popular.get(EventCatalogCacheService.POPULAR_KEY)).isNotNull();
+        });
+
+    assertThat(detail.get(eventId)).isNull();
+    assertThat(popular.get(EventCatalogCacheService.POPULAR_KEY)).isNull();
+    EventDetailResponse refreshed = eventService.getPublished(eventId);
+    assertThat(refreshed.venue().name()).isEqualTo("Renamed Arena");
+    assertThat(refreshed.venue().city()).isEqualTo("Bogota");
   }
 
   @Test

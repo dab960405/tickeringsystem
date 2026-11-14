@@ -5,8 +5,10 @@ import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.venue.api.VenueRequest;
 import com.portfolio.ticketing.venue.api.VenueResponse;
 import com.portfolio.ticketing.venue.domain.Venue;
+import com.portfolio.ticketing.venue.domain.VenueUpdatedEvent;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -17,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class VenueService {
 
   private final VenueRepository venueRepository;
+  private final ApplicationEventPublisher eventPublisher;
 
-  public VenueService(VenueRepository venueRepository) {
+  public VenueService(VenueRepository venueRepository, ApplicationEventPublisher eventPublisher) {
     this.venueRepository = venueRepository;
+    this.eventPublisher = eventPublisher;
   }
 
   public PageResponse<VenueResponse> list(Pageable pageable) {
@@ -49,7 +53,9 @@ public class VenueService {
   public VenueResponse update(UUID id, VenueRequest request) {
     Venue venue = findVenue(id);
     venue.update(request.name(), request.city(), request.address(), request.capacity());
-    return VenueResponse.from(venueRepository.saveAndFlush(venue));
+    VenueResponse response = VenueResponse.from(venueRepository.saveAndFlush(venue));
+    eventPublisher.publishEvent(new VenueUpdatedEvent(id));
+    return response;
   }
 
   @PreAuthorize("hasRole('ADMIN')")

@@ -11,6 +11,7 @@ import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.venue.api.VenueRequest;
 import com.portfolio.ticketing.venue.api.VenueResponse;
 import com.portfolio.ticketing.venue.domain.Venue;
+import com.portfolio.ticketing.venue.domain.VenueUpdatedEvent;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -29,6 +31,7 @@ class VenueServiceTest {
   private static final VenueRequest REQUEST = new VenueRequest("Arena", "Lima", "Main St 1", 500);
 
   @Mock private VenueRepository venueRepository;
+  @Mock private ApplicationEventPublisher eventPublisher;
   @InjectMocks private VenueService venueService;
 
   @Test
@@ -71,6 +74,7 @@ class VenueServiceTest {
     assertThat(response)
         .extracting(VenueResponse::name, VenueResponse::capacity)
         .containsExactly("Arena", 500);
+    verify(eventPublisher).publishEvent(any(VenueUpdatedEvent.class));
   }
 
   @Test
