@@ -169,7 +169,10 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("EXPIRED", "FAILED", "EXPIRED", 0, 1));
 
-    orderPaymentService.process(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-after-order-expiry"));
+    PaymentWebhookRequest lateCapture =
+        webhook(fixture, PaymentStatus.SUCCEEDED, "provider-after-order-expiry");
+    orderPaymentService.process(lateCapture);
+    orderPaymentService.process(lateCapture);
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("EXPIRED", "SUCCEEDED", "EXPIRED", 0, 1));
