@@ -370,6 +370,93 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_recordFailedRefundEvidenceWithoutChangingPaymentOrTickets() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-refund-failed"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest failedRefund = refundWebhook(fixture, PaymentStatus.FAILED, null);
+    handle(failedRefund);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("FAILED");
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("VALID");
+    assertThat(countRows("provider_events", "provider_event_id", failedRefund.providerEventId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", failedRefund.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_keepRefundPendingForReconciliationWithoutChangingPaymentOrTickets()
+      throws Exception {
+    OrderFixture fixture = createOrder(1);
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-refund-pending"));
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest pendingRefund = refundWebhook(fixture, PaymentStatus.PENDING, null);
+    handle(pendingRefund);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("PENDING_RECONCILIATION");
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("VALID");
+    assertThat(countRows("provider_events", "provider_event_id", pendingRefund.providerEventId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", pendingRefund.providerOperationId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void should_preserveOutOfOrderRefundEvidenceWithoutChangingPendingPurchase() throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest outOfOrderRefund =
+        refundWebhook(fixture, PaymentStatus.REFUNDED, "provider-refund-before-capture");
+
+    handle(outOfOrderRefund);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "ACTIVE", 0, 0));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("NONE");
+    assertThat(
+            countRows("provider_events", "provider_event_id", outOfOrderRefund.providerEventId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "semantic_applications",
+                "idempotency_key",
+                outOfOrderRefund.providerOperationId()))
+        .isEqualTo(1);
+
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "provider-capture-after-refund-evidence"));
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+  }
+
+  @Test
   void should_persistAndDeduplicateThreeIdentities_when_sameWebhookIsRepeated() throws Exception {
     OrderFixture fixture = createOrder(1);
     PaymentWebhookRequest webhook = webhook(fixture, PaymentStatus.SUCCEEDED, "provider-inbox");

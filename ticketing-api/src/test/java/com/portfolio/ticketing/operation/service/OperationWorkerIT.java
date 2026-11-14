@@ -8,6 +8,7 @@ import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
+import com.portfolio.ticketing.order.service.OrderCancellationService;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
@@ -69,6 +70,7 @@ class OperationWorkerIT extends AbstractIntegrationTest {
 
   @Autowired private ReservationService reservationService;
   @Autowired private OrderService orderService;
+  @Autowired private OrderCancellationService orderCancellationService;
   @Autowired private ProviderEventInboxService inboxService;
   @Autowired private OperationJobService jobService;
   @Autowired private PaymentOperationService paymentOperationService;
@@ -229,6 +231,45 @@ class OperationWorkerIT extends AbstractIntegrationTest {
     assertThat(executionCount(pending.jobId())).isEqualTo(2);
     assertThat(dispositionTypes(pending.jobId())).containsExactlyInAnyOrder("APPLIED", "NO_OP");
     assertThat(projectionStatus(pending.jobId())).isEqualTo("COMPLETED");
+  }
+
+  @Test
+  void should_recoverRefundProjectionWithoutRepeatingFinancialEffects() throws Exception {
+    OrderFixture fixture = createOrder();
+    PaymentWebhookRequest capture = webhook(fixture, new BigDecimal("40.00"));
+    String capturePayload = objectMapper.writeValueAsString(capture);
+    paymentWebhookService.handle(signature(capturePayload), capturePayload);
+    asUser(
+        fixture.userId(),
+        () -> orderCancellationService.cancel(fixture.orderId(), fixture.userId()));
+
+    PaymentWebhookRequest refund =
+        new PaymentWebhookRequest(
+            fixture.orderId(),
+            PaymentStatus.REFUNDED,
+            "refund-" + UUID.randomUUID(),
+            UUID.randomUUID(),
+            "refund-operation-" + UUID.randomUUID(),
+            ProviderOperationKind.PAYMENT_REFUND,
+            new BigDecimal("40.00"),
+            "USD");
+    String refundPayload = objectMapper.writeValueAsString(refund);
+    ProviderEventReceipt receipt = inboxService.receive(refund, refundPayload);
+    UUID jobId = jobService.findEffectiveJobIdForEvent(receipt.eventId()).orElseThrow();
+    PendingOperation pending = new PendingOperation(receipt, refund, jobId);
+    OperationClaim interrupted = jobService.claim(jobId, "refund-interrupted").orElseThrow();
+
+    paymentOperationService.apply(interrupted);
+    paymentOperationService.processJob(jobId, "refund-recovery");
+
+    assertThat(orderStatus(fixture.orderId())).isEqualTo("REFUNDED");
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("REFUNDED");
+    assertThat(refundStatus(fixture.orderId())).isEqualTo("CONFIRMED");
+    assertThat(cancelledTicketCount(fixture.orderId())).isEqualTo(1);
+    assertThat(semanticCount(pending.request())).isEqualTo(1);
+    assertThat(executionCount(jobId)).isEqualTo(2);
+    assertThat(dispositionTypes(jobId)).containsExactlyInAnyOrder("APPLIED", "NO_OP");
+    assertThat(projectionStatus(jobId)).isEqualTo("COMPLETED");
   }
 
   @Test
@@ -451,6 +492,29 @@ class OperationWorkerIT extends AbstractIntegrationTest {
             + " WHERE oi.order_id = ?",
         Integer.class,
         orderId);
+  }
+
+  private int cancelledTicketCount(UUID orderId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT COUNT(*) FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+            + " WHERE oi.order_id = ? AND t.status = 'CANCELLED'",
+        Integer.class,
+        orderId);
+  }
+
+  private String orderStatus(UUID orderId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT status FROM orders WHERE id = ?", String.class, orderId);
+  }
+
+  private String paymentStatus(UUID orderId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT status FROM payments WHERE order_id = ?", String.class, orderId);
+  }
+
+  private String refundStatus(UUID orderId) {
+    return jdbcTemplate.queryForObject(
+        "SELECT refund_status FROM orders WHERE id = ?", String.class, orderId);
   }
 
   private int semanticCount(PaymentWebhookRequest request) {
