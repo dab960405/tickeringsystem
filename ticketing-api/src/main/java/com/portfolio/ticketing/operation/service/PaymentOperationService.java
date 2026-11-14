@@ -2,6 +2,7 @@ package com.portfolio.ticketing.operation.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
 import com.portfolio.ticketing.payment.api.PaymentWebhookRequest;
 import com.portfolio.ticketing.payment.service.ProviderEventReceipt;
@@ -25,6 +26,7 @@ public class PaymentOperationService {
   private final SemanticApplicationService semanticApplicationService;
   private final OrderPaymentService orderPaymentService;
   private final JdbcTemplate jdbcTemplate;
+  private final EventLockService eventLockService;
   private final ObjectMapper objectMapper;
 
   public PaymentOperationService(
@@ -33,13 +35,15 @@ public class PaymentOperationService {
       SemanticApplicationService semanticApplicationService,
       OrderPaymentService orderPaymentService,
       JdbcTemplate jdbcTemplate,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      EventLockService eventLockService) {
     this.jobService = jobService;
     this.transactionExecutor = transactionExecutor;
     this.semanticApplicationService = semanticApplicationService;
     this.orderPaymentService = orderPaymentService;
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.eventLockService = eventLockService;
   }
 
   public void process(ProviderEventReceipt receipt) {
@@ -71,6 +75,7 @@ public class PaymentOperationService {
   void apply(OperationClaim claim) {
     PaymentWebhookRequest request = readRequest(claim.payload());
     transactionExecutor.apply(() -> {
+      eventLockService.lockShared(findEventIdForOrder(claim.orderId()));
       requireCurrentExecution(claim, "CLAIMED");
       ProviderEventReceipt receipt =
           new ProviderEventReceipt(
@@ -142,6 +147,19 @@ public class PaymentOperationService {
           claim.jobId());
       return null;
     });
+  }
+
+  private UUID findEventIdForOrder(UUID orderId) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT t.event_id
+        FROM orders o
+        JOIN reservations r ON r.id = o.reservation_id
+        JOIN ticket_types t ON t.id = r.ticket_type_id
+        WHERE o.id = ?
+        """,
+        UUID.class,
+        orderId);
   }
 
   private void requireCurrentExecution(OperationClaim claim, String expectedStatus) {
