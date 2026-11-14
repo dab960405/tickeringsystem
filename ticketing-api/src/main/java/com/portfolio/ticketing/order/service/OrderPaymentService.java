@@ -14,6 +14,7 @@ import com.portfolio.ticketing.payment.domain.PaymentStatus;
 import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.payment.service.PaymentWebhookRequestValidator;
 import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult;
+import com.portfolio.ticketing.reservation.service.ReservationReleaseResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import jakarta.persistence.EntityManager;
 import java.util.Objects;
@@ -112,13 +113,10 @@ public class OrderPaymentService {
   }
 
   private void processFailure(Order order, Payment payment) {
-    InvalidStateTransitionException releaseFailure = null;
+    ReservationReleaseResult releaseResult = null;
     if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
-      try {
-        reservationService.releaseForPayment(order.getReservationId(), order.getUserId());
-      } catch (InvalidStateTransitionException resolvedReservation) {
-        releaseFailure = resolvedReservation;
-      }
+      releaseResult =
+          reservationService.releaseForPayment(order.getReservationId(), order.getUserId());
     }
     LockedOrderPayment locked = lockOrderAndPayment(order.getId());
     order = locked.order();
@@ -131,8 +129,8 @@ public class OrderPaymentService {
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
       return;
     }
-    if (releaseFailure != null) {
-      throw releaseFailure;
+    if (releaseResult == ReservationReleaseResult.CONFIRMED) {
+      throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
     }
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
       payment.markFailed();
