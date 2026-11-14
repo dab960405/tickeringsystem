@@ -12,7 +12,6 @@ import com.portfolio.ticketing.reservation.domain.ReservationInventoryDispositio
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -141,14 +140,19 @@ public class EventCancellationService {
       }
     }
 
-    String placeholders = String.join(",", Collections.nCopies(reservationIds.size(), "?"));
     List<UUID> pendingOrderIds =
         jdbcTemplate.query(
-            "SELECT id FROM orders WHERE reservation_id IN ("
-                + placeholders
-                + ") AND status = 'PENDING_PAYMENT' ORDER BY id FOR UPDATE",
+            """
+            SELECT o.id
+            FROM orders o
+            JOIN reservations r ON r.id = o.reservation_id
+            JOIN ticket_types t ON t.id = r.ticket_type_id
+            WHERE t.event_id = ? AND o.status = 'PENDING_PAYMENT'
+            ORDER BY o.id
+            FOR UPDATE OF o
+            """,
             (row, index) -> row.getObject(1, UUID.class),
-            reservationIds.toArray());
+            eventId);
     if (pendingOrderIds.isEmpty()) {
       return;
     }
