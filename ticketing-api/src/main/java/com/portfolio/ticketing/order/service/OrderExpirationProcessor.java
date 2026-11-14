@@ -2,6 +2,7 @@ package com.portfolio.ticketing.order.service;
 
 import com.portfolio.ticketing.common.exception.InvalidStateTransitionException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
+import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.order.domain.Order;
 import com.portfolio.ticketing.order.domain.OrderStatus;
 import com.portfolio.ticketing.order.repository.OrderExpirationCandidate;
@@ -10,7 +11,6 @@ import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
-import com.portfolio.ticketing.event.service.EventLockService;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
@@ -39,7 +39,9 @@ public class OrderExpirationProcessor {
     this.entityManager = entityManager;
   }
 
-  /** Processes one candidate in its own transaction, respecting ADR-016 lock order E → T → R → O. */
+  /**
+   * Processes one candidate in its own transaction, respecting ADR-016 lock order E → T → R → O.
+   */
   @Transactional
   public void expire(OrderExpirationCandidate candidate) {
     eventLockService.lockShared(candidate.getEventId());
