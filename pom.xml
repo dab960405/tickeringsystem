@@ -105,6 +105,9 @@
                         <includes>
                             <include>**/*IT.java</include>
                         </includes>
+                        <systemPropertyVariables>
+                            <spring.test.context.cache.maxSize>4</spring.test.context.cache.maxSize>
+                        </systemPropertyVariables>
                     </configuration>
                     <executions>
                         <execution>
