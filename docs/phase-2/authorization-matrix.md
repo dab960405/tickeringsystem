@@ -1,6 +1,6 @@
 # Matriz de autorización — Fase 2
 
-**Estado:** vigente para el código de la rama dev revisado el 13-11-2026.  
+**Estado:** vigente para el código de `dev` revisado el 14-11-2026. La ejecución CI #154 validó los escenarios de aislamiento sobre el SHA `06490392e86866094ee9dddbff450f4e76e646ad`; `dev` tiene después un commit exclusivamente documental.  
 **Fuente de verdad:** SecurityConfig, @PreAuthorize de los servicios y pruebas HTTP/IT asociadas.  
 **Objetivo:** describir las reglas efectivas; no sustituye la ejecución de las pruebas.
 
@@ -63,8 +63,8 @@ Las rutas no enumeradas quedan sujetas a .anyRequest().authenticated(); deben a�
 | Rol requerido para venues | VenueControllerTest | Pruebas HTTP con usuarios simulados |
 | Rol requerido para eventos y tipos | EventControllerTest, TicketTypeControllerTest | Pruebas HTTP con usuarios simulados |
 | USER requerido para órdenes/reservas/tickets | OrderControllerTest, ReservationControllerTest, TicketControllerTest | Pruebas HTTP con usuarios simulados |
-| Aislamiento entre dos organizadores con JWT reales | Caso añadido a AuthenticationFlowIT | Pendiente de CI |
-| Aislamiento entre dos usuarios reales para órdenes y reservas | Caso añadido a AuthenticationFlowIT: GET/cancelación de orden y cancelación de reserva de otro usuario | Pendiente de CI |
+| Aislamiento entre dos organizadores con JWT reales | `AuthenticationFlowIT.should_hideForeignOrganizerEventAsNotFound_usingTwoRealAccessTokens` | Ejecutado en CI #154: incluido en Failsafe; 0 fallos y 0 errores en la suite |
+| Aislamiento entre dos usuarios reales para órdenes y reservas | `AuthenticationFlowIT.should_isolateReservationsAndOrdersBetweenTwoRealUserTokens`: GET/cancelación de orden y cancelación de reserva ajena; el propietario conserva lectura | Ejecutado en CI #154: incluido en Failsafe; 0 fallos y 0 errores en la suite |
 | Matriz exhaustiva método × rol × estado de recurso | No existe una suite única que cubra todas las celdas | Pendiente de completar según endpoints existentes |
 
 ## Criterio de aceptación para Fase 2
@@ -73,7 +73,7 @@ Las rutas no enumeradas quedan sujetas a .anyRequest().authenticated(); deben a�
 2. Las operaciones de propietario derivan la identidad del JWT, nunca de un ID de usuario suministrado por el cliente.
 3. Los recursos privados ajenos no pueden consultarse ni modificarse; se aplica el 404 de ocultación documentado.
 4. Las pruebas de integración usan dos identidades autenticadas reales para acreditar aislamiento.
-5. ./mvnw -B clean verify termina correctamente en CI para el HEAD final de dev.
+5. `./mvnw -B clean verify` termina correctamente en CI para el SHA de código validado; run #154 probó `06490392e86866094ee9dddbff450f4e76e646ad`. El HEAD posterior `c25e0d323edf32e86b3590df0131d0fe87181b29` solo añade este registro documental y debe tener su propia ejecución CI si el workflow se dispara para cambios de documentación.
 6. La evidencia de pruebas y cobertura se registra en docs/PROGRESS.md.
 
-La matriz no declara la Fase 2 cerrada por sí sola. El cierre requiere verificar las pruebas y la evidencia de CI del commit final.
+La matriz no declara la Fase 2 cerrada por sí sola. La CI #154 ejecutó 479 tests (379 Surefire y 100 Failsafe), con 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo finalizaron correctamente. El cierre formal requiere confirmar que el HEAD vigente de `dev` mantiene esa evidencia y resolver la brecha de cobertura exhaustiva método × rol × estado si la especificación la exige.
