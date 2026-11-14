@@ -158,24 +158,26 @@ public class ReservationService {
   }
 
   @Transactional
-  public void releaseForPayment(UUID id, UUID userId) {
+  public ReservationReleaseResult releaseForPayment(UUID id, UUID userId) {
     UUID ticketTypeId = discoverTicketTypeId(id, userId);
     eventLockService.lockShared(inventoryService.findEventId(ticketTypeId));
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
     if (reservation.getStatus() == ReservationStatus.CONFIRMED) {
-      throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
+      return ReservationReleaseResult.CONFIRMED;
     }
     if (reservation.getStatus() != ReservationStatus.ACTIVE) {
-      return;
+      return ReservationReleaseResult.ALREADY_RELEASED;
     }
     if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
       throw new InvalidStateTransitionException("Active reservation does not hold inventory");
     }
-    if (reservationRepository.cancelActive(id, userId) == 1) {
-      inventoryService.release(ticketTypeId, reservation.getQuantity());
+    if (reservationRepository.cancelActive(id, userId) != 1) {
+      throw new InvalidStateTransitionException("Active reservation could not be released");
     }
+    inventoryService.release(ticketTypeId, reservation.getQuantity());
+    return ReservationReleaseResult.RELEASED;
   }
 
   private boolean canRecover(LockedReservation reservation, Instant evaluationTime) {
