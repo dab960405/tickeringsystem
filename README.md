@@ -4,12 +4,14 @@
 
 Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
 
-> **Estado (2026-11-14):** Fases 0–2 completadas. Fase 2 cerrada formalmente tras validar los criterios de autorización, propiedad de recursos y aislamiento con JWT reales, respaldados por CI #154 y #43545520476. El alcance funcional de Fase 3, incluido el hardening de cancelación de eventos y la expiración de órdenes tras la gracia configurable, está implementado y validado por CI; el cierre formal sigue pendiente de resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, completar la documentación de cierre y recibir autorización del responsable. Fase 4 permanece abierta. Fase 5 no ha comenzado y continúa bloqueada.
+> **Estado (2026-11-14):** Fases 0–2 cerradas. Fases 3 y 4 con funcionalidad y evidencia CI, en trámite de cierre formal. F3-01 y ADR-024 proponen una excepción transaccional delimitada para `EventCancellationService`; F4-05 y ADR-022 proponen el contrato mínimo del proveedor SIMULATED. ERD actualizado V1–V16. El responsable autorizó ejecutar los trabajos de cierre; el dictamen técnico del Tech Lead y la aprobación formal siguen pendientes. Fase 5 bloqueada.
 
 ## Documentación
 
 - [Progreso y evidencia de verificación](docs/PROGRESS.md)
 - [Guía de ejecución local](docs/LOCAL_RUN.md)
+- [F3-01 — expediente de Fase 3](docs/phase-3/F3-01-closure-review.md)
+- [ADR-024 — excepción transaccional propuesta](docs/adr/ADR-024-event-cancellation-transactional-exception.md)
 - [F4-05 — expediente de revisión de cierre](docs/phase-4/F4-05-closure-review.md)
 - [ADR-022 — contrato de pagos simulados (propuesto)](docs/adr/ADR-022-simulated-refund-evidence-contract.md)
 - [F5-00 — plan de Fase 5 y primera prueba local (sin iniciar)](docs/phase-5/F5-00-plan-and-local-validation.md)
@@ -115,8 +117,8 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
-- [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: abierta. H75–H83 tienen evidencia CI; H84-01 validó progresión/carreras en CI #302 y recuperación/fencing en CI #306. El contrato mínimo del pago **simulado** se propone en ADR-022; la nueva prueba de conciliación mediante evento firmado está validada en CI #309 (`a8013f67`) y espera dictamen del Tech Lead. Ver expediente F4-05.
+- [ ] Fase 3: reservas, órdenes, pagos SIMULATED, tickets, expiraciones y cancelación implementadas. Expediente [F3-01](docs/phase-3/F3-01-closure-review.md), excepción arquitectónica [ADR-024](docs/adr/ADR-024-event-cancellation-transactional-exception.md) **propuesta**. CI #315 validó la nueva regresión de rollback; requiere dictamen técnico y cierre formal.
+- [ ] Fase 4: H75–H84 implementados y probados en los escenarios documentados. Contrato de reembolsos simulados [ADR-022](docs/adr/ADR-022-simulated-refund-evidence-contract.md) pendiente de dictamen; [F4-05](docs/phase-4/F4-05-closure-review.md) preparado y ERD actualizado hasta V16. Cierre formal sujeto al cierre previo de F3.
 - [ ] Fase 5: bloqueada. [F5-00](docs/phase-5/F5-00-plan-and-local-validation.md) prepara su ejecución; **primero** pruebas manuales en local, **después** outbox/Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
@@ -124,7 +126,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 ## Deuda técnica conocida
 
-- `EventCancellationService` coordina la cancelación con reservas, inventario y órdenes pendientes, pero actualmente accede directamente a repositorios/tablas de otros módulos; este acoplamiento requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
+- `EventCancellationService` coordina cancelación con repositorios/tablas ajenos; se propone **excepción transaccional estrecha** en ADR-024, pendiente de aprobación del Tech Lead. No se extiende a otros servicios.
 - El reembolso no devuelve stock automáticamente; decisión documentada en [ADR-009](docs/decisions.md).
 - Los refresh tokens no rotan durante la operación de refresh.
 - El webhook HMAC no incluye timestamp ni mecanismo anti-replay temporal.
@@ -133,7 +135,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
 
-La Fase 4 continúa abierta: CI #302 verificó progresión y carreras de reembolso; CI #306 verificó la transición interrumpida con fencing. ADR-022 propone fijar el contrato sencillo de evidencia del proveedor **simulado** sin ampliación financiera; CI #309 verde; pendiente dictamen expreso. Fase 5 sigue bloqueada; las primeras pruebas manuales en local están planificadas para el inicio autorizado de esa fase.
+Las Fases 3 y 4 siguen abiertas a efectos formales. La evidencia CI #312 validó 390 unitarias y 170 integraciones sin fallos; la prueba adicional de rollback de Fase 3 pasó en CI #315 (171 integraciones). ADR-024 y ADR-022 son **propuestas**, no decisiones aprobadas. La primera validación manual local permanece prevista para el inicio autorizado de Fase 5.
 
 ## Auditoría de locks de Fase 4
 
@@ -141,7 +143,7 @@ La auditoría transversal de ADR-016 revisó locks explícitos y locks implícit
 
 ## Validación de operaciones y reembolsos
 
-CI #296 sobre `522a2dcf706122760ffee4fd46e8027e41e2723d` completó 390 pruebas unitarias y 153 de integración de `ticketing-api`, con `OrderPaymentFlowIT` 20/20 y `OperationWorkerIT` 11/11, incluidos los timeouts PostgreSQL reales de RX/CLAIM/APPLY/PROJECT. Spotless y JaCoCo finalizaron correctamente. La auditoría [F4-04](docs/phase-4/F4-04-integrated-payment-audit.md) registra una inconsistencia pendiente de decisión en operaciones de reembolso con una misma identidad y estados sucesivos; por ello no se declara H84 cerrado.
+CI #312 validó la regresión de pagos y recuperación (390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12), con Spotless y JaCoCo conformes. La clasificación, el fencing y el reenvío firmado están cubiertos en F4-04; H84-01 exige aceptación del contrato SIMULATED descrito en ADR-022.
 
 ## Decisiones técnicas
 

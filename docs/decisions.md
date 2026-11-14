@@ -157,7 +157,7 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 ## Pendientes de decidir
 
 - **H84-01 — contrato mínimo del proveedor simulado:** la clasificación de efectos y la progresión `PENDING`/`FAILED → REFUNDED` con referencia estable ya están validadas en CI #302/#306. [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) propone conservar HTTP 409 para cambios de digest y revalidar reembolsos anticipados solo tras **nuevo evento firmado**, sin reconciliador automático. **Propuesto, pendiente de dictamen del Tech Lead**, sin cambios de migraciones ni contrato aprobado.
-- **Coordinación cross-module de cancelación de eventos:** `EventCancellationService` necesita coordinar en una única transacción el evento, inventario, reservas y órdenes pendientes, y actualmente utiliza repositorios y SQL directo sobre módulos vecinos. La especificación general exige comunicación entre módulos mediante servicios o eventos de aplicación. Antes del cierre formal de Fase 3, el Tech Lead debe decidir explícitamente entre aceptar una excepción transaccional estrecha y documentada para este coordinador o exigir un refactor que preserve el mismo protocolo de locks y atomicidad. **Esta entrada registra la decisión pendiente; no constituye aceptación de la excepción.**
+- **Coordinación cross-module de cancelación de eventos:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) propone excepción transaccional limitada, manteniendo E → T → R → O, rollback y proyección Redis post-commit. Añadido test de rollback en CI #314 (pendiente). **No aprobado unilateralmente: requiere dictamen del Tech Lead.**
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
 
 ## ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
@@ -181,3 +181,10 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 - **Alternativas:** publicación directa (rechazada), relay limitado con SKIP LOCKED sobre V10 (propuesto), claim/lease con nueva migración (condicionado a evidencia), CDC/2PC (fuera de alcance).
 - **Documento:** [ADR-023](adr/ADR-023-phase-5-outbox-and-notification-delivery.md).
 - **Plan y pruebas:** [F5-01](phase-5/F5-01-technical-design.md) y [F5-02](phase-5/F5-02-test-and-acceptance-plan.md).
+
+## ADR-024: Excepción transaccional limitada de cancelación de eventos (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 3.
+- **Estado:** PROPUESTO para dictamen del Tech Lead; no aprobado ni cierre formal.
+- **Alternativas:** refactor entre servicios versus excepción deliberada y acotada; se recomienda esta última por atomicidad y orden de locks existentes.
+- **Documento:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md); expediente [F3-01](phase-3/F3-01-closure-review.md).

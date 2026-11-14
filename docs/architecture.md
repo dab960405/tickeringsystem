@@ -134,5 +134,5 @@ El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directament
 
 - El proveedor de pago es simulado; no hay integración con un gateway externo real.
 - La publicación del outbox y el flujo Kafka → notificaciones están pendientes de Fase 5.
-- La cancelación coordinada de eventos está implementada y cubierta por pruebas de concurrencia, pero `EventCancellationService` accede directamente a repositorios/tablas de otros módulos. La especificación del monolito modular exige comunicación mediante servicios o eventos; esta excepción requiere decisión arquitectónica explícita o refactor antes de proponer el cierre formal de Fase 3.
+- La cancelación coordinada de eventos está implementada y probada, pero `EventCancellationService` accede a repositorios/SQL de módulos vecinos. Se propone la excepción transaccional acotada [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), pendiente de dictamen técnico; no se ha cambiado el contrato ni el código productivo.
 - Los tests `*IT` que necesitan PostgreSQL/Redis mediante Testcontainers deben ejecutarse en un entorno con Docker. La documentación no sustituye esa verificación.

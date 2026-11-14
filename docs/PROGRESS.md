@@ -4,7 +4,7 @@
 
 ## Estado actual
 
-**Fase 4 abierta. Fase 5 bloqueada y no iniciada.** El cierre exige evidencia para H75–H84 y aprobación independiente; los pipelines verdes anteriores no demuestran ese cierre.
+**Fases 3 y 4 en preparación de cierre formal; Fase 5 bloqueada y no iniciada.** El cierre exige evidencia para H75–H84 y aprobación independiente; los pipelines verdes anteriores no demuestran ese cierre.
 
 La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo CI `43437152585` estaba en verde. En ese punto existían configuración operativa y mejoras de reservas/pagos, pero no las estructuras de H77/H78 ni las identidades persistentes de H80.
 
@@ -173,7 +173,7 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Deuda técnica y trabajo diferido
 
 1. H84-01: clasificación y carreras verificadas en CI #302, recuperación/fencing en CI #306. ADR-022 propone el contrato mínimo de referencia estable y nueva notificación HMAC para el simulador, sin conciliación automática; aceptación del Tech Lead pendiente. La regresión del reenvío posterior a captura pasó en CI #309, SHA `a8013f67`, con 390 unitarias, 170 integraciones, Spotless y JaCoCo correctos.
-2. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
+2. `EventCancellationService`: excepción transaccional acotada **propuesta** en [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) y expediente [F3-01](phase-3/F3-01-closure-review.md). Regresión de rollback validada en [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223), SHA `9d11d83344b88007e2b5d89de698bf62899817c0`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10; pendiente dictamen del Tech Lead.
 3. Refresh token sin rotación y webhook sin timestamp anti-replay.
 4. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
 
@@ -186,10 +186,10 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Próximos pasos
 
-1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
+1. Dictamen del Tech Lead para la excepción transaccional [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) y [F3-01](phase-3/F3-01-closure-review.md), con CI #315 verde antes del cierre de Fase 3.
 2. Obtener dictamen del Tech Lead sobre el contrato mínimo simulado [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) y expediente [F4-05](phase-4/F4-05-closure-review.md), con regresión verificada en CI #309. No implementar reconciliador ni ampliar el esquema.
-3. Mantener pendiente el dictamen de la excepción de `EventCancellationService` para el cierre formal de Fase 3; no cambiar límites entre módulos sin aprobación.
-4. Solicitar resolución expresa de los cierres formales de Fase 3 y Fase 4.
+3. Revisar el [ERD](erd.md) actualizado hasta Flyway V16 (22 tablas) y completar la trazabilidad de criterios de Fases 3 y 4.
+4. Obtener dictamen formal sobre el contrato mínimo [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md), H75–H84 y [F4-05](phase-4/F4-05-closure-review.md); cerrar F4 únicamente tras cerrar F3.
 5. No iniciar Fase 5. Solo planificación [F5-00](phase-5/F5-00-plan-and-local-validation.md); su primer incremento autorizado comenzará con pruebas manuales locales.
 
 ## Comandos de referencia
@@ -285,3 +285,7 @@ El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma q
 **Estado de referencias:** el run #154 probó el SHA de código `06490392e86866094ee9dddbff450f4e76e646ad`. El HEAD de `dev` observado antes de esta actualización documental era `c25e0d323edf32e86b3590df0131d0fe87181b29`, que solo añadía este resultado al propio `docs/PROGRESS.md`; la comparación entre ambos SHA mostró exactamente ese único archivo modificado. Los commits documentales posteriores también requieren comprobar su CI antes de afirmar que el HEAD final está validado.
 
 **Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
+
+## Trabajo de cierre autorizado — 2026-11-14
+
+El responsable autorizó **ejecutar** la preparación y validación de cierres F3/F4; no se presume aceptada ninguna excepción arquitectónica por esa autorización. Se incorporan [F3-01](phase-3/F3-01-closure-review.md), [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), [ERD](erd.md) hasta V16 y las actualizaciones de [F4-05](phase-4/F4-05-closure-review.md). La prueba de rollback fue añadida en `4d381899`, corrigió el fixture en `c18d9f2` y la aserción de stock en `9d11d833`. CI #313/#314 fallaron respectivamente en SQL del fixture y expectativa de inventario; [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) terminó en `success`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless y JaCoCo. **Fases 3 y 4 abiertas hasta dictamen del Tech Lead y aprobación formal; F5 bloqueada.**
