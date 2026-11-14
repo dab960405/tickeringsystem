@@ -130,8 +130,7 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
                         AND ? = ANY(pg_blocking_pids(pid))
                         AND query ILIKE '%ticket_types%FOR UPDATE%'
                       """,
-                      Integer.class,
-                      blockerPid);
+                      Integer.class, blockerPid);
               assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
             });
 
