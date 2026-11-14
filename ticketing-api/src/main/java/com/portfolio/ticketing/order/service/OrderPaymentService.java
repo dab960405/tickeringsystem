@@ -82,7 +82,9 @@ public class OrderPaymentService {
     if (payment.getStatus() == PaymentStatus.REFUNDED) {
       return;
     }
-    if (order.getStatus() == OrderStatus.PAID && payment.getStatus() == PaymentStatus.SUCCEEDED) {
+    if (payment.getStatus() == PaymentStatus.SUCCEEDED
+        && (order.getStatus() == OrderStatus.PAID
+            || order.getStatus() == OrderStatus.CANCELLED)) {
       requireSameProviderReference(payment, request.providerReference());
       return;
     }
