@@ -136,7 +136,8 @@ public class OrderPaymentService {
         && payment.getStatus() == PaymentStatus.FAILED) {
       return;
     }
-    if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
+    if ((order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED)
+        && payment.getStatus() == PaymentStatus.PENDING) {
       payment.markFailed();
       paymentService.save(payment);
       return;
