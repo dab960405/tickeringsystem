@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.repository.EventRepository;
+import com.portfolio.ticketing.event.service.EventCancellationService;
 import com.portfolio.ticketing.order.api.OrderRequest;
 import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
@@ -57,6 +58,7 @@ import org.springframework.test.context.TestPropertySource;
 class EventGuardConcurrencyIT extends AbstractIntegrationTest {
 
   @Autowired private ReservationService reservationService;
+  @Autowired private EventCancellationService eventCancellationService;
   @Autowired private ReservationExpirationService expirationService;
   @Autowired private OrderService orderService;
   @Autowired private OrderPaymentService orderPaymentService;
@@ -124,6 +126,32 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
                 Integer.class,
                 reservation.reservationId()))
         .isZero();
+  }
+
+  @Test
+  void should_expireActiveReservationsAndCancelPendingOrders_when_eventIsCancelled() {
+    OrderFixture fixture = createOrder(createReservation(2));
+
+    eventCancellationService.cancel(fixture.reservation().eventId());
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("CANCELLED", "PENDING", "EXPIRED", "PENDING", 0, 2));
+
+    eventCancellationService.cancel(fixture.reservation().eventId());
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("CANCELLED", "PENDING", "EXPIRED", "PENDING", 0, 2));
+  }
+
+  @Test
+  void should_preservePaidOrdersAndConfirmedReservations_when_eventIsCancelled() {
+    OrderFixture fixture = createOrder(createReservation(2));
+    orderPaymentService.process(capture(fixture));
+
+    eventCancellationService.cancel(fixture.reservation().eventId());
+
+    assertThat(outcome(fixture))
+        .isEqualTo(new Outcome("PAID", "SUCCEEDED", "CONFIRMED", "FULFILLED", 1, 1));
   }
 
   @Test
