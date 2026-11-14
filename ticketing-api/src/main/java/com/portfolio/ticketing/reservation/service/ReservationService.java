@@ -86,15 +86,18 @@ public class ReservationService {
   }
 
   /**
-   * Locks E FOR SHARE → R FOR UPDATE and revalidates both, so the caller can attach a new order (O)
-   * without racing a cancellation, expiration or release that resolves the reservation. T is
-   * skipped because order creation does not touch inventory.
+   * Locks E FOR SHARE → T FOR UPDATE → R FOR UPDATE and revalidates the reservation before the
+   * caller attaches a new order (O). T is required even though order creation does not mutate
+   * inventory: inserting order_items validates its ticket_type_id foreign key and can otherwise
+   * acquire an implicit KEY SHARE on T after R, recreating the R → T inversion forbidden by
+   * ADR-016.
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public Reservation lockActiveForOrder(UUID id, UUID userId) {
     UUID ticketTypeId = discoverTicketTypeId(id, userId);
     EventStatus lockedEventStatus =
         eventLockService.lockShared(inventoryService.findEventId(ticketTypeId));
+    inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
     if (lockedEventStatus != EventStatus.PUBLISHED) {

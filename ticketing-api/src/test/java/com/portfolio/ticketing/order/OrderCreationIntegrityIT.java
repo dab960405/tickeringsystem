@@ -17,6 +17,9 @@ import com.portfolio.ticketing.tickettype.repository.TicketTypeRepository;
 import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +28,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -49,6 +54,7 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private DataSource dataSource;
 
   @Test
   void should_return409_when_reservationAlreadyHasAnOrderWithAnotherKey() throws Exception {
@@ -87,6 +93,63 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
     assertConflictIsProblemDetail(results);
     assertThat(countOrders(fixture.reservationId())).isEqualTo(1);
     assertThat(countPayments(fixture.reservationId())).isEqualTo(1);
+  }
+
+  @Test
+  void should_lockTicketTypeBeforeReservation_when_orderCreationCompetesWithRelease()
+      throws Exception {
+    OrderFixture fixture = createReservation();
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try (Connection blocker = dataSource.getConnection()) {
+      blocker.setAutoCommit(false);
+      int blockerPid;
+      try (PreparedStatement lockTicketType =
+          blocker.prepareStatement("SELECT id FROM ticket_types WHERE id = ? FOR UPDATE")) {
+        lockTicketType.setObject(1, fixture.ticketTypeId());
+        lockTicketType.executeQuery().close();
+      }
+      try (var statement = blocker.createStatement();
+          var result = statement.executeQuery("SELECT pg_backend_pid()")) {
+        result.next();
+        blockerPid = result.getInt(1);
+      }
+
+      Future<MvcResult> pending =
+          executor.submit(() -> createOrder(fixture, "checkout-lock-order"));
+      try {
+        Awaitility.await()
+            .alias("order creation waits on ticket type before reservation")
+            .atMost(Duration.ofSeconds(10))
+            .pollInterval(Duration.ofMillis(25))
+            .untilAsserted(() -> {
+              Integer waiting =
+                  jdbcTemplate.queryForObject(
+                      """
+                      SELECT COUNT(*) FROM pg_stat_activity
+                      WHERE wait_event_type = 'Lock'
+                        AND ? = ANY(pg_blocking_pids(pid))
+                        AND query ILIKE '%ticket_types%FOR UPDATE%'
+                      """,
+                      Integer.class,
+                      blockerPid);
+              assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
+            });
+
+        blocker.createStatement().execute("SET LOCAL lock_timeout = '1s'");
+        try (PreparedStatement lockReservation =
+            blocker.prepareStatement("SELECT id FROM reservations WHERE id = ? FOR UPDATE")) {
+          lockReservation.setObject(1, fixture.reservationId());
+          lockReservation.executeQuery().close();
+        }
+
+        blocker.rollback();
+        assertThat(pending.get(20, TimeUnit.SECONDS).getResponse().getStatus()).isEqualTo(201);
+      } finally {
+        blocker.rollback();
+      }
+    } finally {
+      executor.shutdownNow();
+    }
   }
 
   @Test
@@ -177,7 +240,7 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
         asUser(
             userId,
             () -> reservationService.create(userId, new ReservationRequest(ticketType.getId(), 1)));
-    return new OrderFixture(userId, reservation.id());
+    return new OrderFixture(userId, ticketType.getId(), reservation.id());
   }
 
   private UUID createUser() {
@@ -239,5 +302,5 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
     return body.path("id").asText();
   }
 
-  private record OrderFixture(UUID userId, UUID reservationId) {}
+  private record OrderFixture(UUID userId, UUID ticketTypeId, UUID reservationId) {}
 }

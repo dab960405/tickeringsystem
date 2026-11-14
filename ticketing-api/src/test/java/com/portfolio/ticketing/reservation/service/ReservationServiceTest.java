@@ -220,17 +220,17 @@ class ReservationServiceTest {
   }
 
   @Test
-  void should_lockEventBeforeReservation_when_lockingActiveReservationForOrder() {
+  void should_lockEventAndTicketTypeBeforeReservation_when_lockingActiveReservationForOrder() {
     Reservation reservation = activeReservation();
     stubOrderLocks(reservation, EventStatus.PUBLISHED);
 
     assertThat(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
         .isSameAs(reservation);
 
-    InOrder lockOrder = inOrder(eventLockService, reservationRepository);
+    InOrder lockOrder = inOrder(eventLockService, inventoryService, reservationRepository);
     lockOrder.verify(eventLockService).lockShared(EVENT_ID);
+    lockOrder.verify(inventoryService).lockRequired(TICKET_TYPE_ID);
     lockOrder.verify(reservationRepository).findOwnedForUpdate(RESERVATION_ID, USER_ID);
-    verify(inventoryService, never()).lockRequired(any());
   }
 
   @Test
@@ -267,6 +267,7 @@ class ReservationServiceTest {
         .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
     when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
+    when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(ticketTypeMock());
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(reservation));
   }
