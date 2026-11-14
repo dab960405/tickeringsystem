@@ -1,6 +1,6 @@
 # Progreso del proyecto
 
-Última actualización: 2026-11-13 · Rama de trabajo: `dev`
+Última actualización: 2026-11-14 · Rama de trabajo: `dev`
 
 ## Estado actual
 
@@ -211,3 +211,19 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 ### Dictamen
 
 La brecha de ocultación de eventos ajenos quedó corregida en código y se añadieron pruebas de integración de aislamiento para eventos, órdenes y reservas. Sin ejecución CI satisfactoria del HEAD final, el cierre formal de Fase 2 sigue pendiente. Fase 5 continúa bloqueada y no iniciada.
+
+
+## Fase 2 — resultado final de CI tras corrección Spotless (2026-11-14)
+
+**Evidencia añadida:** el workflow [CI run #154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946), asociado al commit \`06490392e86866094ee9dddbff450f4e76e646ad\` en \`dev\`, terminó con \`status=completed\` y \`conclusion=success\`.
+
+- El job \`Build and test\` terminó correctamente.
+- El paso \`Build, test and verify coverage\` terminó correctamente.
+- Los pasos de publicación de reportes de tests y cobertura terminaron correctamente.
+- El bloqueo anterior de Spotless quedó resuelto en los tres archivos Java identificados por el run fallido #153.
+- Commits correctivos publicados individualmente en \`dev\`:
+  - \`612ed9e2cba51ff2a392e96f01958256270be16a\` — formato de \`AuthenticationFlowIT.java\`.
+  - \`460506a560470b4e96aba896046798db9f84f593\` — formato de \`EventAuthorizationServiceTest.java\`.
+  - \`06490392e86866094ee9dddbff450f4e76e646ad\` — formato de \`EventAuthorizationService.java\`.
+
+**Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
