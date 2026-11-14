@@ -13,8 +13,8 @@ import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
-import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import com.portfolio.ticketing.event.service.EventLockService;
+import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
@@ -73,9 +73,16 @@ public class OrderExpirationProcessor {
         return;
       }
       inventoryService.release(candidate.getTicketTypeId(), reservation.getQuantity());
+    } else if (reservation.getStatus() == ReservationStatus.CANCELLED
+        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED) {
+      return;
+    } else if (reservation.getStatus() == ReservationStatus.CONFIRMED
+        && reservation.getInventoryDisposition() == ReservationInventoryDisposition.CONSUMED) {
+      return;
     } else if (reservation.getStatus() != ReservationStatus.EXPIRED
         || reservation.getInventoryDisposition() != ReservationInventoryDisposition.RELEASED) {
-      return;
+      throw new InvalidStateTransitionException(
+          "Reservation status and inventory disposition are inconsistent");
     }
 
     orderRepository
