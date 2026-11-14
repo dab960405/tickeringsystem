@@ -120,16 +120,17 @@ public class TicketService {
       throw new BusinessRuleViolationException("A generation with used tickets cannot be reissued");
     }
 
-    currentTickets.stream()
-        .filter(ticket -> ticket.getStatus() == TicketStatus.VALID)
-        .forEach(Ticket::cancel);
     current.supersede();
-    // Flush before inserting the successor: the partial unique index allows one ACTIVE row.
+    // Flush only the generation transition before inserting its successor. Old ticket cancellation
+    // is deliberately deferred until after U -> EN issuance so implicit FK locks keep ADR-016 order.
     generationRepository.saveAndFlush(current);
 
     CommercialGeneration successor = generationRepository.save(current.successor());
     List<CommercialUnit> units = unitRepository.findForOrder(orderId);
     issueGeneration(units, successor);
+    currentTickets.stream()
+        .filter(ticket -> ticket.getStatus() == TicketStatus.VALID)
+        .forEach(Ticket::cancel);
     return new TicketIssuanceResult(
         successor.getId(), successor.getGenerationNumber(), units.size(), true);
   }

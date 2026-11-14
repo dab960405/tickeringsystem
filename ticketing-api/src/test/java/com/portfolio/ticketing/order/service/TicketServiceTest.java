@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -162,7 +163,7 @@ class TicketServiceTest {
             CommercialFixtures.unit(order.getItems().getFirst(), 2));
     List<Ticket> previous =
         units.stream()
-            .map(unit -> new Ticket(unit, current, UUID.randomUUID().toString()))
+            .map(unit -> spy(new Ticket(unit, current, UUID.randomUUID().toString())))
             .toList();
     lockSucceeds(order);
     when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
@@ -187,9 +188,19 @@ class TicketServiceTest {
     assertThat(reissued)
         .extracting(Ticket::getCode)
         .doesNotContainAnyElementsOf(previous.stream().map(Ticket::getCode).toList());
-    InOrder ordered = inOrder(generationRepository);
+    InOrder ordered =
+        inOrder(
+            generationRepository,
+            unitGenerationRepository,
+            ticketRepository,
+            previous.get(0),
+            previous.get(1));
     ordered.verify(generationRepository).saveAndFlush(current);
     ordered.verify(generationRepository).save(any(CommercialGeneration.class));
+    ordered.verify(unitGenerationRepository).saveAll(anyList());
+    ordered.verify(ticketRepository).saveAll(anyList());
+    ordered.verify(previous.get(0)).cancel();
+    ordered.verify(previous.get(1)).cancel();
   }
 
   @Test
