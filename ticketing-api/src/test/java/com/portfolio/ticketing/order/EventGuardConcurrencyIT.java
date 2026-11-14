@@ -133,10 +133,10 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
               canceller.prepareStatement("UPDATE orders SET status = 'CANCELLED' WHERE id = ?")) {
         cancelEvent.setObject(1, fixture.reservation().eventId());
         assertThat(cancelEvent.executeUpdate()).isEqualTo(1);
-        expireReservation.setObject(1, fixture.reservation().reservationId());
-        assertThat(expireReservation.executeUpdate()).isEqualTo(1);
         restoreStock.setObject(1, fixture.reservation().ticketTypeId());
         assertThat(restoreStock.executeUpdate()).isEqualTo(1);
+        expireReservation.setObject(1, fixture.reservation().reservationId());
+        assertThat(expireReservation.executeUpdate()).isEqualTo(1);
         cancelOrder.setObject(1, fixture.orderId());
         assertThat(cancelOrder.executeUpdate()).isEqualTo(1);
       }
