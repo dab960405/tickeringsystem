@@ -24,8 +24,8 @@ public class OrderExpirationService {
   }
 
   /**
-   * Expires pending orders 15 minutes after their reservation deadline. Each candidate is
-   * processed in a separate transaction so locks from one order cannot overlap the next one.
+   * Expires pending orders 15 minutes after their reservation deadline. Each candidate is processed
+   * in a separate transaction so locks from one order cannot overlap the next one.
    */
   @Scheduled(
       fixedDelayString = "${ticketing.order.expiration-fixed-delay-ms:30000}",

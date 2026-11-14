@@ -50,10 +50,9 @@ public class OrderExpirationProcessor {
     Reservation reservation =
         reservationRepository
             .findByIdForUpdate(candidate.getReservationId())
-            .orElseThrow(
-                () ->
-                    new ResourceNotFoundException(
-                        "Reservation " + candidate.getReservationId() + " not found"));
+            .orElseThrow(() ->
+                new ResourceNotFoundException(
+                    "Reservation " + candidate.getReservationId() + " not found"));
     entityManager.refresh(reservation);
     if (!reservation.getTicketType().getId().equals(candidate.getTicketTypeId())) {
       throw new InvalidStateTransitionException("Reservation inventory relationship changed");
@@ -88,8 +87,8 @@ public class OrderExpirationProcessor {
     Order order =
         orderRepository
             .findById(candidate.getOrderId())
-            .orElseThrow(
-                () -> new ResourceNotFoundException("Order " + candidate.getOrderId() + " not found"));
+            .orElseThrow(() ->
+                new ResourceNotFoundException("Order " + candidate.getOrderId() + " not found"));
     entityManager.refresh(order);
     if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
       return;

@@ -150,9 +150,7 @@ class ReservationHttpConcurrencyIT extends AbstractIntegrationTest {
             .claim("type", "access")
             .build();
     return jwtEncoder
-        .encode(
-            JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+        .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
         .getTokenValue();
   }
 
