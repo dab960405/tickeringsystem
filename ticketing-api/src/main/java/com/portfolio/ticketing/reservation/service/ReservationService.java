@@ -160,6 +160,7 @@ public class ReservationService {
   @Transactional
   public void releaseForPayment(UUID id, UUID userId) {
     UUID ticketTypeId = discoverTicketTypeId(id, userId);
+    eventLockService.lockShared(inventoryService.findEventId(ticketTypeId));
     inventoryService.lockRequired(ticketTypeId);
     Reservation reservation = findOwnedForUpdate(id, userId);
     requireSameTicketType(reservation, ticketTypeId);
