@@ -54,8 +54,8 @@ Cada transacción configura `lock_timeout` y `statement_timeout` mediante `SET L
 8. Nueva operación de ciclo sin repetir la aplicación semántica global.
 9. Webhook duplicado concurrente con una sola emisión.
 
-`OrderPaymentFlowIT` ejecuta 16 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes y evidencia append-only.
+`OrderPaymentFlowIT` ejecuta 17 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes, concurrencia de identidad de operación y evidencia append-only.
 
 ## Pendientes
 
-H77 está implementado mediante V16 y validado por `CommercialIssuanceIT`, pero continúa sujeto a la auditoría transversal H75/H83. H81 y la auditoría global H75/H76/H83 siguen abiertos. H79/H84 deben someterse a la validación integral final. Este documento no representa el cierre formal de Fase 4 ni autoriza Fase 5.
+H77 y H81 están implementados y validados. La auditoría transversal [F4-03](F4-03-lock-audit.md) validó H75/H76/H83 sobre CI #292 después de corregir dos inversiones implícitas de locks. H78/H80 conservan la evidencia de workers e idempotencia de este documento, pero H78/H79/H80/H82/H84 deben someterse todavía a la validación integral final y al expediente de cierre. Este documento no representa el cierre formal de Fase 4 ni autoriza Fase 5.

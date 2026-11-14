@@ -19,6 +19,16 @@ Los símbolos usados por este alcance se asignan así: `E` events, `PE` provider
 
 Una transacción solo puede adquirir locks de fila siguiendo una subsecuencia de ese orden. Las lecturas sin lock para descubrir identificadores no son adquisiciones, pero sus datos deben revalidarse después de bloquear. Los inserts de filas nuevas no sustituyen la revalidación de filas existentes.
 
+### Locks implícitos por claves foráneas y flush
+
+El orden se aplica también a locks sobre filas padre que PostgreSQL adquiere implícitamente para validar claves foráneas. Que una operación no modifique directamente una tabla no autoriza a omitir su posición si un insert posterior puede adquirir un `KEY SHARE` sobre ella.
+
+- La creación de una orden bloquea E → T → R antes de insertar O/P/I. T se toma porque `order_items.ticket_type_id` referencia `ticket_types`; sin ese lock previo, el flush podría mantener R y adquirir T después.
+- La reemisión de tickets establece primero las relaciones de la nueva generación con U y emite EN; la cancelación de EN de la generación anterior se difiere hasta después. Esto evita que un flush de entidades dirty materialice EN antes de los locks implícitos de FK sobre U.
+- Repetir un UPDATE sobre una fila J/XA ya bloqueada no constituye una nueva adquisición posterior; el orden se evalúa cuando el lock se obtiene por primera vez.
+
+La auditoría transversal y las pruebas de estas reglas se documentan en [F4-03](../phase-4/F4-03-lock-audit.md).
+
 ### Protocolo de inventario y reservas
 
 1. Descubrir candidatos sin lock, con lote máximo de 100 para expiración.
@@ -30,7 +40,7 @@ Una transacción solo puede adquirir locks de fila siguiendo una subsecuencia de
 7. Considerar válida una reserva solo si `expires_at > evaluation_time`; si `expires_at <= evaluation_time`, está expirada.
 8. Cambiar reserva e inventario en la misma transacción. Cualquier inconsistencia revierte todo.
 
-La creación bloquea/actualiza T antes de insertar R. Cancelación, liberación, confirmación, recuperación y expiración siguen T → R. La expiración no calcula su hora de decisión antes de bloquear.
+La creación de reservas bloquea/actualiza T antes de insertar R. La creación de órdenes también mantiene T antes de R para cubrir la FK de `order_items`. Cancelación, liberación, confirmación, recuperación y expiración siguen T → R. La expiración no calcula su hora de decisión antes de bloquear.
 
 ### Inventario
 

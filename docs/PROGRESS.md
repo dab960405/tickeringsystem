@@ -12,15 +12,15 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 
 | Requisito | Estado demostrado | Pendiente |
 | --- | --- | --- |
-| H75 — orden global de locks | Parcial: T → R en reservas; J → XA todavía no existe | Auditoría de todos los flujos y nuevos workers |
-| H76 — protocolo T → R | Implementado en confirmación, expiración, liberación y recuperación; pruebas de carreras presentes | Validación integral con los componentes nuevos |
-| H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Auditoría transversal con H75/H83 y cierre documental |
+| H75 — orden global de locks | **Validado en CI #292:** auditoría de locks explícitos, FK implícitas y flushes JPA; secuencias existentes compatibles tras dos correcciones | Reabrir si cambian FK, locks o materialización de flush |
+| H76 — protocolo T → R | **Validado en CI #292:** creación, cancelación, confirmación, recuperación, expiración y creación de orden mantienen T antes de R | Integrar en expediente final |
+| H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Integrar en expediente final |
 | H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Implementado y probado localmente:** V15, TX-RX/CLAIM/APPLY/PROJECT, renovación, reemplazo y recuperación | Validación integral final |
 | H79 — pagos tardíos | Recuperación con gracia y estados `UNFULFILLABLE`/`REQUIRED`, integrados con workers | Validación integral con idempotencia global |
 | H80 — identidades e idempotencia persistente | **Implementado y probado localmente:** V14+V15, inbox, tres identidades, digest, aplicación global única y webhooks concurrentes | Validación integral final |
 | H81 — Redis | **Implementado y validado en CI:** caché de tipos/eventos, proyección de reservas, rate limiting login/reservas/órdenes y degradación | Cierre documental dentro del expediente integral de Fase 4 |
 | H82 — configuración operativa | **Integrada:** timeouts, lock/statement timeout, lease, lote, reintentos, backoff y recuperación se consumen en procesos reales | Validación integral final |
-| H83 — consistencia global de locks | Parcial | Auditoría después de H77/H78/H80 |
+| H83 — consistencia global de locks | **Validado en CI #292:** corregidas las inversiones implícitas EN → U en reemisión y R → T por FK en creación de orden | Reabrir ante cambios de esquema/locks/flush |
 | H84 — reembolsos | Parcial: solicitud y confirmación con evidencia | Integración con identidades, inbox, reintentos y workers |
 
 ## Incremento H80 — V14
@@ -59,6 +59,15 @@ La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo C
 - `ReservationController` aplica 20 creaciones/60 s por usuario y `OrderController` 10/60 s; login conserva 5/60 s. `RedisRateLimiter` usa incremento+expiración atómicos y degrada fail-open ante indisponibilidad Redis.
 - CI #286, SHA `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`: 390 unitarios y 147 integraciones de `ticketing-api`, sin fallos, errores ni omitidos. `EventCatalogCacheIT` 5/5, `RedisRateLimiterIT` 3/3 y `ReservationRedisProjectionIT` 5/5; Spotless y JaCoCo correctos; `BUILD SUCCESS`.
 - H81 deja de clasificarse como pendiente técnico. Esto no implica cierre de Fase 4: H75/H76/H83 y H79/H84 continúan pendientes de validación integral.
+
+## Auditoría H75/H76/H83 — F4-03
+
+- Se auditaron los `service` y `repository` que adquieren locks explícitos y las escrituras que pueden introducir locks implícitos por claves foráneas o por flush de JPA. La matriz completa está en [F4-03](phase-4/F4-03-lock-audit.md).
+- Se identificó una inversión potencial **EN → U** en reemisión: cancelar tickets antiguos antes de un `saveAndFlush` podía materializar UPDATE sobre `tickets` antes de las FK de la nueva generación hacia `commercial_units`. La corrección difiere la cancelación de los tickets antiguos hasta después de persistir enlaces U y nuevos EN.
+- Se identificó una inversión **R → T** en creación de orden: `lockActiveForOrder` bloqueaba R y el posterior insert de `order_items` podía adquirir `KEY SHARE` sobre T por la FK `ticket_type_id`. La corrección hace explícito E → T → R antes de persistir O/P/I.
+- `TicketServiceTest` fija el orden de reemisión y `ReservationServiceTest` fija E → T → R. `OrderCreationIntegrityIT` usa PostgreSQL real para demostrar que creación de orden espera en T antes de adquirir R.
+- CI #292, SHA `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`: 390 unitarios y 148 integraciones de `ticketing-api`, 0 fallos, 0 errores y 0 omitidos; `OrderCreationIntegrityIT` 5/5, `CommercialIssuanceIT` 14/14, `EventGuardConcurrencyIT` 9/9, `OperationWorkerIT` 9/9, `ReservationConcurrencyIT` 20/20 y `ReservationHttpConcurrencyIT` 20/20. Spotless y JaCoCo correctos; `BUILD SUCCESS`.
+- **Dictamen técnico:** H75, H76 y H83 quedan validados para el modelo del SHA auditado. Deben reabrirse si una nueva migración añade FK relevantes, si aparece un nuevo lock explícito o si cambia el orden de flush de escrituras relacionadas.
 
 ## Cambios de integridad de órdenes — V11 y ADR-015
 
@@ -155,11 +164,10 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 
 ## Deuda técnica y trabajo diferido
 
-1. H75/H76/H83: auditoría global de locks con V16 y los workers ya integrados.
-2. H79/H84: validación integral de pagos tardíos y reembolsos con el procesamiento recuperable.
-3. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
-4. Refresh token sin rotación y webhook sin timestamp anti-replay.
-5. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
+1. H78/H79/H80/H82/H84: validación integral final de workers, pagos tardíos, identidades, configuración operativa y reembolsos.
+2. `EventCancellationService` coordina reservas, inventario y órdenes pendientes, pero mantiene acceso directo a repositorios/tablas de otros módulos; requiere decisión arquitectónica o refactor antes de proponer el cierre formal de Fase 3.
+3. Refresh token sin rotación y webhook sin timestamp anti-replay.
+4. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
 
 ## Verificación local y limitaciones
 
@@ -171,11 +179,10 @@ El run #116 es la evidencia de código usada para los conteos y cobertura. Los r
 ## Próximos pasos
 
 1. Resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService` antes de proponer el cierre de Fase 3.
-2. Auditar H75/H76/H83 con H77/H78/H80/H81 ya presentes.
-3. Validar H79/H84, concurrencia, flujo completo, cobertura y CI.
-4. Sincronizar el resto de la documentación con la evidencia actual.
-5. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
-6. No iniciar Fase 5.
+2. Validar integralmente H78/H79/H80/H82/H84 con la infraestructura y locks ya auditados.
+3. Sincronizar el resto de la documentación con la evidencia actual.
+4. Preparar los expedientes de cierre; la aprobación formal sigue reservada al responsable del proyecto.
+5. No iniciar Fase 5.
 
 ## Comandos de referencia
 

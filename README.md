@@ -113,7 +113,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
 - [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: reservas, órdenes, inventario concurrente, expiración de reservas y órdenes, idempotencia, webhook HMAC, pagos, tickets y hardening de cancelación de eventos implementados y cubiertos por la suite. **Cierre formal pendiente:** resolver o aceptar explícitamente el acceso directo entre módulos de `EventCancellationService`, consolidar la evidencia/documentación y recibir autorización del responsable.
-- [ ] Fase 4: abierta. H77 y H81 están implementados y validados; permanecen pendientes la auditoría global H75/H76/H83 y la validación integral de H79/H84 antes de proponer el cierre.
+- [ ] Fase 4: abierta. H75/H76/H77/H81/H83 están implementados o validados; permanecen pendientes la validación integral de H78/H79/H80/H82/H84 y el expediente de cierre antes de proponer la aceptación.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
 - [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
 - [ ] Fase 7: CI/CD y despliegue en AWS.
@@ -130,7 +130,11 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
 
-La Fase 4 continúa abierta: H75/H76/H83 y H79/H84 aún requieren validación integral. La Fase 5 no debe iniciarse antes del cierre formal de Fase 4.
+La Fase 4 continúa abierta: H78/H79/H80/H82/H84 aún requieren validación integral y expediente final. La Fase 5 no debe iniciarse antes del cierre formal de Fase 4.
+
+## Auditoría de locks de Fase 4
+
+La auditoría transversal de ADR-016 revisó locks explícitos y locks implícitos por claves foráneas/flush. Se corrigieron dos inversiones: reemisión de tickets (EN → U) y creación de órdenes (R → T por la FK de `order_items`). CI #292 sobre `24be7cbe670e7076d8e6999a9d708ef4cad09fe1` validó 390 unitarios y 148 integraciones de `ticketing-api`, incluidos los escenarios de concurrencia e integridad; H75, H76 y H83 quedan validados para ese modelo. Véase [F4-03](docs/phase-4/F4-03-lock-audit.md).
 
 ## Decisiones técnicas
 
