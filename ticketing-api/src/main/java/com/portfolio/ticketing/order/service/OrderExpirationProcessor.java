@@ -69,9 +69,10 @@ public class OrderExpirationProcessor {
       if (reservation.getExpiresAt().isAfter(evaluationTime)) {
         return;
       }
-      if (reservationRepository.expireActive(reservation.getId(), evaluationTime) == 1) {
-        inventoryService.release(candidate.getTicketTypeId(), reservation.getQuantity());
+      if (reservationRepository.expireActive(reservation.getId(), evaluationTime) != 1) {
+        return;
       }
+      inventoryService.release(candidate.getTicketTypeId(), reservation.getQuantity());
     } else if (reservation.getStatus() != ReservationStatus.EXPIRED
         || reservation.getInventoryDisposition() != ReservationInventoryDisposition.RELEASED) {
       return;
