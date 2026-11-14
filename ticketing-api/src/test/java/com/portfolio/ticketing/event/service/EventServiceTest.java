@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
 
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
@@ -44,6 +45,7 @@ class EventServiceTest {
   @Mock private VenueService venueService;
   @Mock private TicketTypeQueryService ticketTypeQueryService;
   @Mock private EventCatalogCacheService eventCatalogCacheService;
+  @Mock private EventCancellationService eventCancellationService;
   @InjectMocks private EventService eventService;
 
   private static Venue venue() {
@@ -104,7 +106,15 @@ class EventServiceTest {
 
   @Test
   void should_cancel_when_eventIsDraft() {
-    when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(draft()));
+    Event event = draft();
+    when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+    doAnswer(
+            invocation -> {
+              event.cancel();
+              return null;
+            })
+        .when(eventCancellationService)
+        .cancel(EVENT_ID);
 
     assertThat(eventService.cancel(EVENT_ID).status()).isEqualTo(EventStatus.CANCELLED);
   }
