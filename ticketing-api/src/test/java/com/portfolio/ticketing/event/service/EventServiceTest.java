@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.api.EventDetailResponse;
+import com.portfolio.ticketing.event.api.EventMetadata;
 import com.portfolio.ticketing.event.api.EventRequest;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.domain.EventStatus;
@@ -42,6 +43,7 @@ class EventServiceTest {
   @Mock private EventRepository eventRepository;
   @Mock private VenueService venueService;
   @Mock private TicketTypeQueryService ticketTypeQueryService;
+  @Mock private EventCatalogCacheService eventCatalogCacheService;
   @InjectMocks private EventService eventService;
 
   private static Venue venue() {
@@ -109,7 +111,8 @@ class EventServiceTest {
 
   @Test
   void should_hideEvent_when_notPublished() {
-    when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(draft()));
+    when(eventCatalogCacheService.getPublished(EVENT_ID))
+        .thenThrow(new ResourceNotFoundException("Event " + EVENT_ID + " not found"));
 
     assertThatThrownBy(() -> eventService.getPublished(EVENT_ID))
         .isInstanceOf(ResourceNotFoundException.class);
@@ -119,7 +122,7 @@ class EventServiceTest {
   void should_returnDetailWithTicketTypes_when_published() {
     Event event = draft();
     event.publish();
-    when(eventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
+    when(eventCatalogCacheService.getPublished(EVENT_ID)).thenReturn(EventMetadata.from(event));
     when(ticketTypeQueryService.listForEvent(any())).thenReturn(List.of());
 
     assertThat(eventService.getPublished(EVENT_ID).status()).isEqualTo(EventStatus.PUBLISHED);

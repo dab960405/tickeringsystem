@@ -4,6 +4,7 @@ import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.event.service.EventCatalogCacheService;
 import com.portfolio.ticketing.event.service.EventService;
 import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.api.TicketTypeResponse;
@@ -21,10 +22,15 @@ public class TicketTypeService {
 
   private final TicketTypeRepository ticketTypeRepository;
   private final EventService eventService;
+  private final EventCatalogCacheService eventCatalogCacheService;
 
-  public TicketTypeService(TicketTypeRepository ticketTypeRepository, EventService eventService) {
+  public TicketTypeService(
+      TicketTypeRepository ticketTypeRepository,
+      EventService eventService,
+      EventCatalogCacheService eventCatalogCacheService) {
     this.ticketTypeRepository = ticketTypeRepository;
     this.eventService = eventService;
+    this.eventCatalogCacheService = eventCatalogCacheService;
   }
 
   @PreAuthorize("@eventAuthorizationService.canManage(#eventId, authentication)")
@@ -42,7 +48,9 @@ public class TicketTypeService {
             request.saleStartsAt(),
             request.saleEndsAt(),
             request.maxPerOrder());
-    return TicketTypeResponse.from(ticketTypeRepository.save(ticketType));
+    TicketTypeResponse response = TicketTypeResponse.from(ticketTypeRepository.save(ticketType));
+    eventCatalogCacheService.evictAll();
+    return response;
   }
 
   @PreAuthorize("@ticketTypeAuthorizationService.canManage(#id, authentication)")
@@ -63,7 +71,10 @@ public class TicketTypeService {
         request.saleStartsAt(),
         request.saleEndsAt(),
         request.maxPerOrder());
-    return TicketTypeResponse.from(ticketTypeRepository.saveAndFlush(ticketType));
+    TicketTypeResponse response =
+        TicketTypeResponse.from(ticketTypeRepository.saveAndFlush(ticketType));
+    eventCatalogCacheService.evictAll();
+    return response;
   }
 
   private static void requireEditable(Event event) {

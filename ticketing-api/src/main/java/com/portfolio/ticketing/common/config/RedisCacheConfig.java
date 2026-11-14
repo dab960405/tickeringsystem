@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.event.api.EventMetadata;
+import com.portfolio.ticketing.event.api.EventSummaryResponse;
+import com.portfolio.ticketing.event.service.EventCatalogCacheService;
 import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
 import java.time.Duration;
 import java.util.List;
@@ -21,6 +25,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
@@ -36,12 +41,15 @@ public class RedisCacheConfig implements CachingConfigurer {
 
   private final RedisConnectionFactory connectionFactory;
   private final Duration ticketTypesTtl;
+  private final Duration eventsTtl;
 
   public RedisCacheConfig(
       RedisConnectionFactory connectionFactory,
-      @Value("${ticketing.cache.ticket-types.ttl:5m}") Duration ticketTypesTtl) {
+      @Value("${ticketing.cache.ticket-types.ttl:5m}") Duration ticketTypesTtl,
+      @Value("${ticketing.cache.events.ttl:60s}") Duration eventsTtl) {
     this.connectionFactory = connectionFactory;
     this.ticketTypesTtl = ticketTypesTtl;
+    this.eventsTtl = eventsTtl;
   }
 
   @Bean
@@ -76,8 +84,38 @@ public class RedisCacheConfig implements CachingConfigurer {
             .serializeValuesWith(
                 RedisSerializationContext.SerializationPair.fromSerializer(serializer));
 
+    JavaType eventMetadataType = objectMapper.getTypeFactory().constructType(EventMetadata.class);
+    Jackson2JsonRedisSerializer<EventMetadata> eventMetadataSerializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, eventMetadataType);
+    JavaType popularPageType =
+        objectMapper
+            .getTypeFactory()
+            .constructParametricType(PageResponse.class, EventSummaryResponse.class);
+    Jackson2JsonRedisSerializer<PageResponse<EventSummaryResponse>> popularPageSerializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, popularPageType);
+    RedisCacheConfiguration eventDefaults =
+        RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(eventsTtl)
+            .prefixCacheNameWith("ticketing:")
+            .disableCachingNullValues();
+
+    RedisCacheWriter cacheWriter =
+        new ResilientRedisCacheWriter(
+            RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory));
     RedisCacheManager.RedisCacheManagerBuilder builder =
-        RedisCacheManager.builder(connectionFactory).cacheDefaults(defaults);
+        RedisCacheManager.builder(connectionFactory)
+            .cacheWriter(cacheWriter)
+            .cacheDefaults(defaults)
+            .withCacheConfiguration(
+                EventCatalogCacheService.DETAIL_CACHE,
+                eventDefaults.serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(
+                        eventMetadataSerializer)))
+            .withCacheConfiguration(
+                EventCatalogCacheService.POPULAR_CACHE,
+                eventDefaults.serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(
+                        popularPageSerializer)));
     if (transactionAware) {
       builder.transactionAware();
     }

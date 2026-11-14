@@ -7,7 +7,6 @@ import com.portfolio.ticketing.event.api.EventDetailResponse;
 import com.portfolio.ticketing.event.api.EventRequest;
 import com.portfolio.ticketing.event.api.EventSummaryResponse;
 import com.portfolio.ticketing.event.domain.Event;
-import com.portfolio.ticketing.event.domain.EventStatus;
 import com.portfolio.ticketing.event.repository.EventFilter;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.event.repository.EventSpecifications;
@@ -16,6 +15,7 @@ import com.portfolio.ticketing.venue.domain.Venue;
 import com.portfolio.ticketing.venue.service.VenueService;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,17 +27,23 @@ public class EventService {
   private final EventRepository eventRepository;
   private final VenueService venueService;
   private final TicketTypeQueryService ticketTypeQueryService;
+  private final EventCatalogCacheService eventCatalogCacheService;
 
   public EventService(
       EventRepository eventRepository,
       VenueService venueService,
-      TicketTypeQueryService ticketTypeQueryService) {
+      TicketTypeQueryService ticketTypeQueryService,
+      EventCatalogCacheService eventCatalogCacheService) {
     this.eventRepository = eventRepository;
     this.venueService = venueService;
     this.ticketTypeQueryService = ticketTypeQueryService;
+    this.eventCatalogCacheService = eventCatalogCacheService;
   }
 
   public PageResponse<EventSummaryResponse> listPublished(EventFilter filter, Pageable pageable) {
+    if (isPopularFirstPage(filter, pageable)) {
+      return eventCatalogCacheService.getPopularFirstPage();
+    }
     return PageResponse.from(
         eventRepository
             .findAll(EventSpecifications.publicCatalog(filter), pageable)
@@ -46,11 +52,9 @@ public class EventService {
 
   /** Public detail: unpublished events are reported as missing so drafts are not disclosed. */
   public EventDetailResponse getPublished(UUID id) {
-    Event event = findEvent(id);
-    if (event.getStatus() != EventStatus.PUBLISHED) {
-      throw notFound(id);
-    }
-    return toDetail(event);
+    return eventCatalogCacheService
+        .getPublished(id)
+        .withTicketTypes(ticketTypeQueryService.listForEvent(id));
   }
 
   /** Used by other modules (e.g. ticket types) that need the event entity reference. */
@@ -71,7 +75,9 @@ public class EventService {
             request.category(),
             request.startsAt(),
             request.endsAt());
-    return toDetail(eventRepository.save(event));
+    EventDetailResponse response = toDetail(eventRepository.save(event));
+    eventCatalogCacheService.evictAll();
+    return response;
   }
 
   @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
@@ -86,7 +92,9 @@ public class EventService {
         request.category(),
         request.startsAt(),
         request.endsAt());
-    return toDetail(eventRepository.saveAndFlush(event));
+    EventDetailResponse response = toDetail(eventRepository.saveAndFlush(event));
+    eventCatalogCacheService.evictAll();
+    return response;
   }
 
   @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
@@ -98,7 +106,9 @@ public class EventService {
           "An event needs at least one ticket type before it can be published");
     }
     event.publish();
-    return toDetail(event);
+    EventDetailResponse response = toDetail(event);
+    eventCatalogCacheService.evictAll();
+    return response;
   }
 
   // Expiring the event's active reservations and emitting EventCancelled arrive with the
@@ -108,7 +118,24 @@ public class EventService {
   public EventDetailResponse cancel(UUID id) {
     Event event = findEvent(id);
     event.cancel();
-    return toDetail(event);
+    EventDetailResponse response = toDetail(event);
+    eventCatalogCacheService.evictAll();
+    return response;
+  }
+
+  private static boolean isPopularFirstPage(EventFilter filter, Pageable pageable) {
+    return isBlank(filter.q())
+        && isBlank(filter.category())
+        && isBlank(filter.city())
+        && filter.from() == null
+        && filter.to() == null
+        && pageable.getPageNumber() == 0
+        && pageable.getPageSize() == 20
+        && pageable.getSort().equals(Sort.by(Sort.Direction.ASC, "startsAt"));
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
   }
 
   private EventDetailResponse toDetail(Event event) {

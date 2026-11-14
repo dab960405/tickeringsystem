@@ -62,6 +62,8 @@ ticketing:
   cache:
     ticket-types:
       ttl: ${TICKET_TYPES_CACHE_TTL:5m}
+    events:
+      ttl: ${EVENTS_CACHE_TTL:60s}
   rate-limits:
     scopes:
       login:

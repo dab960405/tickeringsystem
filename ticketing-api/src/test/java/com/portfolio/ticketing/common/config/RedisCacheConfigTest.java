@@ -13,7 +13,8 @@ import org.springframework.data.redis.serializer.SerializationException;
 class RedisCacheConfigTest {
 
   private final RedisCacheConfig config =
-      new RedisCacheConfig(mock(RedisConnectionFactory.class), Duration.ofMinutes(5));
+      new RedisCacheConfig(
+          mock(RedisConnectionFactory.class), Duration.ofMinutes(5), Duration.ofSeconds(60));
   private final Cache cache = mock(Cache.class);
 
   @Test

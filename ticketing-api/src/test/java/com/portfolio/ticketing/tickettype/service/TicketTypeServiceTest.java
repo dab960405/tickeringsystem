@@ -11,6 +11,7 @@ import com.portfolio.ticketing.common.exception.BusinessRuleViolationException;
 import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.common.exception.ResourceNotFoundException;
 import com.portfolio.ticketing.event.domain.Event;
+import com.portfolio.ticketing.event.service.EventCatalogCacheService;
 import com.portfolio.ticketing.event.service.EventService;
 import com.portfolio.ticketing.tickettype.api.TicketTypeRequest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
@@ -36,6 +37,7 @@ class TicketTypeServiceTest {
 
   @Mock private TicketTypeRepository ticketTypeRepository;
   @Mock private EventService eventService;
+  @Mock private EventCatalogCacheService eventCatalogCacheService;
   @InjectMocks private TicketTypeService ticketTypeService;
 
   private static Event draftEvent() {
