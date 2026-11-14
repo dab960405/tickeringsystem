@@ -183,20 +183,18 @@ class OperationWorkerIT extends AbstractIntegrationTest {
       Awaitility.await()
           .atMost(Duration.ofSeconds(10))
           .pollInterval(Duration.ofMillis(25))
-          .untilAsserted(
-              () -> {
-                Integer waiting =
-                    jdbcTemplate.queryForObject(
-                        """
-                        SELECT COUNT(*) FROM pg_stat_activity
-                        WHERE wait_event_type = 'Lock'
-                          AND ? = ANY(pg_blocking_pids(pid))
-                          AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
-                        """,
-                        Integer.class,
-                        blockerPid);
-                assertThat(waiting).isNotNull().isGreaterThan(0);
-              });
+          .untilAsserted(() -> {
+            Integer waiting =
+                jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*) FROM pg_stat_activity
+                    WHERE wait_event_type = 'Lock'
+                      AND ? = ANY(pg_blocking_pids(pid))
+                      AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
+                    """,
+                    Integer.class, blockerPid);
+            assertThat(waiting).isNotNull().isGreaterThan(0);
+          });
 
       try (Connection probe = dataSource.getConnection();
           PreparedStatement jobLock =

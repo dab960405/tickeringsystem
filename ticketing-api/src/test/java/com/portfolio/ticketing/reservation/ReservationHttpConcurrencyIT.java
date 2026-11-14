@@ -89,21 +89,19 @@ class ReservationHttpConcurrencyIT extends AbstractIntegrationTest {
       for (UUID userId : userIds) {
         String token = accessToken(userId);
         attempts.add(
-            executor.submit(
-                () -> {
-                  start.await();
-                  HttpHeaders headers = new HttpHeaders();
-                  headers.setBearerAuth(token);
-                  headers.setContentType(MediaType.APPLICATION_JSON);
-                  HttpEntity<String> request =
-                      new HttpEntity<>(
-                          "{\"ticketTypeId\":\"" + ticketType.getId() + "\",\"quantity\":1}",
-                          headers);
-                  ResponseEntity<String> response =
-                      restTemplate.exchange(
-                          "/api/v1/reservations", HttpMethod.POST, request, String.class);
-                  return HttpStatus.valueOf(response.getStatusCode().value());
-                }));
+            executor.submit(() -> {
+              start.await();
+              HttpHeaders headers = new HttpHeaders();
+              headers.setBearerAuth(token);
+              headers.setContentType(MediaType.APPLICATION_JSON);
+              HttpEntity<String> request =
+                  new HttpEntity<>(
+                      "{\"ticketTypeId\":\"" + ticketType.getId() + "\",\"quantity\":1}", headers);
+              ResponseEntity<String> response =
+                  restTemplate.exchange(
+                      "/api/v1/reservations", HttpMethod.POST, request, String.class);
+              return HttpStatus.valueOf(response.getStatusCode().value());
+            }));
       }
 
       start.countDown();

@@ -121,7 +121,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
       awaitWaitingOnEventRow(canceller, fixture.reservation().eventId(), capture);
 
       try (PreparedStatement cancelEvent =
-          canceller.prepareStatement("UPDATE events SET status = 'CANCELLED' WHERE id = ?");
+              canceller.prepareStatement("UPDATE events SET status = 'CANCELLED' WHERE id = ?");
           PreparedStatement expireReservation =
               canceller.prepareStatement(
                   "UPDATE reservations SET status = 'EXPIRED', inventory_disposition = 'RELEASED'"
@@ -236,22 +236,20 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
       Awaitility.await()
           .atMost(Duration.ofSeconds(10))
           .pollInterval(Duration.ofMillis(25))
-          .untilAsserted(
-              () -> {
-                Integer waiting =
-                    jdbcTemplate.queryForObject(
-                        """
-                        SELECT COUNT(*) FROM pg_stat_activity
-                        WHERE wait_event_type = 'Lock'
-                          AND ? = ANY(pg_blocking_pids(pid))
-                          AND query ILIKE '%FROM orders WHERE id%FOR UPDATE%'
-                        """,
-                        Integer.class,
-                        blockerPid);
-                // Lock order is E → T → R → O: one request can wait on O while
-                // the other is still serialized behind the first request's R lock.
-                assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
-              });
+          .untilAsserted(() -> {
+            Integer waiting =
+                jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*) FROM pg_stat_activity
+                    WHERE wait_event_type = 'Lock'
+                      AND ? = ANY(pg_blocking_pids(pid))
+                      AND query ILIKE '%FROM orders WHERE id%FOR UPDATE%'
+                    """,
+                    Integer.class, blockerPid);
+            // Lock order is E → T → R → O: one request can wait on O while
+            // the other is still serialized behind the first request's R lock.
+            assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
+          });
       blocker.commit();
       CompletableFuture.allOf(first, second).get(10, TimeUnit.SECONDS);
     }

@@ -8,10 +8,10 @@ import com.portfolio.ticketing.common.exception.DuplicateResourceException;
 import com.portfolio.ticketing.event.domain.Event;
 import com.portfolio.ticketing.event.repository.EventRepository;
 import com.portfolio.ticketing.order.api.OrderRequest;
-import com.portfolio.ticketing.order.service.OrderCancellationService;
-import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.repository.OrderExpirationCandidate;
 import com.portfolio.ticketing.order.repository.OrderRepository;
+import com.portfolio.ticketing.order.service.OrderCancellationService;
+import com.portfolio.ticketing.order.service.OrderCreationResult;
 import com.portfolio.ticketing.order.service.OrderExpirationProcessor;
 import com.portfolio.ticketing.order.service.OrderExpirationService;
 import com.portfolio.ticketing.order.service.OrderPaymentService;
@@ -182,19 +182,17 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       Future<?> first =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 orderExpirationProcessor.expire(candidate);
-                return null;
-              });
+            return null;
+          });
       Future<?> second =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 orderExpirationProcessor.expire(candidate);
-                return null;
-              });
+            return null;
+          });
 
       start.countDown();
       first.get(60, TimeUnit.SECONDS);
@@ -228,19 +226,17 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       Future<?> expiration =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 orderExpirationProcessor.expire(candidate);
-                return null;
-              });
+            return null;
+          });
       Future<?> capture =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 orderPaymentService.process(lateCapture);
-                return null;
-              });
+            return null;
+          });
 
       start.countDown();
       expiration.get(60, TimeUnit.SECONDS);
@@ -424,19 +420,17 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       Future<?> firstResult =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 handle(first);
-                return null;
-              });
+            return null;
+          });
       Future<?> secondResult =
-          executor.submit(
-              () -> {
-                start.await();
+          executor.submit(() -> {
+            start.await();
                 handle(second);
-                return null;
-              });
+            return null;
+          });
 
       start.countDown();
       firstResult.get(60, TimeUnit.SECONDS);
