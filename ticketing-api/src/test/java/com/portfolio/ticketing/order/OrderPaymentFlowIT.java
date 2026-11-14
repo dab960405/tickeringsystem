@@ -428,6 +428,54 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture()
+      throws Exception {
+    OrderFixture fixture = createOrder(1);
+    PaymentWebhookRequest earlyRefund =
+        refundWebhook(fixture, PaymentStatus.REFUNDED, "refund-early-" + UUID.randomUUID());
+
+    handle(earlyRefund);
+    assertThat(dispositionForEvent(earlyRefund.providerEventId())).isEqualTo("NO_OP");
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "ACTIVE", 0, 0));
+
+    handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-early-" + UUID.randomUUID()));
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PAID", "SUCCEEDED", "CONFIRMED", 1, 0));
+
+    PaymentWebhookRequest repeated =
+        new PaymentWebhookRequest(
+            earlyRefund.orderId(),
+            earlyRefund.status(),
+            earlyRefund.providerReference(),
+            UUID.randomUUID(),
+            earlyRefund.providerOperationId(),
+            earlyRefund.operationKind(),
+            earlyRefund.amount(),
+            earlyRefund.currency());
+    handle(repeated);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("REFUNDED", "REFUNDED", "CONFIRMED", 1, 0));
+    assertThat(dispositionForEvent(earlyRefund.providerEventId())).isEqualTo("NO_OP");
+    assertThat(dispositionForEvent(repeated.providerEventId())).isEqualTo("APPLIED");
+    assertThat(
+            countRowsByString(
+                "provider_operations", "provider_operation_id", earlyRefund.providerOperationId()))
+        .isEqualTo(1);
+    assertThat(
+            countRowsByString(
+                "semantic_applications", "idempotency_key", earlyRefund.providerOperationId()))
+        .isEqualTo(1);
+    assertThat(
+            queryString(
+                "SELECT t.status FROM tickets t JOIN order_items oi ON t.order_item_id = oi.id"
+                    + " WHERE oi.order_id = ?",
+                fixture.orderId()))
+        .isEqualTo("CANCELLED");
+  }
+
+  @Test
   void should_recordNoOp_whenRefundedEventIsRepeatedWithNewEventId() throws Exception {
     OrderFixture fixture = createOrder(1);
     handle(webhook(fixture, PaymentStatus.SUCCEEDED, "capture-h84-repeat"));
