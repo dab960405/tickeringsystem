@@ -60,11 +60,18 @@ public class OrderPaymentService {
   }
 
   private void processSuccess(Order order, Payment payment, PaymentWebhookRequest request) {
+    if (payment.getStatus() == PaymentStatus.REFUNDED) {
+      return;
+    }
+    if (order.getStatus() == OrderStatus.PAID && payment.getStatus() == PaymentStatus.SUCCEEDED) {
+      requireSameProviderReference(payment, request.providerReference());
+      return;
+    }
     UUID orderId = order.getId();
-    UUID reservationId = order.getReservationId();
-    UUID userId = order.getUserId();
     ReservationConfirmationResult confirmation =
-        reservationService.confirmForPayment(reservationId, userId);
+        order.getStatus() == OrderStatus.CANCELLED
+            ? ReservationConfirmationResult.RECOVERY_NOT_ALLOWED
+            : reservationService.confirmForPayment(order.getReservationId(), order.getUserId());
     LockedOrderPayment locked = lockOrderAndPayment(orderId);
     order = locked.order();
     payment = locked.payment();
