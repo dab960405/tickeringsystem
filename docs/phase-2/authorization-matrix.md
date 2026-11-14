@@ -1,6 +1,6 @@
 # Matriz de autorización — Fase 2
 
-**Estado:** vigente para el código de `dev` revisado el 14-11-2026. La ejecución CI #154 validó los escenarios de aislamiento sobre el SHA `06490392e86866094ee9dddbff450f4e76e646ad`; `dev` tiene después un commit exclusivamente documental.  
+**Estado:** Fase 2 cerrada formalmente el 2026-11-13, con autorización expresa del responsable del proyecto. La ejecución CI #154 validó los escenarios de aislamiento sobre el SHA `06490392e86866094ee9dddbff450f4e76e646ad`; el run #43545520476 validó el HEAD previo al registro de cierre, `7146517ef80f3fe350a57d00e272f66b59ffc923`.  
 **Fuente de verdad:** SecurityConfig, @PreAuthorize de los servicios y pruebas HTTP/IT asociadas.  
 **Objetivo:** describir las reglas efectivas; no sustituye la ejecución de las pruebas.
 
@@ -73,7 +73,7 @@ Las rutas no enumeradas quedan sujetas a .anyRequest().authenticated(); deben a�
 2. Las operaciones de propietario derivan la identidad del JWT, nunca de un ID de usuario suministrado por el cliente.
 3. Los recursos privados ajenos no pueden consultarse ni modificarse; se aplica el 404 de ocultación documentado.
 4. Las pruebas de integración usan dos identidades autenticadas reales para acreditar aislamiento.
-5. `./mvnw -B clean verify` termina correctamente en CI para el SHA de código validado; run #154 probó `06490392e86866094ee9dddbff450f4e76e646ad`. El HEAD posterior `c25e0d323edf32e86b3590df0131d0fe87181b29` solo añade este registro documental y debe tener su propia ejecución CI si el workflow se dispara para cambios de documentación.
+5. `./mvnw -B clean verify` termina correctamente en CI para el SHA de código validado: run #154 probó `06490392e86866094ee9dddbff450f4e76e646ad`; el run #43545520476 validó el HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923`, incluidos los commits documentales previos.
 6. La evidencia de pruebas y cobertura se registra en docs/PROGRESS.md.
 
-La matriz no declara la Fase 2 cerrada por sí sola. La CI #154 ejecutó 479 tests (379 Surefire y 100 Failsafe), con 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo finalizaron correctamente. El cierre formal requiere confirmar que el HEAD vigente de `dev` mantiene esa evidencia y resolver la brecha de cobertura exhaustiva método × rol × estado si la especificación la exige.
+La brecha de una suite exhaustiva método × rol × estado queda registrada como mejora no bloqueante: la especificación de Fase 2 exige una matriz de tests por rol y que un usuario no pueda operar sobre recursos ajenos, pero no exige cubrir cada combinación en una suite única. La CI #154 ejecutó 479 tests (379 Surefire y 100 Failsafe), con 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo finalizaron correctamente. El run #43545520476 confirmó `BUILD SUCCESS`, Spotless, JaCoCo y 100 tests Failsafe sin fallos en el HEAD previo al registro de cierre. **Fase 2: cerrada formalmente.**

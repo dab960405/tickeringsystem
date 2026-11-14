@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
 
-> **Estado (2026-11-14):** Fases 0–1 completadas. Fase 2 implementada; las pruebas de aislamiento y autorización pasaron en CI #154 (479 tests, 0 fallos/errores), pero el cierre formal sigue pendiente de verificar el HEAD vigente de `dev` y completar la revisión de aceptación. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado.
+> **Estado (2026-11-13):** Fases 0–2 completadas. Fase 2 cerrada formalmente tras validar los criterios de autorización, propiedad de recursos y aislamiento con JWT reales, respaldados por CI #154 y #43545520476. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado y continúa bloqueada.
 
 ## Documentación
 
@@ -95,7 +95,7 @@ Cobertura JaCoCo de paquetes de `ticketing-api`, desde el XML del artefacto `jac
 | `domain` | 291 / 296 | **98,31 %** | 84 / 101 | 83,17 % |
 
 
-**CI #154 — verificación de Fase 2:** 379 tests Surefire y 100 Failsafe; 479 en total, con 0 fallos, 0 errores y 0 omitidos. Spotless pasó y JaCoCo confirmó que se cumplieron los checks de cobertura. El SHA probado es el de código; los commits documentales posteriores y el HEAD actual deben verificarse antes de declarar el cierre formal.
+**CI #154 — verificación de Fase 2:** 379 tests Surefire y 100 Failsafe; 479 en total, con 0 fallos, 0 errores y 0 omitidos. Spotless pasó y JaCoCo confirmó que se cumplieron los checks de cobertura. El run #43545520476 validó el HEAD previo al registro de cierre (`7146517ef80f3fe350a57d00e272f66b59ffc923`): `BUILD SUCCESS`, Spotless correcto, checks JaCoCo cumplidos y 100 tests Failsafe sin fallos. Con la autorización expresa del responsable, Fase 2 queda cerrada formalmente.
 
 Los runs documentales posteriores no modificaron código funcional. El detalle de CI y los estados por criterio están en [docs/PROGRESS.md](docs/PROGRESS.md).
 
@@ -109,7 +109,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
-- [ ] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; **pruebas de aislamiento validadas en CI #154 (479 tests, 0 fallos/errores); cierre formal pendiente** de verificar CI para el HEAD vigente de `dev` y completar la revisión de aceptación.
+- [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
 - [ ] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets implementado. **Fase pendiente de completar:** ejecutar y verificar el hardening del ciclo de cancelación de eventos.
 - [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.

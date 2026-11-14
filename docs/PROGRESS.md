@@ -175,7 +175,7 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 
 ## Fase 2 — auditoría de cierre y correcciones de autorización (2026-11-13)
 
-**Estado: implementación de cierre publicada; aceptación final pendiente de CI.** La Fase 2 no se declara cerrada hasta verificar el workflow completo del HEAD final.
+**Estado: CERRADA FORMALMENTE el 2026-11-13**, tras autorización expresa del responsable del proyecto. Los criterios de aceptación de la especificación fueron contrastados con la matriz, el ADR-021, las pruebas y la evidencia de CI.
 
 ### Alcance realizado en dev
 
@@ -200,13 +200,14 @@ Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante
 - `87d92f5a0f9c9c034c1b7aa910eb86d5289c81c0` — ADR-021 actualizado con la evidencia prevista.
 - `75f69668859be13c3a5f8a76b5ddb98e892a4377` — README y roadmap corregidos.
 
-### Verificación pendiente
+### Verificación y fundamento del cierre
 
-- No se ejecutó Maven/Testcontainers en este entorno; no afirmar que las pruebas pasan.
-- La evidencia de CI debe corresponder al HEAD final después de actualizar este documento.
-- Revisar el resultado de `./mvnw -B clean verify`, incluyendo Spotless, Surefire, Failsafe y JaCoCo.
-- Si CI falla, corregir el defecto, añadir/ajustar pruebas y publicar cada incremento mediante commit y push inmediato a `dev`.
-- La matriz identifica que la cobertura HTTP de cada celda método × rol no está consolidada en una suite única. Se deben revisar los casos que CI revele, sin duplicar pruebas existentes.
+- La especificación original, sección 22, define la aceptación de Fase 2 como «matriz de tests por rol; un usuario no puede tocar recursos ajenos». No exige una suite única que cubra exhaustivamente el producto cartesiano método × rol × estado.
+- La matriz clasifica las rutas funcionales por método y rol, y registra las restricciones de propiedad y respuestas esperadas.
+- `AuthenticationFlowIT` verifica aislamiento entre dos organizadores y entre dos usuarios mediante JWT reales.
+- CI #154, SHA `06490392e86866094ee9dddbff450f4e76e646ad`: 479 tests (379 Surefire y 100 Failsafe), 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo correctos.
+- CI #43545520476 validó el HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923`: workflow completado con éxito, `BUILD SUCCESS`, Spotless correcto, checks JaCoCo cumplidos y 100 tests Failsafe sin fallos.
+- La cobertura exhaustiva de todas las celdas método × rol × estado se conserva como mejora no bloqueante, no como criterio adicional inventado.
 
 ### Dictamen
 
