@@ -73,6 +73,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
       nativeQuery = true)
   int expireActive(@Param("id") UUID id, @Param("now") Instant now);
 
+  @Query(value = "SELECT * FROM reservations WHERE id = :id FOR UPDATE", nativeQuery = true)
+  Optional<Reservation> findByIdForUpdate(@Param("id") UUID id);
+
   @Query(
       value = "SELECT * FROM reservations WHERE id = :id AND user_id = :userId FOR UPDATE",
       nativeQuery = true)
