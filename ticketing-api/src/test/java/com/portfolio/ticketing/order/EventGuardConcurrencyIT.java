@@ -206,7 +206,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
 
     jdbcTemplate.execute(
         """
-        CREATE OR REPLACE FUNCTION fail_event_stock_restore() RETURNS trigger AS $
+        CREATE OR REPLACE FUNCTION fail_event_stock_restore() RETURNS trigger AS $body$
         BEGIN
           IF NEW.id = TG_ARGV[0]::uuid
               AND NEW.available_quantity > OLD.available_quantity THEN
@@ -214,7 +214,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
           END IF;
           RETURN NEW;
         END;
-        $ LANGUAGE plpgsql
+        $body$ LANGUAGE plpgsql
         """);
     jdbcTemplate.execute(
         "CREATE TRIGGER fail_event_stock_restore_trigger BEFORE UPDATE ON ticket_types "
