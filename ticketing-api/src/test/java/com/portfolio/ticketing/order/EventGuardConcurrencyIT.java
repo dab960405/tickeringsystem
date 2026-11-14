@@ -212,11 +212,43 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
     eventCancellationService.cancel(fixture.reservation().eventId());
     PaymentWebhookRequest request = capture(fixture);
 
-    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    try (Connection blocker = dataSource.getConnection();
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      blocker.setAutoCommit(false);
+      int blockerPid;
+      try (PreparedStatement lock =
+          blocker.prepareStatement("SELECT id FROM orders WHERE id = ? FOR UPDATE")) {
+        lock.setObject(1, fixture.orderId());
+        lock.executeQuery().close();
+      }
+      try (PreparedStatement pid = blocker.prepareStatement("SELECT pg_backend_pid()");
+          var result = pid.executeQuery()) {
+        result.next();
+        blockerPid = result.getInt(1);
+      }
+
       CompletableFuture<Void> first =
           CompletableFuture.runAsync(() -> orderPaymentService.process(request), executor);
       CompletableFuture<Void> second =
           CompletableFuture.runAsync(() -> orderPaymentService.process(request), executor);
+      Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .pollInterval(Duration.ofMillis(25))
+          .untilAsserted(
+              () -> {
+                Integer waiting =
+                    jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*) FROM pg_stat_activity
+                        WHERE wait_event_type = 'Lock'
+                          AND ? = ANY(pg_blocking_pids(pid))
+                          AND query ILIKE '%FROM orders WHERE id%FOR UPDATE%'
+                        """,
+                        Integer.class,
+                        blockerPid);
+                assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(2);
+              });
+      blocker.commit();
       CompletableFuture.allOf(first, second).get(10, TimeUnit.SECONDS);
     }
 
