@@ -20,14 +20,15 @@ import com.portfolio.ticketing.payment.domain.Payment;
 import com.portfolio.ticketing.payment.domain.PaymentStatus;
 import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.reservation.domain.Reservation;
+import com.portfolio.ticketing.reservation.service.ReservationReleaseResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import jakarta.persistence.EntityManager;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import jakarta.persistence.EntityManager;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +68,8 @@ class OrderCancellationServiceTest {
     Order order = order(OrderStatus.PENDING_PAYMENT);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
     when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
+    when(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
+        .thenReturn(ReservationReleaseResult.RELEASED);
     when(orderRepository.save(order)).thenReturn(order);
 
     OrderResponse response = cancellationService.cancel(ORDER_ID, USER_ID);
@@ -74,6 +77,20 @@ class OrderCancellationServiceTest {
     assertThat(response.status()).isEqualTo(OrderStatus.CANCELLED);
     verify(reservationService).releaseForPayment(RESERVATION_ID, USER_ID);
     verifyNoInteractions(paymentService, ticketService);
+  }
+
+  @Test
+  void should_rejectCancellation_when_reservationWasAlreadyConfirmed() {
+    Order order = order(OrderStatus.PENDING_PAYMENT);
+    when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
+    when(reservationService.releaseForPayment(RESERVATION_ID, USER_ID))
+        .thenReturn(ReservationReleaseResult.CONFIRMED);
+
+    assertThatThrownBy(() -> cancellationService.cancel(ORDER_ID, USER_ID))
+        .isInstanceOf(InvalidStateTransitionException.class);
+
+    verify(orderRepository, never()).lockById(ORDER_ID);
+    verify(orderRepository, never()).save(order);
   }
 
   @Test
