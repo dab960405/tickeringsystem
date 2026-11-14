@@ -28,16 +28,19 @@ public class EventService {
   private final VenueService venueService;
   private final TicketTypeQueryService ticketTypeQueryService;
   private final EventCatalogCacheService eventCatalogCacheService;
+  private final EventCancellationService eventCancellationService;
 
   public EventService(
       EventRepository eventRepository,
       VenueService venueService,
       TicketTypeQueryService ticketTypeQueryService,
-      EventCatalogCacheService eventCatalogCacheService) {
+      EventCatalogCacheService eventCatalogCacheService,
+      EventCancellationService eventCancellationService) {
     this.eventRepository = eventRepository;
     this.venueService = venueService;
     this.ticketTypeQueryService = ticketTypeQueryService;
     this.eventCatalogCacheService = eventCatalogCacheService;
+    this.eventCancellationService = eventCancellationService;
   }
 
   public PageResponse<EventSummaryResponse> listPublished(EventFilter filter, Pageable pageable) {
@@ -111,14 +114,15 @@ public class EventService {
     return response;
   }
 
-  // Expiring the event's active reservations and emitting EventCancelled arrive with the
-  // reservation (phase 3) and outbox (phase 4) modules.
+  /**
+   * Cancels the event and resolves active reservations/pending orders atomically. Provider payment
+   * state is not changed because event cancellation is not financial evidence.
+   */
   @PreAuthorize("@eventAuthorizationService.canManage(#id, authentication)")
   @Transactional
   public EventDetailResponse cancel(UUID id) {
-    Event event = findEvent(id);
-    event.cancel();
-    EventDetailResponse response = toDetail(event);
+    eventCancellationService.cancel(id);
+    EventDetailResponse response = toDetail(findEvent(id));
     eventCatalogCacheService.evictAll();
     return response;
   }
