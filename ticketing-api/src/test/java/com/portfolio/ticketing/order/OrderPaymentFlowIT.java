@@ -49,7 +49,11 @@ import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
-@TestPropertySource(properties = "ticketing.reservation.expiration-fixed-delay-ms=600000")
+@TestPropertySource(
+    properties = {
+      "ticketing.reservation.expiration-fixed-delay-ms=600000",
+      "ticketing.order.expiration-fixed-delay-ms=600000"
+    })
 class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
   @Autowired private ReservationService reservationService;
@@ -159,6 +163,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
         fixture.reservationId());
     expirationService.expireOverdue();
 
+    orderExpirationService.expireOverdue();
     orderExpirationService.expireOverdue();
 
     assertThat(paymentFlowResult(fixture))
