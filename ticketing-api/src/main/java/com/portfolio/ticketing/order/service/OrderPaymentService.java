@@ -108,8 +108,13 @@ public class OrderPaymentService {
   }
 
   private void processFailure(Order order, Payment payment) {
+    InvalidStateTransitionException releaseFailure = null;
     if (order.getStatus() == OrderStatus.PENDING_PAYMENT) {
-      reservationService.releaseForPayment(order.getReservationId(), order.getUserId());
+      try {
+        reservationService.releaseForPayment(order.getReservationId(), order.getUserId());
+      } catch (InvalidStateTransitionException resolvedReservation) {
+        releaseFailure = resolvedReservation;
+      }
     }
     LockedOrderPayment locked = lockOrderAndPayment(order.getId());
     order = locked.order();
@@ -126,6 +131,9 @@ public class OrderPaymentService {
       payment.markFailed();
       paymentService.save(payment);
       return;
+    }
+    if (releaseFailure != null) {
+      throw releaseFailure;
     }
     requirePending(order, payment);
     order.cancel();
