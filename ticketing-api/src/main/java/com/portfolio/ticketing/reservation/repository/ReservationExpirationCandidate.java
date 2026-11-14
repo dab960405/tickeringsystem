@@ -6,4 +6,6 @@ public interface ReservationExpirationCandidate {
   UUID getId();
 
   UUID getTicketTypeId();
+
+  UUID getEventId();
 }
