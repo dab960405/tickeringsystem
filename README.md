@@ -4,7 +4,7 @@
 
 Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
 
-> **Estado (2026-11-13):** Fases 0–1 completadas. Fase 2 implementada; su cierre formal está pendiente de validar en CI las nuevas pruebas de aislamiento y autorización. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado.
+> **Estado (2026-11-14):** Fases 0–1 completadas. Fase 2 implementada; las pruebas de aislamiento y autorización pasaron en CI #154 (479 tests, 0 fallos/errores), pero el cierre formal sigue pendiente de verificar el HEAD vigente de `dev` y completar la revisión de aceptación. El alcance principal de Fase 3 está implementado; el hardening de cancelación de eventos sigue pendiente. Fase 4 permanece abierta. Fase 5 no ha comenzado.
 
 ## Documentación
 
@@ -77,7 +77,7 @@ La degradación y sus límites están documentados en [ADR-014](docs/adr/ADR-014
 
 ## Evidencia CI de código
 
-La evidencia cuantitativa más reciente corresponde al commit de código `aabc02301deda4b983c5f3e56af00ed4ecd717ec`, [GitHub Actions run #116](https://github.com/dab960405/tickeringsystem/actions/runs/43046441594), rama `dev`, conclusión `success`. Los conteos proceden de los XML del artefacto `test-reports` de esa ejecución.
+La evidencia cuantitativa histórica de Fase 4 corresponde al commit `aabc02301deda4b983c5f3e56af00ed4ecd717ec` (run #116). Para Fase 2, la evidencia más reciente es [GitHub Actions run #154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946), SHA `06490392e86866094ee9dddbff450f4e76e646ad`, rama `dev`, conclusión `success`. Los conteos de esta ejecución proceden de los XML del artefacto `test-reports`:
 
 | Suite | Ejecutados | Fallidos | Errores | Omitidos |
 | --- | ---: | ---: | ---: | ---: |
@@ -94,6 +94,9 @@ Cobertura JaCoCo de paquetes de `ticketing-api`, desde el XML del artefacto `jac
 | `service` | 501 / 522 | **95,98 %** | 126 / 151 | 83,44 % |
 | `domain` | 291 / 296 | **98,31 %** | 84 / 101 | 83,17 % |
 
+
+**CI #154 — verificación de Fase 2:** 379 tests Surefire y 100 Failsafe; 479 en total, con 0 fallos, 0 errores y 0 omitidos. Spotless pasó y JaCoCo confirmó que se cumplieron los checks de cobertura. El SHA probado es el de código; los commits documentales posteriores y el HEAD actual deben verificarse antes de declarar el cierre formal.
+
 Los runs documentales posteriores no modificaron código funcional. El detalle de CI y los estados por criterio están en [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Concurrencia
@@ -106,7 +109,7 @@ El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. 
 
 - [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
 - [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
-- [ ] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; **cierre formal pendiente:** CI debe validar pruebas de aislamiento entre dos organizadores y dos usuarios con JWT reales.
+- [ ] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; **pruebas de aislamiento validadas en CI #154 (479 tests, 0 fallos/errores); cierre formal pendiente** de verificar CI para el HEAD vigente de `dev` y completar la revisión de aceptación.
 - [ ] Fase 3: alcance principal de reservas y órdenes, inventario concurrente, expiración, idempotencia, webhook HMAC, pagos y tickets implementado. **Fase pendiente de completar:** ejecutar y verificar el hardening del ciclo de cancelación de eventos.
 - [ ] Fase 4: implementación y evidencia CI completadas; **pendiente confirmación explícita de cierre**.
 - [ ] Fase 5: publicación transaccional outbox, Kafka y consumidor `notification-service`.
