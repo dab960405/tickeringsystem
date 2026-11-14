@@ -81,7 +81,7 @@ class ReservationEventLockIT extends AbstractIntegrationTest {
       CompletableFuture<Void> reservation =
           CompletableFuture.runAsync(() -> reserve(fixture, 1), executor);
 
-      awaitWaitingOnEventRow(fixture.eventId());
+      awaitWaitingOnEventRow(canceller, fixture.eventId());
       assertThat(reservation).isNotDone();
       assertThat(ticketTypeIsUnlocked(fixture.ticketTypeId()))
           .as("T must not be locked while the reservation waits for E")
@@ -106,7 +106,7 @@ class ReservationEventLockIT extends AbstractIntegrationTest {
 
       CompletableFuture<Void> reservation =
           CompletableFuture.runAsync(() -> reserve(fixture, 1), executor);
-      awaitWaitingOnEventRow(fixture.eventId());
+      awaitWaitingOnEventRow(canceller, fixture.eventId());
 
       try (PreparedStatement cancel =
           canceller.prepareStatement("UPDATE events SET status = 'CANCELLED' WHERE id = ?")) {
