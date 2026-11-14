@@ -126,11 +126,11 @@ public class OrderPaymentService {
         || payment.getStatus() == PaymentStatus.REFUNDED) {
       return;
     }
-    if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
-      return;
-    }
     if (releaseResult == ReservationReleaseResult.CONFIRMED) {
       throw new InvalidStateTransitionException("A confirmed reservation cannot be released");
+    }
+    if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.FAILED) {
+      return;
     }
     if (order.getStatus() == OrderStatus.CANCELLED && payment.getStatus() == PaymentStatus.PENDING) {
       payment.markFailed();
