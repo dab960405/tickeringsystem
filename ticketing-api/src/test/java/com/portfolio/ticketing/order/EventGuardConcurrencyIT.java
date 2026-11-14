@@ -18,6 +18,7 @@ import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult;
 import com.portfolio.ticketing.reservation.service.ReservationExpirationService;
+import com.portfolio.ticketing.reservation.service.ReservationRedisProjectionService;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -66,6 +68,7 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   @Autowired private TicketTypeRepository ticketTypeRepository;
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private StringRedisTemplate redisTemplate;
   @Autowired private DataSource dataSource;
 
   @AfterEach
@@ -176,8 +179,13 @@ class EventGuardConcurrencyIT extends AbstractIntegrationTest {
   @Test
   void should_expireActiveReservationsAndCancelPendingOrders_when_eventIsCancelled() {
     OrderFixture fixture = createOrder(createReservation(2));
+    String projectionKey =
+        ReservationRedisProjectionService.KEY_PREFIX + fixture.reservation().reservationId();
+    assertThat(redisTemplate.hasKey(projectionKey)).isTrue();
 
     eventCancellationService.cancel(fixture.reservation().eventId());
+
+    assertThat(redisTemplate.hasKey(projectionKey)).isFalse();
 
     assertThat(outcome(fixture))
         .isEqualTo(new Outcome("CANCELLED", "PENDING", "EXPIRED", "PENDING", 0, 2));

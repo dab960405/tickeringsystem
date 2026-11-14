@@ -12,6 +12,7 @@ import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
+import com.portfolio.ticketing.reservation.service.ReservationRedisProjectionService;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +39,7 @@ public class EventCancellationService {
   private final EventLockService eventLockService;
   private final TicketTypeInventoryService inventoryService;
   private final ReservationRepository reservationRepository;
+  private final ReservationRedisProjectionService redisProjectionService;
   private final OrderRepository orderRepository;
   private final JdbcTemplate jdbcTemplate;
 
@@ -46,12 +48,14 @@ public class EventCancellationService {
       EventLockService eventLockService,
       TicketTypeInventoryService inventoryService,
       ReservationRepository reservationRepository,
+      ReservationRedisProjectionService redisProjectionService,
       OrderRepository orderRepository,
       JdbcTemplate jdbcTemplate) {
     this.eventRepository = eventRepository;
     this.eventLockService = eventLockService;
     this.inventoryService = inventoryService;
     this.reservationRepository = reservationRepository;
+    this.redisProjectionService = redisProjectionService;
     this.orderRepository = orderRepository;
     this.jdbcTemplate = jdbcTemplate;
   }
@@ -140,6 +144,8 @@ public class EventCancellationService {
     }
     if (!activeReservations.isEmpty()) {
       reservationRepository.saveAllAndFlush(activeReservations);
+      activeReservations.forEach(
+          reservation -> redisProjectionService.deleteAfterCommit(reservation.getId()));
     }
 
     for (ReservationCandidate candidate : reservations) {

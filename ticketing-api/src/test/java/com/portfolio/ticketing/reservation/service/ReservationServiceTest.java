@@ -51,6 +51,7 @@ class ReservationServiceTest {
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
   @Mock private EventLockService eventLockService;
+  @Mock private ReservationRedisProjectionService redisProjectionService;
 
   private ReservationService reservationService;
 
@@ -64,6 +65,7 @@ class ReservationServiceTest {
             inventoryService,
             eventLockService,
             properties,
+            redisProjectionService,
             Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
@@ -128,6 +130,7 @@ class ReservationServiceTest {
             ReservationResponse::expiresAt)
         .containsExactly(TICKET_TYPE_ID, 2, ReservationStatus.ACTIVE, NOW.plusSeconds(600));
     verify(inventoryService).reserve(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).writeActiveAfterCommit(null, NOW.plusSeconds(600));
   }
 
   @Test
@@ -189,6 +192,7 @@ class ReservationServiceTest {
     reservationService.cancel(RESERVATION_ID, USER_ID);
 
     verify(inventoryService).release(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test

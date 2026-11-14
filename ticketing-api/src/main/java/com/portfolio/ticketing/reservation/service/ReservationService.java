@@ -30,6 +30,7 @@ public class ReservationService {
   private final TicketTypeInventoryService inventoryService;
   private final EventLockService eventLockService;
   private final ReservationProperties properties;
+  private final ReservationRedisProjectionService redisProjectionService;
   private final Clock clock;
 
   public ReservationService(
@@ -37,11 +38,13 @@ public class ReservationService {
       TicketTypeInventoryService inventoryService,
       EventLockService eventLockService,
       ReservationProperties properties,
+      ReservationRedisProjectionService redisProjectionService,
       Clock clock) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
     this.eventLockService = eventLockService;
     this.properties = properties;
+    this.redisProjectionService = redisProjectionService;
     this.clock = clock;
   }
 
@@ -59,7 +62,9 @@ public class ReservationService {
             ticketType,
             request.quantity(),
             now.plusSeconds(properties.getTtlMinutes() * 60));
-    return ReservationResponse.from(reservationRepository.save(reservation));
+    Reservation saved = reservationRepository.save(reservation);
+    redisProjectionService.writeActiveAfterCommit(saved.getId(), saved.getExpiresAt());
+    return ReservationResponse.from(saved);
   }
 
   @PreAuthorize("hasRole('USER')")
@@ -77,6 +82,7 @@ public class ReservationService {
       throw new InvalidStateTransitionException("Reservation is no longer active");
     }
     inventoryService.release(ticketTypeId, reservation.getQuantity());
+    redisProjectionService.deleteAfterCommit(id);
   }
 
   /**
@@ -154,6 +160,7 @@ public class ReservationService {
     if (reservationRepository.confirmRecovered(id, userId) == 0) {
       throw new InvalidStateTransitionException("Reservation is no longer available for payment");
     }
+    redisProjectionService.deleteAfterCommit(id);
     return ReservationConfirmationResult.CONFIRMED;
   }
 
@@ -185,6 +192,7 @@ public class ReservationService {
       throw new InvalidStateTransitionException("Active reservation could not be released");
     }
     inventoryService.release(ticketTypeId, reservation.getQuantity());
+    redisProjectionService.deleteAfterCommit(id);
     return ReservationReleaseResult.RELEASED;
   }
 
@@ -198,6 +206,7 @@ public class ReservationService {
     if (reservationRepository.confirmActive(id, userId, evaluationTime) == 0) {
       throw new InvalidStateTransitionException("Reservation is no longer active for payment");
     }
+    redisProjectionService.deleteAfterCommit(id);
   }
 
   /**
@@ -213,6 +222,7 @@ public class ReservationService {
       throw new InvalidStateTransitionException("Reservation could not be released for event");
     }
     inventoryService.release(reservation.ticketTypeId(), reservation.quantity());
+    redisProjectionService.deleteAfterCommit(id);
   }
 
   private void expireActiveReservation(LockedReservation reservation, Instant evaluationTime) {
@@ -220,6 +230,7 @@ public class ReservationService {
       throw new InvalidStateTransitionException("Reservation could not be expired for recovery");
     }
     inventoryService.release(reservation.ticketTypeId(), reservation.quantity());
+    redisProjectionService.deleteAfterCommit(reservation.id());
   }
 
   /**

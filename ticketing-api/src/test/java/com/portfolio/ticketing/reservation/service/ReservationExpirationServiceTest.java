@@ -38,6 +38,7 @@ class ReservationExpirationServiceTest {
   @Mock private ReservationRepository reservationRepository;
   @Mock private TicketTypeInventoryService inventoryService;
   @Mock private EventLockService eventLockService;
+  @Mock private ReservationRedisProjectionService redisProjectionService;
 
   private ReservationExpirationService expirationService;
 
@@ -48,6 +49,7 @@ class ReservationExpirationServiceTest {
             reservationRepository,
             inventoryService,
             eventLockService,
+            redisProjectionService,
             Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
@@ -66,6 +68,7 @@ class ReservationExpirationServiceTest {
     order.verify(reservationRepository).databaseNow();
     order.verify(reservationRepository).expireActive(RESERVATION_ID, NOW);
     order.verify(inventoryService).release(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test
@@ -77,6 +80,7 @@ class ReservationExpirationServiceTest {
     expirationService.expireOverdue();
 
     verify(inventoryService, never()).release(TICKET_TYPE_ID, 2);
+    verify(redisProjectionService, never()).deleteAfterCommit(RESERVATION_ID);
   }
 
   @Test

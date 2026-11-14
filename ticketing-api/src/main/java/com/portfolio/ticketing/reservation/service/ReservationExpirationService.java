@@ -27,16 +27,19 @@ public class ReservationExpirationService {
   private final ReservationRepository reservationRepository;
   private final TicketTypeInventoryService inventoryService;
   private final EventLockService eventLockService;
+  private final ReservationRedisProjectionService redisProjectionService;
   private final Clock clock;
 
   public ReservationExpirationService(
       ReservationRepository reservationRepository,
       TicketTypeInventoryService inventoryService,
       EventLockService eventLockService,
+      ReservationRedisProjectionService redisProjectionService,
       Clock clock) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
     this.eventLockService = eventLockService;
+    this.redisProjectionService = redisProjectionService;
     this.clock = clock;
   }
 
@@ -95,6 +98,7 @@ public class ReservationExpirationService {
       }
       if (reservationRepository.expireActive(reservation.getId(), evaluationTime) == 1) {
         inventoryService.release(candidateTicketTypeId, reservation.getQuantity());
+        redisProjectionService.deleteAfterCommit(reservation.getId());
       }
     }
   }

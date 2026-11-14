@@ -24,6 +24,7 @@ import com.portfolio.ticketing.reservation.api.ReservationRequest;
 import com.portfolio.ticketing.reservation.api.ReservationResponse;
 import com.portfolio.ticketing.reservation.config.ReservationProperties;
 import com.portfolio.ticketing.reservation.service.ReservationExpirationService;
+import com.portfolio.ticketing.reservation.service.ReservationRedisProjectionService;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -82,6 +84,7 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   @Autowired private EventRepository eventRepository;
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private StringRedisTemplate redisTemplate;
 
   @Test
   void should_returnOriginalOrderAndPayment_when_idempotencyKeyIsRepeated() {
@@ -166,6 +169,22 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
 
     assertThat(paymentFlowResult(fixture))
         .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "EXPIRED", 0, 1));
+  }
+
+  @Test
+  void should_deleteReservationProjection_when_orderExpirationResolvesActiveReservation() {
+    OrderFixture fixture = createOrder(1);
+    String projectionKey = ReservationRedisProjectionService.KEY_PREFIX + fixture.reservationId();
+    assertThat(redisTemplate.hasKey(projectionKey)).isTrue();
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
+        fixture.reservationId());
+
+    orderExpirationService.expireOverdue();
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "PENDING", "EXPIRED", 0, 1));
+    assertThat(redisTemplate.hasKey(projectionKey)).isFalse();
   }
 
   @Test

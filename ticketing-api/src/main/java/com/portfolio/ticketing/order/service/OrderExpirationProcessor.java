@@ -11,6 +11,7 @@ import com.portfolio.ticketing.reservation.domain.Reservation;
 import com.portfolio.ticketing.reservation.domain.ReservationInventoryDisposition;
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
+import com.portfolio.ticketing.reservation.service.ReservationRedisProjectionService;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
@@ -24,6 +25,7 @@ public class OrderExpirationProcessor {
   private final TicketTypeInventoryService inventoryService;
   private final ReservationRepository reservationRepository;
   private final OrderRepository orderRepository;
+  private final ReservationRedisProjectionService redisProjectionService;
   private final EntityManager entityManager;
 
   public OrderExpirationProcessor(
@@ -31,11 +33,13 @@ public class OrderExpirationProcessor {
       TicketTypeInventoryService inventoryService,
       ReservationRepository reservationRepository,
       OrderRepository orderRepository,
+      ReservationRedisProjectionService redisProjectionService,
       EntityManager entityManager) {
     this.eventLockService = eventLockService;
     this.inventoryService = inventoryService;
     this.reservationRepository = reservationRepository;
     this.orderRepository = orderRepository;
+    this.redisProjectionService = redisProjectionService;
     this.entityManager = entityManager;
   }
 
@@ -68,6 +72,7 @@ public class OrderExpirationProcessor {
         return;
       }
       inventoryService.release(candidate.getTicketTypeId(), reservation.getQuantity());
+      redisProjectionService.deleteAfterCommit(reservation.getId());
     } else if (reservation.getStatus() == ReservationStatus.CANCELLED
         && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED) {
       return;
