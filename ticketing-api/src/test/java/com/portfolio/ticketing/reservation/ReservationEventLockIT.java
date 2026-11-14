@@ -17,6 +17,7 @@ import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,8 +45,6 @@ import org.springframework.transaction.IllegalTransactionStateException;
 @SpringBootTest
 @TestPropertySource(properties = "ticketing.reservation.expiration-fixed-delay-ms=600000")
 class ReservationEventLockIT extends AbstractIntegrationTest {
-
-  private static final Duration BLOCKED_WINDOW = Duration.ofMillis(750);
 
   @Autowired private ReservationService reservationService;
   @Autowired private EventLockService eventLockService;
@@ -167,27 +167,35 @@ class ReservationEventLockIT extends AbstractIntegrationTest {
   }
 
   /** Polls pg_locks/pg_stat_activity until a backend is blocked on the event row. */
-  private void awaitWaitingOnEventRow(UUID eventId) throws InterruptedException {
-    Instant deadline = Instant.now().plusSeconds(10);
-    while (Instant.now().isBefore(deadline)) {
-      Integer waiting =
-          jdbcTemplate.queryForObject(
-              """
-              SELECT COUNT(*) FROM pg_stat_activity
-              WHERE wait_event_type = 'Lock'
-                AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
-              """,
-              Integer.class);
-      if (waiting != null && waiting > 0) {
-        Thread.sleep(BLOCKED_WINDOW.toMillis());
-        return;
-      }
-      Thread.sleep(25);
+  private void awaitWaitingOnEventRow(Connection blocker, UUID eventId) throws SQLException {
+    int blockerPid;
+    try (Statement statement = blocker.createStatement();
+        ResultSet result = statement.executeQuery("SELECT pg_backend_pid()")) {
+      result.next();
+      blockerPid = result.getInt(1);
     }
-    throw new AssertionError("Reservation never blocked on event " + eventId);
+
+    Awaitility.await()
+        .alias("reservation waits for event row " + eventId)
+        .atMost(Duration.ofSeconds(10))
+        .pollInterval(Duration.ofMillis(25))
+        .until(
+            () -> {
+              Integer waiting =
+                  jdbcTemplate.queryForObject(
+                      """
+                      SELECT COUNT(*) FROM pg_stat_activity
+                      WHERE wait_event_type = 'Lock'
+                        AND ? = ANY(pg_blocking_pids(pid))
+                        AND query ILIKE '%FROM events WHERE id%FOR SHARE%'
+                      """,
+                      Integer.class,
+                      blockerPid);
+              return waiting != null && waiting > 0;
+            });
   }
 
-  private boolean ticketTypeIsUnlocked(UUID ticketTypeId) throws SQLException {
+  ate boolean ticketTypeIsUnlocked(UUID ticketTypeId) throws SQLException {
     try (Connection probe = dataSource.getConnection()) {
       probe.setAutoCommit(false);
       try (Statement timeout = probe.createStatement()) {
