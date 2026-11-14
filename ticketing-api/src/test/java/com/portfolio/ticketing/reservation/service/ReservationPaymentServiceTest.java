@@ -99,6 +99,20 @@ class ReservationPaymentServiceTest {
   }
 
   @Test
+  void should_allowRecovery_atExactGraceBoundary() {
+    Reservation reservation = reservation(ReservationStatus.EXPIRED);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        reservation, "expiresAt", NOW.minusSeconds(900));
+    stubLockedReservation(reservation);
+    when(inventoryService.tryReserve(TICKET_TYPE_ID, 2)).thenReturn(true);
+    when(reservationRepository.confirmRecovered(RESERVATION_ID, USER_ID)).thenReturn(1);
+
+    assertThat(reservationService.confirmForPayment(RESERVATION_ID, USER_ID))
+        .isEqualTo(ReservationConfirmationResult.CONFIRMED);
+    verify(inventoryService).tryReserve(TICKET_TYPE_ID, 2);
+  }
+
+  @Test
   void should_rejectRecovery_when_graceWindowHasElapsed() {
     Reservation reservation = reservation(ReservationStatus.EXPIRED);
     org.springframework.test.util.ReflectionTestUtils.setField(
