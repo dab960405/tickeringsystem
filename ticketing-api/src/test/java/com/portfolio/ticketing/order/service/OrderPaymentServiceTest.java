@@ -24,6 +24,7 @@ import com.portfolio.ticketing.payment.domain.PaymentStatus;
 import com.portfolio.ticketing.payment.domain.ProviderOperationKind;
 import com.portfolio.ticketing.payment.service.PaymentService;
 import com.portfolio.ticketing.reservation.service.ReservationConfirmationResult;
+import com.portfolio.ticketing.reservation.service.ReservationReleaseResult;
 import com.portfolio.ticketing.reservation.service.ReservationService;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -170,7 +171,7 @@ class OrderPaymentServiceTest {
               order.markPaid();
               order.markFulfilled();
               payment.markSucceeded("provider-123");
-              throw new InvalidStateTransitionException("Reservation is already confirmed");
+              return ReservationReleaseResult.CONFIRMED;
             })
         .when(reservationService)
         .releaseForPayment(RESERVATION_ID, USER_ID);
