@@ -27,8 +27,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import java.util.UUID;
 import jakarta.persistence.EntityManager;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +80,7 @@ class OrderCancellationServiceTest {
   void should_requestRefundWithoutExecutingIt_when_eventHasNotStarted() {
     Order order = order(OrderStatus.PAID);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
     when(orderRepository.save(order)).thenReturn(order);
     when(reservationService.findForOrder(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(reservation.getTicketType()).thenReturn(ticketType);
@@ -97,6 +98,7 @@ class OrderCancellationServiceTest {
   void should_rejectRefund_when_eventHasAlreadyStarted() {
     Order order = order(OrderStatus.PAID);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
     when(reservationService.findForOrder(RESERVATION_ID, USER_ID)).thenReturn(reservation);
     when(reservation.getTicketType()).thenReturn(ticketType);
     when(ticketType.getEvent()).thenReturn(event);
@@ -113,6 +115,7 @@ class OrderCancellationServiceTest {
   void should_rejectCancellation_when_orderIsAlreadyFinal() {
     Order order = order(OrderStatus.CANCELLED);
     when(orderRepository.findByIdAndUserId(ORDER_ID, USER_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.lockById(ORDER_ID)).thenReturn(Optional.of(ORDER_ID));
 
     assertThatThrownBy(() -> cancellationService.cancel(ORDER_ID, USER_ID))
         .isInstanceOf(InvalidStateTransitionException.class);
