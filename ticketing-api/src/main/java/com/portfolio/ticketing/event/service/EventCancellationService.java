@@ -12,6 +12,7 @@ import com.portfolio.ticketing.reservation.domain.ReservationInventoryDispositio
 import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -118,17 +119,25 @@ public class EventCancellationService {
     Map<UUID, ReservationCandidate> candidatesById =
         reservations.stream()
             .collect(Collectors.toMap(ReservationCandidate::id, Function.identity()));
-    List<Reservation> activeReservations =
-        lockedReservations.stream()
-            .filter(reservation -> candidatesById.get(reservation.getId()).held())
-            .toList();
-    for (Reservation reservation : activeReservations) {
+    List<Reservation> activeReservations = new ArrayList<>();
+    for (Reservation reservation : lockedReservations) {
+      ReservationCandidate candidate = candidatesById.get(reservation.getId());
+      if (candidate == null
+          || !candidate.ticketTypeId().equals(reservation.getTicketType().getId())
+          || candidate.quantity() != reservation.getQuantity()) {
+        throw new BusinessRuleViolationException(
+            "Reservation inventory relationship changed during event cancellation");
+      }
+      if (!candidate.held()) {
+        continue;
+      }
       if (reservation.getStatus() != ReservationStatus.ACTIVE
           || reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD) {
         throw new BusinessRuleViolationException(
             "Reservation changed while its event was being cancelled");
       }
       reservation.expire();
+      activeReservations.add(reservation);
     }
     if (!activeReservations.isEmpty()) {
       reservationRepository.saveAllAndFlush(activeReservations);
