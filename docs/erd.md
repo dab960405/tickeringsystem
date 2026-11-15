@@ -65,7 +65,7 @@ erDiagram
     ORDERS {
         UUID id PK
         UUID user_id FK
-        UUID reservation_id FK_UK
+        UUID reservation_id FK, UK
         VARCHAR status
         VARCHAR fulfillment_status
         VARCHAR refund_status
@@ -98,7 +98,7 @@ erDiagram
     }
     PAYMENTS {
         UUID id PK
-        UUID order_id FK_UK
+        UUID order_id FK, UK
         VARCHAR status
         VARCHAR provider_reference UK
         VARCHAR refund_provider_reference UK
