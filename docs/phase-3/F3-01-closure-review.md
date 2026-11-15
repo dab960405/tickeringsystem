@@ -2,7 +2,7 @@
 
 - **Estado:** preparado para dictamen; Fase 3 **no cerrada formalmente**.
 - **Fecha:** 2026-11-14 · **Rama:** `dev`.
-- **Referencia técnica verificada:** `cde7ff1c30cf6ad1592caab3fedbbc27bf0e6ff7`, CI #312 `success`.
+- **Referencia documental final verificada:** `0e6f5d21ec1665cef19f5145cfcdf97a97097da1`, [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) `success` (390 unitarias, 171 integraciones, Spotless, JaCoCo).
 - **Regresión de rollback validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success` (390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless/JaCoCo y BUILD SUCCESS).
 - **Decisión arquitectónica pendiente:** [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md); [solicitud de dictamen Tech Lead #5](https://github.com/dab960405/tickeringsystem/issues/5) abierta.
 
@@ -18,7 +18,7 @@
 | Tickets, unidades y generaciones | `TicketService`, V16, ADR-017 | `CommercialIssuanceIT` 14 |
 | Cancelación de evento, idempotencia y carreras | `EventCancellationService` | `EventGuardConcurrencyIT` 10/10 en CI #315 (9 anteriores y nueva regresión rollback) |
 
-La evidencia técnica es `./mvnw -B clean verify`: CI #312 ejecutó 390 unitarias y 170 integraciones sin fallos, con Spotless/JaCoCo correctos y `BUILD SUCCESS`. No se documenta un smoke test local con Docker Compose que todavía no se ha ejecutado; se realizará en el inicio autorizado de Fase 5.
+La evidencia técnica es `./mvnw -B clean verify`: CI #317 ejecutó 390 unitarias y 171 integraciones sin fallos, con Spotless/JaCoCo correctos y `BUILD SUCCESS`. No se documenta un smoke test local con Docker Compose que todavía no se ha ejecutado; se realizará en el inicio autorizado de Fase 5.
 
 ## B. Hallazgo arquitectónico residual
 

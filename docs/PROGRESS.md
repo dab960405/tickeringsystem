@@ -286,6 +286,10 @@ El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma q
 
 **Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
 
+## Validación final previa al dictamen
+
+El commit `0e6f5d21ec1665cef19f5145cfcdf97a97097da1` pasó [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752): 390 pruebas unitarias, 171 de integración, `EventGuardConcurrencyIT` 10/10, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, Spotless, JaCoCo y `BUILD SUCCESS`. Los issues de dictamen #5 y #6 siguen abiertos; **no se interpreta CI verde como aceptación arquitectónica ni cierre formal**.
+
 ## Solicitudes de dictamen técnico
 
 - **Fase 3:** [issue #5](https://github.com/dab960405/tickeringsystem/issues/5), resolución ADR-024 y revisión de F3-01. **Abierta**, no equivale a aprobación.

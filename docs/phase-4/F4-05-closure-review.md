@@ -4,7 +4,7 @@
 - **Fecha:** 2026-11-14
 - **Rama auditada:** `dev`.
 - **Base técnica validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success`: 390 unitarias, 171 integraciones, Spotless y JaCoCo. CI #309 conserva evidencia específica del reembolso.
-- **Última base documental previa validada:** `cde7ff1c30cf6ad1592caab3fedbbc27bf0e6ff7`, CI #312, `success` (390 unitarias, 170 integraciones, Spotless/JaCoCo).
+- **Última base documental validada:** `0e6f5d21ec1665cef19f5145cfcdf97a97097da1`, [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) `success` (390 unitarias, 171 integraciones, Spotless/JaCoCo).
 - **Alcance:** H75–H84, F4-01–F4-04, ADR-016–ADR-020 y propuesta ADR-022.
 
 ## Matriz de evidencias

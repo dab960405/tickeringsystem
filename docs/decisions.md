@@ -157,7 +157,7 @@ Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se nu
 ## Pendientes de decidir
 
 - **H84-01 — contrato mínimo del proveedor simulado:** la clasificación de efectos y la progresión `PENDING`/`FAILED → REFUNDED` con referencia estable ya están validadas en CI #302/#306. [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) propone conservar HTTP 409 para cambios de digest y revalidar reembolsos anticipados solo tras **nuevo evento firmado**, sin reconciliador automático. **Propuesto, pendiente de dictamen del Tech Lead**, sin cambios de migraciones ni contrato aprobado.
-- **Coordinación cross-module de cancelación de eventos:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) propone excepción transaccional limitada, manteniendo E → T → R → O, rollback y proyección Redis post-commit. Añadido test de rollback en CI #314 (pendiente). **No aprobado unilateralmente: requiere dictamen del Tech Lead.**
+- **Coordinación cross-module de cancelación de eventos:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) propone excepción transaccional limitada, manteniendo E → T → R → O, rollback y proyección Redis post-commit. Regresión de rollback verificada en CI #315 y suite completa nuevamente verde en CI #317 (390 unitarias, 171 integraciones). **No aprobado unilateralmente: requiere dictamen del Tech Lead.**
 - **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
 
 ## ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
