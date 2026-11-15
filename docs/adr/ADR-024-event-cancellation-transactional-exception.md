@@ -37,6 +37,12 @@ Su flujo toma `E FOR UPDATE → T (id ordenado) → R FOR UPDATE (id ordenado) �
 - Regresión adicional: `should_rollbackEventReservationAndOrder_when_stockRestorationFails`, prueba PostgreSQL con trigger de fallo de restitución, aserciones de rollback de evento/reserva/orden/inventario y de proyección Redis; añadida `4d381899`, fixture SQL corregido `c18d9f2` y aserción de stock corregida en `9d11d833`. CI #313 falló por sintaxis del fixture; CI #314 por una expectativa incorrecta del stock inicial. [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success` sobre `9d11d83344b88007e2b5d89de698bf62899817c0`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless y JaCoCo correctos. No modifica código productivo.
 - El dictamen requiere evidencias por SHA/CI y aceptación expresa del Tech Lead; ningún resultado de CI equivale a aprobación automática.
 
+## Double-check externo previo al dictamen
+
+La [matriz de verificación reproducible](../engineering-decision-verification.md) contrasta el SHA `d92238a9f7d37dd0127db4029bb4fcb387886457`, el código real, CI #318 y documentación de **dos mantenedores independientes**: Spring Framework 6.2 para la transacción/proxy/rollback/afterCommit y PostgreSQL 17 para el protocolo de locks/deadlocks. Spring Modulith 1.4 confirma que los accesos entre módulos deberían pasar por APIs expuestas; **no avala de manera general esta excepción**.
+
+**Condiciones que no deben omitirse al aceptar:** `@Transactional` requiere invocación desde fuera del proxy Spring; excepciones checked no provocan rollback por defecto; `deleteAfterCommit` difiere la proyección solo cuando hay sincronización activa. La regresión `EventGuardConcurrencyIT` demuestra rollback ante excepción de PostgreSQL, pero no constituye prueba exhaustiva de todas las intercalaciones. Si la excepción se acepta, registrar el acoplamiento como deuda delimitada y reabrirla al cambiar locks, FK o alcance.
+
 ## Referencias
 
 - [Spring Framework — transacciones y propagation REQUIRED](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/tx-propagation.html).

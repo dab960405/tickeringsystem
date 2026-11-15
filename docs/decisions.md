@@ -2,6 +2,8 @@
 
 Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se numeran y no se borran ni reescriben; si una decisión cambia, se añade otra que la sustituya. Los ADR individuales nuevos están en [`docs/adr/`](adr/).
 
+**Verificación obligatoria antes de recomendar o implementar cambios:** [política de doble comprobación](engineering-decision-verification.md), con documentación oficial/versionada, segunda fuente independiente cuando aplique, revisión de código real y evidencia de pruebas por SHA. Las referencias externas validan mecanismos; **no sustituyen dictamen del Tech Lead ni autorización arquitectónica**.
+
 ---
 
 ## ADR-001: Spring Boot 3.5.x en lugar de Spring Boot 4

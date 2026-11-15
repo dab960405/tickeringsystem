@@ -39,6 +39,12 @@ La especificación técnica del proyecto establece expresamente un pago simulado
 - Regresión adicional: `OrderPaymentFlowIT.should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture`, introducida en `8e2c8787a7fe5bb3c8c8d1571bf523295e413154`, ajustada a Spotless en `a8013f67bffe3a5826606469485335b61e13a93d`. [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382) `success`: 390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36 y `OperationWorkerIT` 12/12.
 - El Tech Lead debe dictaminar este **contrato mínimo**. Su publicación como `Propuesto` no aprueba H84-01 ni cierra la Fase 4.
 
+## Double-check externo previo al dictamen
+
+La [matriz de verificación reproducible](../engineering-decision-verification.md) confronta el SHA `d92238a9f7d37dd0127db4029bb4fcb387886457` y CI #318 con PostgreSQL 17 (unicidad y `ON CONFLICT`), Java 21 (HMAC-SHA256 y comparación segura) e IETF RFC 9110 (§15.5.10, HTTP 409). Se comprobaron `PaymentEvidenceDigest`, `ProviderEventInboxService`, `PaymentWebhookService`, `OrderPaymentService` y `GlobalExceptionHandler`.
+
+**Alcance de la conclusión:** las fuentes avalan el mecanismo de integridad, autenticidad y señalización de conflictos; **no definen el comportamiento de un proveedor de reembolso**, que es el contrato específico del simulador. Los eventos `PENDING`/`FAILED` con referencia nula siguen siendo válidos, pero un evento posterior de la **misma operación** con una referencia nueva genera 409 por el cambio del digest. Un `REFUNDED` anticipado solo se reevalúa con **otro** `providerEventId` firmado. No hay reconciliación automática ni protección temporal antirreplay, y no se afirma que existan.
+
 ## Referencias
 
 - Especificación técnica Ticketing, secciones 1, 2, 10, 15, 22 y 24 (fuente funcional del proyecto).

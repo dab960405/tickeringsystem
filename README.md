@@ -9,6 +9,7 @@ Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Bo
 ## Documentación
 
 - [Progreso y evidencia de verificación](docs/PROGRESS.md)
+- [Política de decisiones técnicas y doble comprobación con fuentes oficiales](docs/engineering-decision-verification.md)
 - [Guía de ejecución local](docs/LOCAL_RUN.md)
 - [F3-01 — expediente de Fase 3](docs/phase-3/F3-01-closure-review.md)
 - [ADR-024 — excepción transaccional propuesta](docs/adr/ADR-024-event-cancellation-transactional-exception.md)

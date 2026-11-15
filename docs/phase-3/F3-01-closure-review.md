@@ -4,6 +4,7 @@
 - **Fecha:** 2026-11-14 · **Rama:** `dev`.
 - **Referencia documental final verificada:** `0e6f5d21ec1665cef19f5145cfcdf97a97097da1`, [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) `success` (390 unitarias, 171 integraciones, Spotless, JaCoCo).
 - **Regresión de rollback validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success` (390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless/JaCoCo y BUILD SUCCESS).
+- **Double-check oficial:** [matriz de verificación externa y código](../engineering-decision-verification.md), Spring Framework 6.2 + PostgreSQL 17 + contraste de límites con Spring Modulith.
 - **Decisión arquitectónica pendiente:** [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md); [solicitud de dictamen Tech Lead #5](https://github.com/dab960405/tickeringsystem/issues/5) abierta.
 
 ## A. Matriz de criterios funcionales

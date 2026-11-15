@@ -286,6 +286,10 @@ El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma q
 
 **Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
 
+## Double-check obligatorio de ingeniería — 2026-11-14
+
+Se documentó la [política de decisiones técnicas](engineering-decision-verification.md) y su aplicación a **ADR-024/Fase 3** (Spring Framework 6.2, PostgreSQL 17, Spring Modulith 1.4) y **ADR-022/Fase 4** (PostgreSQL 17, Oracle Java 21, IETF RFC 9110). Se cotejaron SHA, servicios, excepciones y tests ya verdes en CI #318. No se añadieron servicios, bibliotecas ni infraestructura. ADR-022 y ADR-024 continúan **propuestos hasta dictamen** de Tech Lead en #6 y #5, respectivamente.
+
 ## Validación final previa al dictamen
 
 El commit `0e6f5d21ec1665cef19f5145cfcdf97a97097da1` pasó [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752): 390 pruebas unitarias, 171 de integración, `EventGuardConcurrencyIT` 10/10, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, Spotless, JaCoCo y `BUILD SUCCESS`. Los issues de dictamen #5 y #6 siguen abiertos; **no se interpreta CI verde como aceptación arquitectónica ni cierre formal**.

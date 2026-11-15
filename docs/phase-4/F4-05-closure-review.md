@@ -6,6 +6,7 @@
 - **Base técnica validada:** `9d11d83344b88007e2b5d89de698bf62899817c0` — [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success`: 390 unitarias, 171 integraciones, Spotless y JaCoCo. CI #309 conserva evidencia específica del reembolso.
 - **Última base documental validada:** `0e6f5d21ec1665cef19f5145cfcdf97a97097da1`, [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) `success` (390 unitarias, 171 integraciones, Spotless/JaCoCo).
 - **Alcance:** H75–H84, F4-01–F4-04, ADR-016–ADR-020 y propuesta ADR-022.
+- **Double-check oficial:** [matriz de verificación externa y código](../engineering-decision-verification.md), PostgreSQL 17 + Java 21 + IETF RFC 9110; fuentes verificadas sin alterar el contrato comercial.
 
 ## Matriz de evidencias
 
