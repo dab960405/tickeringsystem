@@ -1,0 +1,165 @@
+package com.portfolio.ticketing.common.config;
+
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.portfolio.ticketing.common.api.PageResponse;
+import com.portfolio.ticketing.event.api.EventMetadata;
+import com.portfolio.ticketing.event.api.EventSummaryResponse;
+import com.portfolio.ticketing.event.service.EventCatalogCacheService;
+import com.portfolio.ticketing.tickettype.api.TicketTypeCatalogEntry;
+import java.time.Duration;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CachingConfigurer;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.interceptor.CacheErrorHandler;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.cache.RedisCacheWriter;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.SerializationException;
+
+@Configuration
+@EnableCaching
+public class RedisCacheConfig implements CachingConfigurer {
+
+  public static final String CATALOG_READ_CACHE_MANAGER = "catalogReadCacheManager";
+
+  private static final Logger log = LoggerFactory.getLogger(RedisCacheConfig.class);
+
+  private final RedisConnectionFactory connectionFactory;
+  private final Duration ticketTypesTtl;
+  private final Duration eventsTtl;
+
+  public RedisCacheConfig(
+      RedisConnectionFactory connectionFactory,
+      @Value("${ticketing.cache.ticket-types.ttl:5m}") Duration ticketTypesTtl,
+      @Value("${ticketing.cache.events.ttl:60s}") Duration eventsTtl) {
+    this.connectionFactory = connectionFactory;
+    this.ticketTypesTtl = ticketTypesTtl;
+    this.eventsTtl = eventsTtl;
+  }
+
+  @Bean
+  @Primary
+  @Override
+  public CacheManager cacheManager() {
+    return buildCacheManager(true);
+  }
+
+  // Keep reads inside the cache interceptor so Redis failures reach CacheErrorHandler.
+  @Bean
+  public CacheManager catalogReadCacheManager() {
+    return buildCacheManager(false);
+  }
+
+  private CacheManager buildCacheManager(boolean transactionAware) {
+    ObjectMapper objectMapper =
+        new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    JavaType catalogType =
+        objectMapper
+            .getTypeFactory()
+            .constructCollectionType(List.class, TicketTypeCatalogEntry.class);
+    Jackson2JsonRedisSerializer<List<TicketTypeCatalogEntry>> serializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, catalogType);
+
+    RedisCacheConfiguration defaults =
+        RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(ticketTypesTtl)
+            .disableCachingNullValues()
+            .serializeValuesWith(
+                RedisSerializationContext.SerializationPair.fromSerializer(serializer));
+
+    JavaType eventMetadataType = objectMapper.getTypeFactory().constructType(EventMetadata.class);
+    Jackson2JsonRedisSerializer<EventMetadata> eventMetadataSerializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, eventMetadataType);
+    JavaType popularPageType =
+        objectMapper
+            .getTypeFactory()
+            .constructParametricType(PageResponse.class, EventSummaryResponse.class);
+    Jackson2JsonRedisSerializer<PageResponse<EventSummaryResponse>> popularPageSerializer =
+        new Jackson2JsonRedisSerializer<>(objectMapper, popularPageType);
+    RedisCacheConfiguration eventDefaults =
+        RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(eventsTtl)
+            .prefixCacheNameWith("ticketing:")
+            .disableCachingNullValues();
+
+    RedisCacheWriter cacheWriter =
+        new ResilientRedisCacheWriter(
+            RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory));
+    RedisCacheManager.RedisCacheManagerBuilder builder =
+        RedisCacheManager.builder(connectionFactory)
+            .cacheWriter(cacheWriter)
+            .cacheDefaults(defaults)
+            .withCacheConfiguration(
+                EventCatalogCacheService.DETAIL_CACHE,
+                eventDefaults.serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(
+                        eventMetadataSerializer)))
+            .withCacheConfiguration(
+                EventCatalogCacheService.POPULAR_CACHE,
+                eventDefaults.serializeValuesWith(
+                    RedisSerializationContext.SerializationPair.fromSerializer(
+                        popularPageSerializer)));
+    if (transactionAware) {
+      builder.transactionAware();
+    }
+    return builder.build();
+  }
+
+  @Bean
+  @Override
+  public CacheErrorHandler errorHandler() {
+    return new CacheErrorHandler() {
+      @Override
+      public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
+        handleRedisFailure("GET", exception, cache, key);
+      }
+
+      @Override
+      public void handleCachePutError(
+          RuntimeException exception, Cache cache, Object key, Object value) {
+        handleRedisFailure("PUT", exception, cache, key);
+      }
+
+      @Override
+      public void handleCacheEvictError(RuntimeException exception, Cache cache, Object key) {
+        handleRedisFailure("EVICT", exception, cache, key);
+      }
+
+      @Override
+      public void handleCacheClearError(RuntimeException exception, Cache cache) {
+        handleRedisFailure("CLEAR", exception, cache, "*");
+      }
+    };
+  }
+
+  private static void handleRedisFailure(
+      String operation, RuntimeException exception, Cache cache, Object key) {
+    if (exception instanceof DataAccessException || exception instanceof SerializationException) {
+      log.warn(
+          "Redis cache {} failed for cache '{}' and key '{}'; continuing without cache",
+          operation,
+          cache.getName(),
+          key,
+          exception);
+      return;
+    }
+    throw exception;
+  }
+}

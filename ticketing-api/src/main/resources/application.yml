@@ -9,6 +9,33 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:ticketing}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
 
 server:
   port: ${TICKETING_API_PORT:8080}
@@ -30,3 +57,48 @@ management:
 info:
   app:
     name: ${spring.application.name}
+
+ticketing:
+  cache:
+    ticket-types:
+      ttl: ${TICKET_TYPES_CACHE_TTL:5m}
+    events:
+      ttl: ${EVENTS_CACHE_TTL:60s}
+  rate-limits:
+    scopes:
+      login:
+        max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+        window-seconds: ${LOGIN_WINDOW_SECONDS:60}
+      reservations:
+        max-attempts: ${RESERVATION_RATE_LIMIT_MAX:20}
+        window-seconds: ${RESERVATION_RATE_LIMIT_WINDOW_SECONDS:60}
+      orders:
+        max-attempts: ${ORDER_RATE_LIMIT_MAX:10}
+        window-seconds: ${ORDER_RATE_LIMIT_WINDOW_SECONDS:60}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      access-ttl-minutes: ${JWT_ACCESS_TTL_MINUTES:15}
+      refresh-ttl-days: ${JWT_REFRESH_TTL_DAYS:7}
+  reservation:
+    ttl-minutes: ${RESERVATION_TTL_MINUTES:10}
+    recovery-grace: ${RESERVATION_RECOVERY_GRACE:15m}
+  payment:
+    webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}
+  # Provider event processing limits (ADR-018, F4-01). Validated at startup by OperationProperties.
+  operation:
+    tx-rx-timeout: ${OPERATION_TX_RX_TIMEOUT:3s}
+    tx-claim-timeout: ${OPERATION_TX_CLAIM_TIMEOUT:3s}
+    tx-apply-timeout: ${OPERATION_TX_APPLY_TIMEOUT:5s}
+    tx-project-timeout: ${OPERATION_TX_PROJECT_TIMEOUT:3s}
+    lock-timeout: ${OPERATION_LOCK_TIMEOUT:1s}
+    lease-duration: ${OPERATION_LEASE_DURATION:30s}
+    batch-size: ${OPERATION_BATCH_SIZE:50}
+    max-attempts: ${OPERATION_MAX_ATTEMPTS:3}
+    retry-backoff: ${OPERATION_RETRY_BACKOFF:5s}
+    recovery-interval: ${OPERATION_RECOVERY_INTERVAL:1s}
+    recovery-enabled: ${OPERATION_RECOVERY_ENABLED:true}
+    provider:
+      code: ${PAYMENT_PROVIDER_CODE:SIMULATED}
+      merchant-account-id: ${PAYMENT_MERCHANT_ACCOUNT_ID:default}
+      identity-namespace: ${PAYMENT_IDENTITY_NAMESPACE:payments.v1}

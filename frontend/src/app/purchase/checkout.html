@@ -1,0 +1,146 @@
+<a routerLink="/eventos" class="back-link">← Volver a los eventos</a>
+@if (loading()) {
+  <p class="empty" role="status">Consultando disponibilidad…</p>
+} @else if (error()) {
+  <div class="notice error" role="alert">
+    <p>{{ error() }}</p>
+    <button class="button secondary" (click)="reload()">Reintentar</button>
+  </div>
+} @else if (blocked()) {
+  <div class="empty">
+    <h1>Tienes una compra en curso</h1>
+    <p>Completa o cancela la reserva actual antes de elegir otro evento.</p>
+    <a class="button" [routerLink]="['/eventos', purchase.event()?.id]">Volver a mi compra</a>
+  </div>
+} @else if (purchase.event(); as event) {
+  <section class="checkout-layout" aria-labelledby="checkout-title">
+    <div class="page-intro">
+      <p class="eyebrow">TU PRÓXIMA EXPERIENCIA</p>
+      <h1 id="checkout-title">{{ event.title }}</h1>
+      <p>{{ event.venue.name }} · {{ event.venue.city }}</p>
+      <p>{{ event.startsAt | date: 'medium' }}</p>
+      <p class="event-description">{{ event.description }}</p>
+    </div>
+    <div class="panel" [attr.aria-busy]="purchase.busy()">
+      <h2>Tu compra</h2>
+      <ol class="steps" aria-label="Progreso de compra">
+        <li class="done">1. Selección</li>
+        <li [class.done]="purchase.reservation()">2. Reserva</li>
+        <li [class.done]="purchase.order()">3. Orden</li>
+        <li
+          [class.done]="
+            purchase.order()?.status === 'PAID' &&
+            purchase.order()?.fulfillmentStatus === 'FULFILLED'
+          "
+        >
+          4. Entrada
+        </li>
+      </ol>
+      @if (purchase.order(); as order) {
+        <div class="status-box">
+          <strong>{{ order.status | orderStatus }}</strong>
+          <p>{{ delivery(order) }}</p>
+          <p>{{ order.refundStatus | orderStatus }}</p>
+        </div>
+        <p class="identifier">Orden {{ order.id }}</p>
+        <div class="price-total">
+          <span>Total</span><strong>{{ order.totalAmount | currency: order.currency }}</strong>
+        </div>
+        @if (order.status === 'PENDING_PAYMENT') {
+          <p class="hint">Pago de demostración. No ingreses datos de tarjeta.</p>
+        }
+        <app-order-actions [order]="order" />
+        <a class="text-button" routerLink="/compras">Consultar mis compras</a>
+        @if (!purchase.pending()) {
+          <button
+            class="button secondary full"
+            [disabled]="purchase.busy()"
+            (click)="purchase.newSelection(); reload()"
+          >
+            Elegir más entradas
+          </button>
+        }
+      } @else if (purchase.reservation(); as reservation) {
+        <div class="status-box">
+          <strong>Reserva temporal</strong>
+          <p>
+            {{
+              remaining() > 0
+                ? 'Tiempo restante: ' + countdown()
+                : 'La reserva venció. Vuelve a consultar disponibilidad.'
+            }}
+          </p>
+        </div>
+        <p>{{ reservation.quantity }} entrada(s) reservadas</p>
+        <button
+          class="button full"
+          [disabled]="purchase.busy() || remaining() === 0"
+          (click)="purchase.createOrder()"
+        >
+          Crear orden
+        </button>
+        <button class="text-button" [disabled]="purchase.busy()" (click)="purchase.release()">
+          Liberar reserva y volver
+        </button>
+      } @else if (event.ticketTypes.length) {
+        <form [formGroup]="form" (ngSubmit)="reserve()">
+          <label for="ticket-type">Tipo de entrada</label>
+          <select id="ticket-type" formControlName="ticketTypeId">
+            @for (type of event.ticketTypes; track type.id) {
+              <option [value]="type.id">
+                {{ type.name }} · {{ type.price | currency: type.currency }} ·
+                {{ type.availableQuantity }} disponibles
+              </option>
+            }
+          </select>
+          <p class="hint">
+            {{
+              available()
+                ? 'Hasta ' + maximum() + ' entradas por compra.'
+                : 'Este tipo no está disponible para venta ahora.'
+            }}
+          </p>
+          <label for="quantity">Cantidad</label
+          ><input
+            id="quantity"
+            type="number"
+            formControlName="quantity"
+            min="1"
+            [max]="maximum()"
+            step="1"
+            required
+          />
+          @if (
+            form.controls.quantity.touched &&
+            (form.controls.quantity.invalid || form.controls.quantity.value > maximum())
+          ) {
+            <p class="form-error" role="alert">
+              Selecciona una cantidad entera entre 1 y {{ maximum() }}.
+            </p>
+          }
+          <div class="price-total">
+            <span>Total estimado</span
+            ><strong>{{ total() | currency: selected()?.currency ?? 'USD' }}</strong>
+          </div>
+          @if (auth.signedIn()) {
+            <button class="button full" type="submit" [disabled]="purchase.busy() || !available()">
+              Reservar entradas
+            </button>
+          } @else {
+            <a
+              class="button full"
+              routerLink="/entrar"
+              [queryParams]="{ returnUrl: '/eventos/' + event.id }"
+              >Entrar para reservar</a
+            >
+          }
+          <p class="hint">
+            La reserva tiene un tiempo limitado. El precio final se confirma al crear la orden.
+          </p>
+        </form>
+      } @else {
+        <p class="empty">No hay entradas disponibles para este evento.</p>
+      }
+    </div>
+  </section>
+}

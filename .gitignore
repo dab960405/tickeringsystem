@@ -29,3 +29,15 @@ crash.log
 
 # Logs
 *.log
+
+# Python local smoke helper
+__pycache__/
+
+# Angular
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Generated local adversarial evidence (fixtures contain no credentials)
+reports/adversarial/

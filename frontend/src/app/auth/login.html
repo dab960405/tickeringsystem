@@ -1,0 +1,67 @@
+<section class="auth-panel panel" aria-labelledby="auth-title">
+  <p class="eyebrow">BIENVENIDO A TICKETING</p>
+  <h1 id="auth-title">{{ registration() ? 'Crear cuenta' : 'Iniciar sesión' }}</h1>
+  <p class="muted">Entra para reservar y consultar tus entradas.</p>
+  <form [formGroup]="form" (ngSubmit)="submit()" [attr.aria-busy]="busy()">
+    @if (registration()) {
+      <label for="full-name">Nombre completo</label>
+      <input
+        id="full-name"
+        formControlName="fullName"
+        autocomplete="name"
+        maxlength="150"
+        required
+      />
+      @if (form.controls.fullName.touched && form.controls.fullName.invalid) {
+        <p class="form-error">Escribe tu nombre.</p>
+      }
+    }
+    <label for="email">Correo electrónico</label>
+    <input
+      id="email"
+      formControlName="email"
+      type="email"
+      autocomplete="username"
+      maxlength="255"
+      required
+    />
+    @if (form.controls.email.touched && form.controls.email.invalid) {
+      <p class="form-error">Escribe un correo válido.</p>
+    }
+    <label for="password">Contraseña</label>
+    <input
+      id="password"
+      formControlName="password"
+      type="password"
+      [attr.autocomplete]="registration() ? 'new-password' : 'current-password'"
+      aria-describedby="password-help"
+      maxlength="72"
+      required
+    />
+    <p id="password-help" class="hint">
+      {{
+        registration()
+          ? 'De 8 a 72 caracteres, con una letra y un número.'
+          : 'Utiliza la contraseña de tu cuenta.'
+      }}
+    </p>
+    @if (form.controls.password.touched && form.controls.password.invalid) {
+      <p class="form-error">Revisa los requisitos de la contraseña.</p>
+    }
+    @if (error()) {
+      <p class="form-error" role="alert">{{ error() }}</p>
+    }
+    <button class="button full" type="submit" [disabled]="busy()">
+      {{ busy() ? 'Procesando…' : registration() ? 'Crear cuenta y entrar' : 'Entrar' }}
+    </button>
+  </form>
+  <a
+    class="text-button"
+    [routerLink]="registration() ? '/entrar' : '/registro'"
+    [queryParams]="{ returnUrl }"
+    >{{
+      registration() ? 'Ya tengo cuenta. Iniciar sesión' : '¿Aún no tienes cuenta? Regístrate'
+    }}</a
+  >
+  <p class="hint">La sesión permanece en memoria. Al recargar la página debes volver a entrar.</p>
+</section>

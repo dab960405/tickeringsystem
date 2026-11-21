@@ -1,6 +1,8 @@
 # Registro de decisiones (ADR)
 
-Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y nunca se borran; si cambian, se añade una nueva que reemplaza a la anterior.
+Formato: contexto, alternativas, decisión y consecuencias. Las decisiones se numeran y no se borran ni reescriben; si una decisión cambia, se añade otra que la sustituya. Los ADR individuales nuevos están en [`docs/adr/`](adr/).
+
+**Verificación obligatoria antes de recomendar o implementar cambios:** [política de doble comprobación](engineering-decision-verification.md), con documentación oficial/versionada, segunda fuente independiente cuando aplique, revisión de código real y evidencia de pruebas por SHA. Las referencias externas validan mecanismos; **no sustituyen dictamen del Tech Lead ni autorización arquitectónica**.
 
 ---
 
@@ -53,8 +55,138 @@ Formato breve: contexto, decisión y consecuencias. Las decisiones se numeran y 
 - **Decisión:** crear ya `.github/workflows/ci.yml` con el job `build-test` (Temurin 21, caché Maven, `permissions: contents: read`, `concurrency`, subida de reportes de Surefire/Failsafe y JaCoCo). El job `docker-build` se añadirá en la Fase 6, cuando existan los Dockerfiles, y `deploy.yml` en la Fase 7. El trabajo se hace en la rama `dev`; `main` solo recibe cambios verificados por CI. Actions fijadas por tag mayor: `checkout@v7`, `setup-java@v6`, `upload-artifact@v7`.
 - **Consecuencias:** cada push y pull request queda verificado en GitHub desde la Fase 0. La Fase 7 sigue pendiente de `docker-build`, `deploy.yml`, Dependabot y el badge.
 
+## ADR-006: JWT con `spring-boot-starter-oauth2-resource-server` y HS256
+
+- **Fecha:** 2026-11-05
+- **Contexto:** la Fase 2 necesita emitir y validar JWT. Opciones: `jjwt` o el soporte nativo de Spring Security (Nimbus).
+- **Decisión:** `spring-boot-starter-oauth2-resource-server` con `NimbusJwtEncoder`/`NimbusJwtDecoder` y HS256. El secreto se lee de `JWT_SECRET` (Base64, mínimo 256 bits; el arranque falla si es más corto). Claims: `sub` (id de usuario), `role`, `iat`, `exp` y `type` (`access` o `refresh`); el refresh token añade `jti`. El decodificador de acceso rechaza tokens con `type` distinto de `access`.
+- **Consecuencias:** sin dependencias extra ni filtro JWT propio; la validación de firma y expiración la hace el filtro estándar `BearerTokenAuthenticationFilter`. Decidido con el usuario.
+
+## ADR-007: Redis desde la Fase 2 para refresh tokens y rate limiting de login
+
+- **Fecha:** 2026-11-05
+- **Contexto:** la especificación (sección 9) guarda el hash del `jti` del refresh token en Redis para poder revocarlo y pide rate limiting en login con contador en Redis, pero Redis se plantea en la Fase 4.
+- **Decisión:** añadir `spring-boot-starter-data-redis` en la Fase 2. Clave `auth:refresh:<sha256(jti)>` con TTL igual a la vida del refresh token; logout la borra. Rate limiting de login con ventana fija: `INCR` sobre `rate:login:<ip>:<email>` y `EXPIRE` en el primer intento; al superar el límite, 429.
+- **Consecuencias:** los tests de integración levantan también un contenedor Redis. La degradación con Redis caído se trata en la Fase 4. Decidido con el usuario.
+
+## ADR-008: Mapeo DTO manual con records
+
+- **Fecha:** 2026-11-05
+- **Contexto:** estaba pendiente elegir entre MapStruct y mapeo manual.
+- **Decisión:** mapeo manual con métodos estáticos `from(...)` en los records de respuesta, como ya se hizo en la Fase 1.
+- **Consecuencias:** sin procesador de anotaciones adicional; el mapeo es explícito y lo cubren los tests de controlador.
+
+## ADR-009: Cancelación de órdenes y reembolsos
+
+- **Fecha:** 2026-11-06
+- **Contexto:** la especificación permite cancelar una orden `PENDING_PAYMENT` y reembolsar una orden `PAID` si el evento no empezó, pero no define un estado `CANCELLED` para pagos ni indica si un reembolso debe devolver stock.
+- **Decisión:** al cancelar una orden pendiente se libera la reserva activa y su stock; el pago permanece `PENDING` porque no existe un estado de cancelación y la orden final impide que un webhook posterior la confirme. Al reembolsar una orden pagada antes del evento, el pago pasa a `REFUNDED` y sus tickets a `CANCELLED`; la reserva queda `CONFIRMED` como historial y no se devuelve stock automáticamente, ya que no es un requisito explícito.
+- **Consecuencias:** las transiciones usan únicamente los estados definidos. Una devolución de stock posterior a reembolsos requeriría una regla de negocio y un ADR nuevos.
+- **Evolución Fase 4:** ADR-019 sustituye el reembolso local inmediato. La cancelación de una orden pagada solo solicita el reembolso; el pago y la orden pasan a `REFUNDED` únicamente con evidencia `PAYMENT_REFUND` válida del proveedor. Se conserva la decisión de no devolver stock automáticamente.
+
+## ADR-010: UPDATE atómico condicional para el inventario
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** descontar unidades con un único `UPDATE ... WHERE available_quantity >= :quantity`; la base de datos serializa la escritura y las filas afectadas indican éxito. Se prefiere a mantener bloqueos pesimistas explícitos durante la lógica de servicio y a gestionar conflictos/reintentos optimistas en un contador de alta contención.
+- **Documento:** [ADR-010](adr/ADR-010-atomic-inventory-update.md).
+
+## ADR-011: Idempotencia de órdenes y webhooks
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** clave de orden única por usuario y reserva; el mismo par clave/reserva reproduce la orden existente y reutilizar la clave con otra reserva es conflicto. Webhooks verifican HMAC y aplican transiciones idempotentes condicionadas por estado y referencia del proveedor.
+- **Límite:** aún no hay inbox ni ID de evento del proveedor persistido; el ADR documenta este límite y la evolución requerida para un gateway real.
+- **Documento:** [ADR-011](adr/ADR-011-order-and-webhook-idempotency.md).
+
+## ADR-012: Expiración con `FOR UPDATE SKIP LOCKED`
+
+- **Fecha:** 2026-11-06 · **Fase:** 3
+- **Decisión:** workers de expiración reclaman lotes de filas vencidas sin esperar por filas bloqueadas por otros workers; la transición condicional y la liberación de inventario se ejecutan en la misma transacción.
+- **Documento:** [ADR-012](adr/ADR-012-reservation-expiration-skip-locked.md).
+
+## ADR-013: Caché Redis de metadatos del catálogo
+
+- **Fecha:** 2026-11-07 · **Fase:** 4
+- **Contexto:** las consultas del catálogo repiten lecturas de metadatos relativamente estables, pero la disponibilidad cambia con cada reserva y liberación de inventario. Cachear la respuesta completa podría exponer stock obsoleto.
+- **Alternativas:** cachear la respuesta completa; cachear entidades JPA; cachear solo metadatos serializables y consultar inventario en cada petición.
+- **Decisión:** aplicar cache-aside sobre records DTO que contienen solo metadatos del tipo de entrada. `availableQuantity` se obtiene siempre desde PostgreSQL mediante una proyección liviana. TTL configurable (`TICKET_TYPES_CACHE_TTL`, por defecto 5 minutos). Las escrituras del catálogo invalidan las entradas y el `RedisCacheManager` es transaccional para diferir la invalidación hasta el commit. Los fallos Redis de tipo `DataAccessException` se registran y se omiten, permitiendo fallback a PostgreSQL.
+- **Consecuencias:** el catálogo reduce lecturas de metadatos sin cachear inventario crítico. La invalidación actual es global para el cache del catálogo porque el servicio de escritura de actualización recibe el ID del tipo y no el ID del evento; se acepta el alcance amplio por simplicidad y corrección. Se requiere validar en CI la serialización, expiración, invalidación y degradación ante indisponibilidad de Redis.
+
+## ADR-014: Resiliencia ante indisponibilidad de Redis y degradación de autenticación
+
+- **Fecha:** 2026-11-10 · **Fase:** 4
+- **Decisión:** degradación diferenciada por riesgo: caché de catálogo con fallback a PostgreSQL y TTL ante invalidación fallida; rate limiting de login fail-open; almacén de refresh tokens fail-closed con HTTP 503; validación local de access tokens sin Redis.
+- **Límites:** los fallos de invalidación pueden dejar metadatos obsoletos hasta el TTL; durante una caída Redis se omite temporalmente el rate limiting de login, mientras que las operaciones que requieren estado de refresh token no se aceptan.
+- **Evidencia:** run CI #107 en `24d6a514f1f8a4d467b1c457d12a478e24f75c36`: 313 tests unitarios y 57 de integración, sin fallos ni errores. Latencias observadas durante Redis outage: ~1.014 ms para catálogo y ~1.023 ms para GET público de evento.
+- **Documento:** [ADR-014](adr/ADR-014-redis-resilience-and-auth-degradation.md).
+
+## ADR-015: Una orden por reserva
+
+- **Fecha:** 2026-11-12 · **Fase:** 3
+- **Decisión:** impedir más de una orden por reserva mediante el guard de `OrderService.create` y el índice único no parcial `ux_orders_reservation_id` de V11 sobre `orders(reservation_id)`. PostgreSQL aplica la unicidad también a órdenes canceladas; los conflictos de integridad correspondientes se responden como HTTP `409 Conflict`.
+- **Consecuencia:** una reserva solo puede originar cero o una orden. Una reserva asociada a una orden cancelada no se reutiliza; para una compra posterior se debe crear otra reserva.
+- **Documento:** [ADR-015](adr/ADR-015-one-order-per-reservation.md).
+
+## ADR-016: Orden global de locks y protocolo T → R
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** todas las escrituras relacionadas siguen el orden global documentado; inventario y reservas bloquean T antes que R, revalidan después de los locks y usan `clock_timestamp()` para decidir expiración.
+- **Documento:** [ADR-016](adr/ADR-016-global-lock-order.md).
+
+## ADR-017: Unidades comerciales estables y generaciones de emisión
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** cada unidad tiene UUID estable; generaciones y asociaciones relacionan unidad/orden/ticket con FK compuestas y unicidad por unidad/generación. La sustitución exige una generación nueva.
+- **Documento:** [ADR-017](adr/ADR-017-commercial-units-and-generations.md).
+
+## ADR-018: Ciclos de operación, leases, fencing y proyecciones
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT separan recepción, ejecución técnica, aplicación y proyección. Jobs efectivos únicos, leases y fencing tokens impiden escrituras de workers antiguos.
+- **Documento:** [ADR-018](adr/ADR-018-operation-cycles-and-worker-recovery.md).
+
+## ADR-019: Identidad del proveedor, idempotencia semántica y recuperación tardía
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** evento, operación del proveedor y aplicación semántica tienen identidades/unicidad separadas. H-79 permite recuperación acotada y exige evidencia de reembolso antes de marcar `REFUNDED`.
+- **Documento:** [ADR-019](adr/ADR-019-provider-identity-and-late-payment-recovery.md).
+
+## ADR-020: Cierre de alcance Redis de Fase 4
+
+- **Fecha:** 2026-11-13 · **Fase:** 4
+- **Decisión:** se incorporan metadatos de eventos con TTL 60 s, claves de reserva con TTL y rate limiting de reservas/órdenes; PostgreSQL sigue siendo la fuente de verdad.
+- **Documento:** [ADR-020](adr/ADR-020-phase-4-redis-completion.md).
+
 ## Pendientes de decidir
 
-- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta.
-- **Librería JWT:** `jjwt` frente a `oauth2-resource-server` (Fase 2).
-- **Mapeo DTO:** MapStruct frente a mapeo manual con records (Fase 1).
+- **H84-01 — contrato mínimo del proveedor simulado:** la clasificación de efectos y la progresión `PENDING`/`FAILED → REFUNDED` con referencia estable ya están validadas en CI #302/#306. [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) propone conservar HTTP 409 para cambios de digest y revalidar reembolsos anticipados solo tras **nuevo evento firmado**, sin reconciliador automático. **Propuesto, pendiente de dictamen del Tech Lead**, sin cambios de migraciones ni contrato aprobado.
+- **Coordinación cross-module de cancelación de eventos:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) propone excepción transaccional limitada, manteniendo E → T → R → O, rollback y proyección Redis post-commit. Regresión de rollback verificada en CI #315 y suite completa nuevamente verde en CI #317 (390 unitarias, 171 integraciones). **No aprobado unilateralmente: requiere dictamen del Tech Lead.**
+- **Región de AWS:** se elegirá en la etapa 0 de la pista AWS según las regiones disponibles en la cuenta. No se creará ningún recurso sin confirmación explícita.
+
+## ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
+
+- **Fecha:** 2026-11-13 · **Fase:** 2
+- **Decisión:** los recursos privados ajenos e inexistentes responden ambos HTTP 404 en operaciones de propiedad; se conserva 403 cuando el usuario autenticado carece del rol funcional requerido. ADMIN mantiene gestión global y ORGANIZER solo gestiona eventos/tipos asociados a sus eventos.
+- **Documento:** [ADR-021](adr/ADR-021-phase-2-authorization-resource-concealment.md).
+- **Matriz:** [Matriz de autorización de Fase 2](phase-2/authorization-matrix.md).
+
+## ADR-022: Contrato mínimo de evidencia de reembolsos simulados (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 4
+- **Estado:** Propuesto para dictamen del Tech Lead. No constituye decisión arquitectónica aceptada ni cierre formal.
+- **Propuesta:** referencia estable por operación y `NO_OP` hasta nueva evidencia firmada tras captura, sin ampliación del sistema financiero simulado.
+- **Documento:** [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md).
+
+## ADR-023: Outbox y entrega idempotente de notificaciones (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 5 (solo diseño).
+- **Estado:** Propuesto al Tech Lead; NO aprobado ni implementado.
+- **Alternativas:** publicación directa (rechazada), relay limitado con SKIP LOCKED sobre V10 (propuesto), claim/lease con nueva migración (condicionado a evidencia), CDC/2PC (fuera de alcance).
+- **Documento:** [ADR-023](adr/ADR-023-phase-5-outbox-and-notification-delivery.md).
+- **Plan y pruebas:** [F5-01](phase-5/F5-01-technical-design.md) y [F5-02](phase-5/F5-02-test-and-acceptance-plan.md).
+
+## ADR-024: Excepción transaccional limitada de cancelación de eventos (propuesta)
+
+- **Fecha:** 2026-11-14 · **Fase:** 3.
+- **Estado:** PROPUESTO para dictamen del Tech Lead; no aprobado ni cierre formal.
+- **Alternativas:** refactor entre servicios versus excepción deliberada y acotada; se recomienda esta última por atomicidad y orden de locks existentes.
+- **Documento:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md); expediente [F3-01](phase-3/F3-01-closure-review.md).

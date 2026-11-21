@@ -2,6 +2,7 @@ package com.portfolio.ticketing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.ticketing.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class TicketingApiApplicationTest {
+class TicketingApiApplicationIT extends AbstractIntegrationTest {
 
   @Autowired private TestRestTemplate restTemplate;
 
