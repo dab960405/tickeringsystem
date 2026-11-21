@@ -11,6 +11,7 @@ Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Bo
 - [Progreso y evidencia de verificación](docs/PROGRESS.md)
 - [Política de decisiones técnicas y doble comprobación con fuentes oficiales](docs/engineering-decision-verification.md)
 - [Guía de ejecución local](docs/LOCAL_RUN.md)
+- [Frontend Angular: arranque, estructura y fuentes oficiales](frontend/README.md)
 - [F3-01 — expediente de Fase 3](docs/phase-3/F3-01-closure-review.md)
 - [ADR-024 — excepción transaccional propuesta](docs/adr/ADR-024-event-cancellation-transactional-exception.md)
 - [F4-05 — expediente de revisión de cierre](docs/phase-4/F4-05-closure-review.md)
@@ -38,6 +39,7 @@ La API es un monolito modular Spring Boot. Los límites de dominio se organizan 
 | `common-events` | Contratos de eventos compartidos (records), p. ej. `EventEnvelope` |
 | `ticketing-api` | API principal (puerto 8080): auth, catálogo, reservas, órdenes, pagos y tickets |
 | `notification-service` | Consumidor separado previsto (puerto 8081); integración Kafka pendiente de Fase 5 |
+| `frontend` | Angular 22: catálogo, autenticación, compra, reembolsos y tickets; simulador local en el puerto 5173 |
 | `docs/` | Arquitectura, ERD, progreso, guía local, flujo HTTP y ADRs |
 
 ## Stack

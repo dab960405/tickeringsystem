@@ -1,0 +1,52 @@
+<section id="tickets-view" aria-labelledby="tickets-title">
+  <div class="page-intro">
+    <p class="eyebrow">LISTO PARA EL EVENTO</p>
+    <h1 id="tickets-title">Mis entradas</h1>
+    <p>Tus entradas vigentes, con su código único.</p>
+  </div>
+  @if (!auth.signedIn()) {
+    <p class="empty">
+      Tu sesión terminó.
+      <a routerLink="/entrar" [queryParams]="{ returnUrl: '/entradas' }">Volver a entrar</a>
+    </p>
+  } @else if (busy()) {
+    <p class="empty" role="status">Cargando tus entradas…</p>
+  } @else if (error()) {
+    <div class="notice error" role="alert">
+      <p>{{ error() }}</p>
+      <button class="button secondary" (click)="load()">Reintentar</button>
+    </div>
+  } @else if (items().length) {
+    <button id="print-tickets" class="button secondary" (click)="print()">Imprimir entradas</button>
+    <div class="ticket-grid">
+      @for (ticket of items(); track ticket.code) {
+        <article class="ticket">
+          <span class="badge">ENTRADA VÁLIDA</span>
+          <h2>Tu entrada al evento</h2>
+          <p class="muted">Compra #{{ ticket.orderId.slice(0, 8) }}</p>
+          <div class="ticket-code">
+            <p>Código de entrada</p>
+            <code>{{ ticket.code }}</code>
+          </div>
+          <button class="text-button" (click)="copy(ticket.code)">Copiar código</button>
+          <details>
+            <summary>Detalles de la entrada</summary>
+            <p class="identifier">
+              Orden: {{ ticket.orderId }}<br />Tipo de entrada: {{ ticket.ticketTypeId
+              }}<br />Unidad: {{ ticket.unitId }}
+            </p>
+          </details>
+        </article>
+      }
+    </div>
+  } @else {
+    <div class="empty">
+      <h2>No tienes entradas vigentes</h2>
+      <p>
+        Las entradas aparecerán aquí al confirmarse el pago. Las reembolsadas dejan de estar
+        disponibles.
+      </p>
+      <a class="button" routerLink="/eventos">Ver eventos</a>
+    </div>
+  }
+</section>

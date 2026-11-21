@@ -1,0 +1,27 @@
+  @Test
+  void should_expireUnpaidOrderAfterGraceWhenItsReservationWasCancelled() {
+    OrderFixture fixture = createOrder(1);
+    asUser(
+        fixture.userId(),
+        () -> {
+          reservationService.cancel(fixture.reservationId(), fixture.userId());
+          return null;
+        });
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("PENDING_PAYMENT", "PENDING", "CANCELLED", 0, 1));
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
+        fixture.reservationId());
+
+    orderExpirationService.expireOverdue();
+    orderExpirationService.expireOverdue();
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "PENDING", "CANCELLED", 0, 1));
+    orderPaymentService.process(webhook(fixture, PaymentStatus.SUCCEEDED, "late-cancelled-reservation"));
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "SUCCEEDED", "CANCELLED", 0, 1));
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUIRED");
+  }
+

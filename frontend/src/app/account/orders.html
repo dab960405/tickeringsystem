@@ -1,0 +1,67 @@
+<section aria-labelledby="orders-title">
+  <div class="page-intro">
+    <p class="eyebrow">TU CUENTA</p>
+    <h1 id="orders-title">Mis compras</h1>
+    <p>Consulta el estado de tus órdenes y gestiona pagos o reembolsos.</p>
+  </div>
+  @if (!auth.signedIn()) {
+    <p class="empty">
+      Tu sesión terminó.
+      <a routerLink="/entrar" [queryParams]="{ returnUrl: '/compras' }">Volver a entrar</a>
+    </p>
+  } @else if (busy()) {
+    <p class="empty" role="status">Cargando tus compras…</p>
+  } @else if (error()) {
+    <div class="notice error" role="alert">
+      <p>{{ error() }}</p>
+      <button class="button secondary" (click)="load()">Reintentar</button>
+    </div>
+  } @else if (result(); as data) {
+    @for (order of data.content; track order.id) {
+      <article class="order-card">
+        <div class="order-header">
+          <div>
+            <h2>Compra #{{ order.id.slice(0, 8) }}</h2>
+            <p class="muted">{{ order.createdAt | date: 'medium' }}</p>
+          </div>
+          <span class="badge" [class.warning]="order.status === 'PENDING_PAYMENT'">{{
+            order.status | orderStatus
+          }}</span>
+        </div>
+        <div class="order-details">
+          <div>
+            <span>Total</span><strong>{{ order.totalAmount | currency: order.currency }}</strong>
+          </div>
+          <div><span>Entradas</span>{{ quantity(order) }}</div>
+          <div><span>Entrega</span>{{ delivery(order) }}</div>
+          <div><span>Reembolso</span>{{ order.refundStatus | orderStatus }}</div>
+        </div>
+        <details>
+          <summary>Identificadores de la compra</summary>
+          <p class="identifier">Orden: {{ order.id }}<br />Reserva: {{ order.reservationId }}</p>
+        </details>
+        <app-order-actions [order]="order" (updated)="update($event)" />
+      </article>
+    } @empty {
+      <div class="empty">
+        <h2>Todavía no tienes compras</h2>
+        <p>Elige un evento para reservar tus primeras entradas.</p>
+        <a class="button" routerLink="/eventos">Explorar eventos</a>
+      </div>
+    }
+    @if (data.totalPages > 1) {
+      <nav class="pagination" aria-label="Páginas de compras">
+        <button class="button secondary" [disabled]="data.page === 0" (click)="load(data.page - 1)">
+          Anterior</button
+        ><span>Página {{ data.page + 1 }} de {{ data.totalPages }}</span
+        ><button
+          class="button secondary"
+          [disabled]="data.page + 1 >= data.totalPages"
+          (click)="load(data.page + 1)"
+        >
+          Siguiente
+        </button>
+      </nav>
+    }
+  }
+</section>

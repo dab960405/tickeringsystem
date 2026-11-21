@@ -1,8 +1,78 @@
 # Ejecución local
 
+## Recorrido guiado para probar la API
+
+En Linux/macOS con Bash y Python 3, desde la raíz del repositorio:
+
+```bash
+bash scripts/local.sh init
+bash scripts/local.sh doctor
+bash scripts/local.sh infra
+bash scripts/local.sh run
+```
+
+`init` crea `.env` con secretos aleatorios y permisos 600; conserva un archivo existente.
+`infra` inicia únicamente PostgreSQL y Redis, suficientes para el flujo actual de la API.
+`run` empaqueta sin pruebas e inicia la API en primer plano. Para la suite completa usa
+`bash scripts/local.sh test`, que ejecuta `./mvnw -B clean verify` con Testcontainers.
+
+Con la API iniciada, abre otra terminal en el repositorio y ejecuta:
+
+```bash
+bash scripts/local.sh smoke
+```
+
+La prueba crea un evento con fechas futuras y dos compradores. Comprueba permisos,
+reserva e inventario, creación idempotente de orden, firma HMAC, captura y reembolso
+duplicados, emisión e invalidación del ticket y revocación del refresh token. Utiliza el
+organizador y el recinto de los datos semilla del perfil `dev`; conserva los datos creados
+para poder inspeccionarlos. No imprime contraseñas, tokens ni firmas.
+
+Para usar otras credenciales o recinto locales, exporta `SMOKE_ORGANIZER_EMAIL`,
+`SMOKE_ORGANIZER_PASSWORD` y `SMOKE_VENUE_ID`. El destino HTTP se limita a localhost;
+`TICKETING_BASE_URL` permite seleccionar el puerto local.
+
+Detén la API con `Ctrl+C`. `bash scripts/local.sh stop` detiene PostgreSQL y Redis
+conservando los datos. El perfil `infra` completo descrito abajo sigue incluyendo Kafka
+y MongoDB para las fases que los utilizan.
+
+## Interfaz para recorrer la compra
+
+La interfaz utiliza Angular 22 y requiere Node 24 LTS (24.15+) y npm. Con PostgreSQL,
+Redis y la API iniciados, instala sus dependencias desde la raíz del repositorio:
+
+```bash
+cd frontend
+npm ci
+cd ..
+bash scripts/local.sh ui
+```
+
+Abre <http://localhost:5173>. La interfaz permite registrarse, iniciar sesión, buscar
+eventos, elegir tipo y cantidad de entradas, reservar, crear la orden y simular un
+pago aprobado o rechazado. En **Mis compras** puedes cancelar una orden pendiente o
+solicitar y confirmar un reembolso; **Mis entradas** muestra los tickets vigentes y
+permite copiar sus códigos o imprimirlos.
+
+Los pagos son ficticios. El simulador local firma los webhooks usando el mismo `.env`
+de la API; el secreto nunca llega al navegador. No introduzcas datos de tarjeta.
+La sesión se mantiene en memoria: después de recargar la página debes iniciar sesión
+otra vez, y tus órdenes y entradas siguen guardadas en el backend.
+
+`ui` compila Angular y Python 3 sirve los archivos resultantes y conecta la interfaz con
+la API. Si Node está fuera del `PATH`, configura `NODE_HOME` en `.env` con su carpeta
+de instalación; el script añade `NODE_HOME/bin` al `PATH` del proceso.
+Este servidor escucha solo en localhost y es una
+herramienta de desarrollo, no un servidor para desplegar en producción. Puedes cambiar
+`FRONTEND_PORT` y `TICKETING_API_PORT` mediante variables de entorno.
+
+Detén la interfaz con `Ctrl+C`. Consulta [la guía del frontend](../frontend/README.md)
+para conocer su organización, pruebas y las fuentes oficiales que orientan la implementación.
+
 ## Requisitos
 
 - Java 21.
+- Para el frontend: Node 24 LTS (24.15+), npm y Python 3.10+.
 - Maven 3.9 o superior (se recomienda usar el Maven Wrapper incluido).
 - Docker Engine/Desktop con Docker Compose v2 y soporte para Testcontainers si se ejecutan pruebas de integración.
 - Puertos disponibles: 5432 (PostgreSQL), 6379 (Redis), 9092 (Kafka), 27017 (MongoDB) y 8080 (API), salvo que se cambien en `.env`.
@@ -142,4 +212,25 @@ Copia únicamente el valor hexadecimal que aparece después de `(stdin)=` y úsa
 
 ## Alcance de verificación
 
-Los comandos anteriores describen el flujo previsto por los archivos de configuración y build del repositorio. **Los pasos con Docker Compose no se verificaron en el entorno de desarrollo asistido**. Verifica el estado real de los contenedores y la respuesta de Actuator en tu equipo antes de considerar operativo el entorno local.
+El 15 de noviembre de 2026 se verificó en Linux Mint, con Java 21 y Docker 29, el
+arranque de PostgreSQL y Redis mediante Compose, las migraciones V1–V16 y el seed de
+desarrollo, y la API en el puerto 8080. `scripts/local-smoke.py` completó 34
+comprobaciones HTTP sobre el código productivo de `dev` en `76a0fbb`.
+El ciclo completo `clean verify` terminó con `BUILD SUCCESS`: 567 pruebas, cero fallos,
+errores u omisiones, controles de cobertura JaCoCo y formato Spotless correctos.
+
+Esta evidencia cubre el recorrido principal de compra y reembolso simulado. No acredita
+el perfil de infraestructura completo con Kafka/MongoDB, las funcionalidades de fases
+posteriores ni los escenarios adicionales de recuperación y expiración pendientes de
+reproducción. Los resultados de la suite completa deben consultarse en los reportes
+Surefire/Failsafe generados por `./mvnw clean verify`.
+
+## Pruebas adversarias locales
+
+Con API y frontend activos, ejecuta `bash scripts/local.sh adversarial`.
+Agrega `--with-integration` para reproducir fallos de recuperación y expiración,
+además de caída de Redis, en Testcontainers desechables. Se crean datos ficticios
+y reportes JSON/Markdown en `reports/adversarial/`; una salida 1 indica hallazgos.
+Consulta [resultados, límites y reproducciones](ADVERSARIAL_TESTING.md).
+Esta comprobación adicional reprodujo los escenarios de recuperación y expiración
+que quedaban pendientes en el alcance de verificación anterior.

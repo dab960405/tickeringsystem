@@ -1,0 +1,54 @@
+  @Test
+  void should_notReevaluateEarlyRefundWhenRecoveringProjectionAfterCapture() throws Exception {
+    OrderFixture fixture = createOrder();
+    PaymentWebhookRequest refund =
+        new PaymentWebhookRequest(
+            fixture.orderId(),
+            PaymentStatus.REFUNDED,
+            "early-refund-" + UUID.randomUUID(),
+            UUID.randomUUID(),
+            "early-refund-operation-" + UUID.randomUUID(),
+            ProviderOperationKind.PAYMENT_REFUND,
+            new BigDecimal("40.00"),
+            "USD");
+    String refundPayload = objectMapper.writeValueAsString(refund);
+    ProviderEventReceipt receipt = inboxService.receive(refund, refundPayload);
+    UUID jobId = jobService.findEffectiveJobIdForEvent(receipt.eventId()).orElseThrow();
+    OperationClaim interrupted = jobService.claim(jobId, "early-refund").orElseThrow();
+
+    paymentOperationService.apply(interrupted);
+    assertThat(dispositionTypes(jobId)).containsExactly("NO_OP");
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("PENDING");
+
+    PaymentWebhookRequest capture = webhook(fixture, new BigDecimal("40.00"));
+    String capturePayload = objectMapper.writeValueAsString(capture);
+    paymentWebhookService.handle(signature(capturePayload), capturePayload);
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("SUCCEEDED");
+    assertThat(ticketCount(fixture.orderId())).isEqualTo(1);
+
+    paymentOperationService.processJob(jobId, "projection-recovery");
+
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("SUCCEEDED");
+    assertThat(orderStatus(fixture.orderId())).isEqualTo("PAID");
+    assertThat(cancelledTicketCount(fixture.orderId())).isZero();
+    assertThat(projectionStatus(jobId)).isEqualTo("COMPLETED");
+    assertThat(dispositionTypes(jobId)).doesNotContain("APPLIED");
+    assertThatThrownBy(() -> paymentOperationService.project(interrupted))
+        .isInstanceOf(OperationFencingException.class);
+
+    PaymentWebhookRequest newRefundEvent =
+        new PaymentWebhookRequest(
+            refund.orderId(),
+            refund.status(),
+            refund.providerReference(),
+            UUID.randomUUID(),
+            refund.providerOperationId(),
+            refund.operationKind(),
+            refund.amount(),
+            refund.currency());
+    String newPayload = objectMapper.writeValueAsString(newRefundEvent);
+    paymentWebhookService.handle(signature(newPayload), newPayload);
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("REFUNDED");
+    assertThat(cancelledTicketCount(fixture.orderId())).isEqualTo(1);
+  }
+

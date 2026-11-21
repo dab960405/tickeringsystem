@@ -1,0 +1,95 @@
+<section aria-labelledby="events-title">
+  <div class="page-intro">
+    <p class="eyebrow">TU PRÓXIMA EXPERIENCIA</p>
+    <h1 id="events-title">Un plan. Tu entrada.</h1>
+    <p>Explora los eventos, elige tu lugar y lleva tus entradas contigo.</p>
+  </div>
+  <form class="search" (submit)="$event.preventDefault(); search()">
+    <label for="query">Buscar un evento</label>
+    <div class="inline">
+      <input
+        id="query"
+        type="search"
+        [formControl]="query"
+        placeholder="Nombre del evento"
+        maxlength="150"
+      />
+      <button class="button" type="submit">Buscar</button>
+    </div>
+  </form>
+  <div class="catalog-layout">
+    <div [attr.aria-busy]="loading()">
+      <div class="section-heading">
+        <h2>Eventos disponibles</h2>
+        @if (result(); as data) {
+          <span>{{ data.totalElements }} evento(s)</span>
+        }
+      </div>
+      @if (loading()) {
+        <p class="empty" role="status">Cargando eventos…</p>
+      } @else if (error()) {
+        <div class="notice error" role="alert">
+          <p>{{ error() }}</p>
+          <button class="button secondary" (click)="reload()">Reintentar</button>
+        </div>
+      } @else if (result(); as data) {
+        @for (event of data.content; track event.id) {
+          <article class="event-row">
+            <div class="date-tile" aria-hidden="true">
+              <strong>{{ event.startsAt | date: 'dd' }}</strong><span>{{
+                event.startsAt | date: 'MMM'
+              }}</span>
+            </div>
+            <div class="event-info">
+              <span class="category">{{ event.category }}</span>
+              <h3>{{ event.title }}</h3>
+              <p>{{ event.venueName }} · {{ event.city }}</p>
+              <p>{{ event.startsAt | date: 'medium' }}</p>
+            </div>
+            <a
+              class="button secondary small"
+              [routerLink]="['/eventos', event.id]"
+              [attr.aria-label]="'Ver entradas de ' + event.title"
+              >Ver entradas</a
+            >
+          </article>
+        } @empty {
+          <div class="empty">
+            <h2>No encontramos eventos</h2>
+            <p>Prueba otro nombre o vuelve a consultar el catálogo.</p>
+          </div>
+        }
+        @if (data.totalPages > 1) {
+          <nav class="pagination" aria-label="Páginas del catálogo">
+            <button
+              class="button secondary small"
+              [disabled]="data.page === 0"
+              (click)="search(data.page - 1)"
+            >
+              Anterior
+            </button>
+            <span>Página {{ data.page + 1 }} de {{ data.totalPages }}</span>
+            <button
+              class="button secondary small"
+              [disabled]="data.page + 1 >= data.totalPages"
+              (click)="search(data.page + 1)"
+            >
+              Siguiente
+            </button>
+          </nav>
+        }
+      }
+    </div>
+    <aside class="panel" aria-label="Pasos de compra">
+      <p class="eyebrow">TU COMPRA</p>
+      <h2>Elige un evento</h2>
+      <p>Podrás consultar la disponibilidad y seguir cada paso de tu compra.</p>
+      <ol class="preview-steps">
+        <li>Elige tus entradas</li>
+        <li>Reserva y crea tu orden</li>
+        <li>Simula el pago</li>
+        <li>Recibe tu entrada</li>
+      </ol>
+    </aside>
+  </div>
+</section>

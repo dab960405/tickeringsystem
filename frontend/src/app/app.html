@@ -1,0 +1,60 @@
+<a
+  class="skip-link"
+  [href]="router.url.split('#')[0] + '#main'"
+  (click)="$event.preventDefault(); focusContent()"
+  >Saltar al contenido</a
+>
+<header class="header">
+  <a class="brand" routerLink="/eventos" aria-label="Ticketing, eventos"
+    ><span class="brand-icon" aria-hidden="true">T</span>ticketing<span class="demo-tag"
+      >DEMO</span
+    ></a
+  >
+  <nav aria-label="Navegación principal">
+    <a routerLink="/eventos" routerLinkActive="active" ariaCurrentWhenActive="page">Eventos</a>
+    <a routerLink="/compras" routerLinkActive="active" ariaCurrentWhenActive="page">Mis compras</a>
+    <a routerLink="/entradas" routerLinkActive="active" ariaCurrentWhenActive="page"
+      >Mis entradas</a
+    >
+  </nav>
+  <div class="account">
+    @if (auth.signedIn()) {
+      <span [title]="auth.email()">{{ auth.email() }}</span><button
+        class="button secondary small"
+        [disabled]="loggingOut() || purchase.busy()"
+        (click)="logout()"
+      >
+        Salir
+      </button>
+    } @else {
+      <a class="button small" routerLink="/entrar" [queryParams]="{ returnUrl: router.url }"
+        >Entrar / Registrarme</a
+      >
+    }
+  </div>
+</header>
+<div class="demo-banner">
+  Proyecto de demostración · Los pagos y reembolsos son simulados. No se cobra dinero real.
+</div>
+<main #main id="main" tabindex="-1">
+  <div
+    class="notice"
+    [class.error]="notice.failed()"
+    [hidden]="!notice.message()"
+    role="status"
+    aria-live="polite"
+  >
+    {{ notice.message() }}
+  </div>
+  @if (purchase.pending()) {
+    <p class="resume-checkout">
+      <a [routerLink]="['/eventos', purchase.event()?.id]"
+        >Tienes una compra en curso. Continuar →</a
+      >
+    </p>
+  }
+  <router-outlet (activate)="focusContent()" />
+</main>
+<footer>
+  <span>ticketing · Portfolio</span><span>Catálogo → Reserva → Orden → Pago → Entrada</span>
+</footer>
