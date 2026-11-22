@@ -1,94 +1,90 @@
-# ADR-014: Resiliencia ante indisponibilidad de Redis y degradación de autenticación
+# ADR-014 — Redis outage resilience and authentication degradation
 
-- **Fecha:** 2026-11-10
-- **Estado:** Aceptado
-- **Fase:** 4
+- **Date:** 2026-11-10
+- **Status:** ACCEPTED
+- **Phase:** 4
 
-## Contexto
+## Context
 
-Redis participa en tres responsabilidades con perfiles de riesgo diferentes:
+Redis has three separate risk profiles in the initial phase:
 
-1. Caché de metadatos del catálogo de tipos de entrada.
-2. Rate limiting de intentos de inicio de sesión.
-3. Persistencia y revocación de refresh tokens.
+1. Ticket-type catalog metadata cache.
+2. Login attempt rate limiting.
+3. Refresh-token persistence and revocation.
 
-Una caída de Redis no debe convertir una optimización de lectura en una caída de la API ni permitir que se acepten sesiones cuya revocación no puede comprobarse. La validación de access tokens debe seguir siendo independiente de Redis.
+A Redis outage should not turn an optional read cache into an API outage, nor should it silently accept authentication sessions whose revocation cannot be checked. Previously issued JWT access tokens should remain locally verifiable.
 
-En runtime, `application.yml` configura `spring.data.redis.timeout=500ms` como timeout de comando. El contexto aislado de `RedisOutageIT` configura además `spring.data.redis.connect-timeout=500ms`. Las pruebas de integración de indisponibilidad usan un contenedor Redis dedicado, separado del contenedor compartido por el resto de las pruebas, y pausan el contenedor para simular la caída.
+Runtime `application.yml` sets `spring.data.redis.timeout=500ms`; the isolated `RedisOutageIT` context additionally sets `spring.data.redis.connect-timeout=500ms`. The Redis outage integration class uses its **own** Redis container and pauses it to simulate a stalled service.
 
-## Alternativas consideradas
+## Alternatives considered
 
-1. **Fail-closed para todas las operaciones Redis:** mantener la consistencia estricta, a costa de hacer indisponible el catálogo y el login ante una caída de Redis.
-2. **Fail-open para todas las operaciones Redis:** mantener disponibilidad, pero permitir operaciones de autenticación sin poder verificar o persistir el estado de sesión.
-3. **Degradación diferenciada según el riesgo:** permitir fallback a PostgreSQL para lecturas cacheadas y omitir temporalmente el rate limiting, pero rechazar operaciones que requieren persistencia o revocación de refresh tokens.
+1. **Fail closed everywhere**: consistent but makes catalog and login unavailable during Redis outages.
+2. **Fail open everywhere**: keeps availability but risks accepting refresh sessions without checking/persisting revocation.
+3. **Risk-specific degradation**: fall back for cached reads and temporarily bypass rate limiting, while failing closed for refresh-token state.
 
-## Decisión
+## Decision: differentiated resilience
 
-Se adopta la degradación diferenciada:
+### Catalog cache — fail-open fallback to PostgreSQL
 
-### Caché de catálogo: fail-open con fallback a PostgreSQL
+- Redis holds only serializable metadata, never current inventory; PostgreSQL supplies stock availability.
+- `CacheErrorHandler` logs and bypasses Redis **access and serialization** failures, allowing the business read to continue.
+- Failed invalidations are **not retried**. An existing cache entry may stay stale until its TTL expires.
+- Runtime TTL `TICKET_TYPES_CACHE_TTL` defaults to five minutes. `RedisOutageIT` sets class-wide `ticketing.cache.ticket-types.ttl=20s` for **all** tests in that class, not just the invalidation test.
+- `should_serveStaleCatalogUntilTtlAfterFailedInvalidation` updates PostgreSQL while Redis is paused, then shows that the earlier cache metadata remains until TTL and is refreshed afterward.
 
-- Redis almacena exclusivamente metadatos serializables del catálogo mediante cache-aside; la disponibilidad de inventario se consulta siempre en PostgreSQL.
-- Los fallos Redis de acceso a datos y serialización en las operaciones de caché se registran y se omiten mediante `CacheErrorHandler`; la lectura continúa contra PostgreSQL.
-- Las invalidaciones fallidas no se reintentan. Una entrada previamente cacheada puede permanecer obsoleta hasta que expire su TTL.
-- El TTL de runtime se configura con `TICKET_TYPES_CACHE_TTL` y tiene un valor predeterminado de cinco minutos. La anotación de clase `@SpringBootTest(properties = "ticketing.cache.ticket-types.ttl=20s")` de `RedisOutageIT` aplica el TTL de 20 segundos a **todos los tests de esa clase**, no únicamente al test de invalidación fallida; es una configuración aislada de pruebas.
+### Login rate limiting — fail open
 
-La prueba `should_serveStaleCatalogUntilTtlAfterFailedInvalidation` verifica que, si Redis está pausado durante una actualización, la API actualiza PostgreSQL y responde correctamente, pero la entrada cacheada anterior sigue visible hasta que vence el TTL. Después de la expiración, la lectura devuelve el valor actualizado.
+- On Redis `DataAccessException`, allow the login request to proceed while logging the degraded rate-limit state.
+- This prioritizes service continuity over temporary brute-force resistance.
+- **Fail-open rate limiting is not fail-open sessions**: a valid login still fails HTTP 503 if it cannot store its refresh token in Redis. Invalid credentials still fail normally.
 
-### Rate limiting de login: fail-open
+### Refresh tokens — fail closed (HTTP 503)
 
-- Si Redis falla durante el chequeo del rate limiter, la excepción `DataAccessException` se registra y se permite continuar la solicitud.
-- Esta decisión prioriza la disponibilidad del flujo de autenticación frente a la indisponibilidad temporal del componente que aplica el límite.
-- Fail-open del rate limiter **no** implica fail-open de la sesión: si un login válido necesita guardar un refresh token y Redis no está disponible, la emisión de tokens falla de forma cerrada (HTTP 503), porque no puede persistirse el estado de sesión.
+- Store, inspect and revoke refresh tokens through Redis.
+- Redis failures become `TokenStoreUnavailableException`, mapped to HTTP 503.
+- Refresh/logout are not successful when revocation cannot be checked or written.
+- A successful-credential login may return 503 if the refresh token cannot be stored.
+- `should_failClosedForAuthenticationSessionsDuringRedisOutage` covers refresh, login, logout and later recovery.
 
-### Refresh tokens: fail-closed, HTTP 503
+### Access JWT — locally validated, independent of Redis
 
-- Guardar, comprobar o revocar un refresh token requiere Redis.
-- Los errores de acceso a Redis se convierten en `TokenStoreUnavailableException`, que la API traduce a HTTP 503.
-- Refresh y logout no se consideran exitosos cuando no es posible consultar o modificar el estado de revocación.
-- Un login con credenciales válidas también puede responder 503 si no logra persistir el refresh token. Un login con credenciales inválidas conserva su respuesta de autenticación fallida.
+- Spring Security Resource Server validates JWT signature, expiration and token type locally.
+- Verifying an access token does not consult Redis refresh-token storage.
+- `should_acceptValidAccessTokenDuringRedisOutage` logs in beforehand and verifies a protected access-token request during a paused Redis container.
 
-La prueba `should_failClosedForAuthenticationSessionsDuringRedisOutage` cubre el comportamiento de refresh, login y logout durante la caída, además de la recuperación posterior.
+### Timeouts and measured latency
 
-### Access tokens: validación local, sin Redis
+- Runtime Redis command timeout is 500 ms; isolated outage tests also configure a 500 ms connection timeout. `should_configureShortCommandTimeoutOnLettuceClient` checks effective Lettuce timeout.
+- Measured degradation examples: approximately **1,014 ms** for catalog fallback and **1,023 ms** for a public event GET. Each performs a failed ~500 ms Redis get and ~500 ms Redis put/refresh, plus processing overhead.
+- These figures describe the tested outage environment; fallback preserves behavior but does not remove waiting latency.
+- An HTTP 503 caused by a timeout **does not prove that Redis never executed the command**. A queued command might take effect after Redis resumes.
 
-- Los access tokens JWT se validan mediante Spring Security Resource Server, verificando firma, expiración y tipo de token localmente con la configuración criptográfica de la API.
-- La comprobación de un access token no consulta el almacén Redis de refresh tokens.
-- La prueba `should_acceptValidAccessTokenDuringRedisOutage` registra e inicia sesión antes de pausar Redis y verifica que una petición autenticada con el access token sigue respondiendo correctamente durante la caída.
+### Transactional authority
 
-### Timeouts y latencia observada
+- PostgreSQL remains authoritative for inventory, reservations and orders.
+- Order item unit price is stored as an immutable snapshot. Redis cannot set inventory or charged price.
 
-- La API configura un timeout de comando Redis de 500 ms. En el contexto de `RedisOutageIT`, el timeout de conexión también se fija en 500 ms; `should_configureShortCommandTimeoutOnLettuceClient` verifica el timeout de comando efectivo de Lettuce.
-- En la ejecución de pruebas de indisponibilidad se observaron aproximadamente **1.014 ms para el fallback del catálogo** y **1.023 ms para el GET público del evento**.
-- En ambos flujos, la petición espera aproximadamente **500 ms al intentar leer desde Redis** y otros **500 ms al intentar escribir/actualizar la caché** antes de completar el fallback. La suma observada es aproximadamente 1.014 ms y 1.023 ms, respectivamente; la diferencia restante corresponde a procesamiento y overhead de la petición.
-- Estas latencias reflejan el coste de esperar las operaciones Redis que fallan durante la caída; el fallback mantiene la respuesta funcional, pero no elimina la latencia de espera.
-- Un HTTP 503 causado por timeout no demuestra que Redis no haya aplicado el comando: si el comando alcanzó Redis antes de perderse la respuesta, podría completarse después de que Redis se reanude.
+## Historical CI evidence
 
-### Fuente de verdad transaccional
+The historical **CI #107** on code commit `24d6a514f1f8a4d467b1c457d12a478e24f75c36` passed **313 unit** and **57 integration** tests with no failures, errors or skips. Its `RedisOutageIT` ran seven cases testing the actual Lettuce timeout, dedicated Redis container, catalog fallback, stale TTL behavior, fail-closed refresh sessions and locally verifiable access tokens.
 
-- PostgreSQL continúa siendo la fuente de verdad para inventario, reservas y órdenes.
-- El precio de cada línea de orden se conserva como snapshot en `order_items`; la caché Redis no determina el precio ni la disponibilidad de una compra.
+Later complete CI runs also exercised the outage suite; review them by exact SHA before asserting the outcome of newly edited code.
 
-## Evidencia de CI
+## Consequences and limitations
 
-El run **#107**, asociado al commit de código `24d6a514f1f8a4d467b1c457d12a478e24f75c36`, terminó correctamente. Sus XML reportan 313 tests unitarios y 57 tests de integración, sin fallos, errores ni omisiones.
+- Catalog remains available during Redis outage but failed invalidation can leave metadata stale up to the remaining TTL.
+- Command timeout is per Redis operation; requests involving multiple cache calls accumulate the delays.
+- Login rate limiting temporarily stops during outages, increasing brute-force exposure for that interval.
+- Redis-dependent refresh/session operations return HTTP 503; existing signed access tokens remain valid until expiry.
+- Only documented Redis faults should be bypassed; unrelated application failures must not be swallowed.
+- Redis recovery does not automatically rebuild every stale entry; TTL allows eventual refresh.
 
-En `RedisOutageIT` se ejecutaron 7 tests, todos correctos. Entre ellos se verifican el timeout real configurado en Lettuce, el uso de Redis dedicado, el fallback durante la caída, la expiración de una entrada obsoleta, el fail-closed del almacén de refresh tokens y la validación local de access tokens.
+## Historical deferred scope — later superseded by ADR-020
 
-## Consecuencias y límites
+**At the time of ADR-014**, three items from the original specification were deliberately deferred, not presented as implemented:
 
-- El catálogo conserva disponibilidad durante una caída de Redis, pero una actualización puede no reflejarse inmediatamente en una entrada cacheada: el límite de obsolescencia está determinado por el TTL restante.
-- El timeout de comando de 500 ms limita la espera por operación Redis; el timeout de conexión de 500 ms se configura específicamente en el contexto de prueba de indisponibilidad. Una petición que realiza más de una operación cacheada puede acumular latencia.
-- El rate limiting de login queda temporalmente desactivado cuando Redis no está disponible; esto aumenta la exposición a intentos de fuerza bruta durante la incidencia.
-- La autenticación que depende del estado de refresh token queda indisponible con HTTP 503 mientras Redis no pueda responder. Los access tokens ya emitidos continúan siendo validables hasta su expiración.
-- El fail-open del catálogo solo aplica a los fallos Redis contemplados por el manejador; errores ajenos a acceso/serialización no deben ocultarse.
-- La recuperación de Redis no implica reconstruir o invalidar automáticamente toda entrada obsoleta; la expiración TTL permite recuperar el catálogo.
+1. **`GET /events/{id}` public event metadata cache:** originally deferred pending cross-entity invalidation and consistency rules.
+2. **Redis `reservation:{id}` keys:** originally deferred to avoid making Redis a second source of truth for reservation state.
+3. **Rate limiting for reservations/orders:** originally deferred pending exact operation-specific scopes, thresholds and responses.
 
-## Trabajo diferido — desviaciones aceptadas respecto a la especificación
-
-Los tres puntos siguientes son **DESVIACIONES respecto a la especificación original**, en particular sus secciones 9, 10 y 11 y el alcance previsto para la Fase 4. Se aceptan explícitamente para esta fase; no se consideran requisitos implementados ni criterios completados. La decisión limita el alcance para mantener PostgreSQL como fuente de verdad transaccional y evitar introducir nuevas rutas de consistencia distribuida sin una política de invalidación, expiración y recuperación definida.
-
-1. **DESVIACIÓN — Caché de `GET /events/{id}`:** la especificación contempla ampliar la caché a la consulta pública del evento. Se difiere porque esa respuesta combina datos del evento y del catálogo; antes de cachearla se necesita definir una estrategia de consistencia e invalidación que no exponga metadatos obsoletos. En esta fase se limita la caché a metadatos de tipos de entrada.
-2. **DESVIACIÓN — Claves Redis `reservation:{id}`:** la especificación contempla almacenar información de reservas en Redis. Se difiere para no duplicar en Redis el estado transaccional que ya administra PostgreSQL ni crear una segunda fuente de verdad para el ciclo de vida de una reserva. Las reservas continúan persistidas y gobernadas por PostgreSQL.
-3. **DESVIACIÓN — Rate limiting de reservas y órdenes:** la especificación prevé extender la limitación de solicitudes más allá del login. Se difiere porque esta fase implementa únicamente el rate limiting de login; las políticas para reservas y órdenes requieren definir límites, sujetos de aplicación y respuestas específicas por operación.
-
+**These historical deferrals were subsequently addressed and accepted through [ADR-020](ADR-020-phase-4-redis-completion.md).** The current code implements public event metadata cache, reservation projections after commit and rate limits for reservations/orders while PostgreSQL remains authoritative. Do not mark these historical deferrals as active omissions without inspecting ADR-020.

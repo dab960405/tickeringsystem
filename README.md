@@ -2,152 +2,116 @@
 
 [![CI](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml/badge.svg)](https://github.com/dab960405/tickeringsystem/actions/workflows/ci.yml)
 
-Plataforma de venta de entradas para eventos, construida con Java 21 y Spring Boot. Demuestra diseño de dominio, seguridad, consistencia transaccional, concurrencia de inventario, reservas temporales, pagos idempotentes y resiliencia ante indisponibilidad de Redis.
+Ticketing is a portfolio event-ticketing platform built on Java 21, Spring Boot 3.5, PostgreSQL 17 and Redis 7. It demonstrates modular domain design, role-based authentication, atomic inventory, time-limited reservations, idempotent orders, signed **simulated** payment callbacks, ticket issuance, durable operation recovery and controlled infrastructure degradation. An Angular 22 buyer interface and a Python localhost-only mock gateway provide a local demonstration.
 
-> **Estado (2026-11-14):** Fases 0–2 cerradas. Fases 3 y 4 con funcionalidad y evidencia CI, en trámite de cierre formal. F3-01 y ADR-024 proponen una excepción transaccional delimitada para `EventCancellationService`; F4-05 y ADR-022 proponen el contrato mínimo del proveedor SIMULATED. ERD actualizado V1–V16. El responsable autorizó ejecutar los trabajos de cierre; el dictamen técnico del Tech Lead y la aprobación formal siguen pendientes. Fase 5 bloqueada.
+> **Project status (2026-11-21):** Phases 0–2 were formally closed. Phases 3 and 4 are implemented substantially but remain **OPEN pending technical remediation, independent Tech Lead verdicts and formal owner acceptance**. ADR-024 (transactional event cancellation exception) and ADR-022 (SIMULATED refund evidence contract) are **PROPOSED, not approved**. Only `main` exists as the permanent branch. Phase 5 (Kafka/outbox/notifications/MongoDB) is **BLOCKED**. The owner explicitly requires English for all maintained project content; the migration is tracked under [ADR-025](docs/adr/ADR-025-english-only-project-policy.md).
 
-## Documentación
+## Documentation and review
 
-- [Progreso y evidencia de verificación](docs/PROGRESS.md)
-- [Política de decisiones técnicas y doble comprobación con fuentes oficiales](docs/engineering-decision-verification.md)
-- [Guía de ejecución local](docs/LOCAL_RUN.md)
-- [Frontend Angular: arranque, estructura y fuentes oficiales](frontend/README.md)
-- [F3-01 — expediente de Fase 3](docs/phase-3/F3-01-closure-review.md)
-- [ADR-024 — excepción transaccional propuesta](docs/adr/ADR-024-event-cancellation-transactional-exception.md)
-- [F4-05 — expediente de revisión de cierre](docs/phase-4/F4-05-closure-review.md)
-- [ADR-022 — contrato de pagos simulados (propuesto)](docs/adr/ADR-022-simulated-refund-evidence-contract.md)
-- [F5-00 — plan de Fase 5 y primera prueba local (sin iniciar)](docs/phase-5/F5-00-plan-and-local-validation.md)
-- [Flujo HTTP de smoke test](docs/flow.http) — no se ejecuta en CI; requiere generar manualmente la firma HMAC del webhook.
-- [Arquitectura y flujo de negocio](docs/architecture.md)
-- [Diagrama ERD basado en migraciones Flyway](docs/erd.md)
-- [Registro de decisiones](docs/decisions.md)
-- [ADR-010: actualización atómica del inventario](docs/adr/ADR-010-atomic-inventory-update.md)
-- [ADR-011: idempotencia de órdenes y webhooks](docs/adr/ADR-011-order-and-webhook-idempotency.md)
-- [ADR-012: expiración con SKIP LOCKED](docs/adr/ADR-012-reservation-expiration-skip-locked.md)
-- [ADR-013: caché Redis de metadatos del catálogo](docs/adr/ADR-013-redis-catalog-cache.md)
-- [ADR-014: resiliencia Redis y degradación de autenticación](docs/adr/ADR-014-redis-resilience-and-auth-degradation.md)
-- [ADR-015: una orden por reserva](docs/adr/ADR-015-one-order-per-reservation.md)
-- [ADR-021: ocultación de recursos ajenos](docs/adr/ADR-021-phase-2-authorization-resource-concealment.md)
-- [Matriz de autorización de Fase 2](docs/phase-2/authorization-matrix.md)
+- [Current engineering remediation report](docs/audit/MAIN-REMEDIATION-2026-11-21.md).
+- [Project progress, verification history and open findings](docs/PROGRESS.md).
+- [Architecture and module boundaries](docs/architecture.md), [Flyway-derived ERD](docs/erd.md), [decisions](docs/decisions.md) and [source-verification policy](docs/engineering-decision-verification.md).
+- [Local run guide](docs/LOCAL_RUN.md), [HTTP example flow](docs/flow.http), [adversarial testing evidence](docs/ADVERSARIAL_TESTING.md).
+- [Angular client](frontend/README.md) and [frontend verification](frontend/VERIFICATION.md).
+- [Phase 3 dossier](docs/phase-3/F3-01-closure-review.md), [proposed ADR-024](docs/adr/ADR-024-event-cancellation-transactional-exception.md), and [Tech Lead issue #5](https://github.com/dab960405/tickeringsystem/issues/5).
+- [Phase 4 dossier](docs/phase-4/F4-05-closure-review.md), [proposed ADR-022](docs/adr/ADR-022-simulated-refund-evidence-contract.md), and [Tech Lead issue #6](https://github.com/dab960405/tickeringsystem/issues/6).
+- [Phase 5 planning only](docs/phase-5/F5-00-plan-and-local-validation.md). The design is not permission to implement it.
 
-## Arquitectura y módulos
+## Architecture
 
-La API es un monolito modular Spring Boot. Los límites de dominio se organizan por paquete dentro de `ticketing-api`; `common-events` contiene contratos compartidos y `notification-service` es el servicio separado previsto para la pista de eventos asíncronos.
+| Module | Responsibility | Status |
+| --- | --- | --- |
+| `ticketing-api` | Modular Spring Boot REST API: authentication, events, venues, inventory, reservations, orders, simulated payments, recoverable operations and tickets | Active |
+| `common-events` | Shared, typed `EventEnvelope` contract | Scaffold for future phases |
+| `notification-service` | Separate health-only service shell | **No Kafka consumer or MongoDB delivery yet** |
+| `frontend` | Angular 22 standalone buyer SPA: catalog, registration/login, reservations, checkout, mock payments/refunds, orders and tickets | Local demo |
+| `docs/` | Architecture, ADRs, reviews, migration-driven ERD and phase dossiers | Maintained |
 
-| Módulo | Descripción |
-| --- | --- |
-| `common-events` | Contratos de eventos compartidos (records), p. ej. `EventEnvelope` |
-| `ticketing-api` | API principal (puerto 8080): auth, catálogo, reservas, órdenes, pagos y tickets |
-| `notification-service` | Consumidor separado previsto (puerto 8081); integración Kafka pendiente de Fase 5 |
-| `frontend` | Angular 22: catálogo, autenticación, compra, reembolsos y tickets; simulador local en el puerto 5173 |
-| `docs/` | Arquitectura, ERD, progreso, guía local, flujo HTTP y ADRs |
+The API is a modular monolith. PostgreSQL is the authority for stock, orders, payment evidence and tickets. Redis stores short-lived **catalog metadata**, reservation projections, refresh-token session state and rate limits, but is never the source of inventory truth. An operation pipeline separates RX, CLAIM, APPLY and PROJECT; leases and fencing constrain recovered workers. Payments and email delivery are **not real**.
 
-## Stack
+## Technology and reproducibility
 
-Java 21 · Maven 3.9 (Maven Wrapper) · Spring Boot 3.5 · PostgreSQL 17 · Redis 7 · Apache Kafka 4 (KRaft) · MongoDB 7 · Flyway · Spring Security · JUnit 5 · Testcontainers · JaCoCo · Spotless · Docker Compose.
+Java 21 · Maven Wrapper · Spring Boot 3.5.x · PostgreSQL 17 · Redis 7 · Flyway · Spring Security JWT · JUnit 5 · Testcontainers · Awaitility · JaCoCo · Spotless · Angular 22 · Node 24 · Python 3.10+ · Docker Compose.
 
-## Inicio rápido
+The Compose file also includes pinned Kafka/MongoDB images as **unused Phase 5 scaffolding**. Their existence does not mean Kafka or notification persistence is implemented.
 
-Consulta [docs/LOCAL_RUN.md](docs/LOCAL_RUN.md) para requisitos, exportación de variables y comandos de pruebas.
+### Prepare a local environment
+
+Use the supported local setup, which generates random secrets and preserves existing `.env` files:
 
 ```bash
-cp .env.example .env
-# Edita .env y exporta sus variables al proceso de la terminal.
-docker compose --profile infra up -d
-docker compose ps
-./mvnw -pl ticketing-api -am package -DskipTests
-java -jar ticketing-api/target/ticketing-api-0.1.0-SNAPSHOT.jar
-curl -i http://localhost:8080/actuator/health
+bash scripts/local.sh init
+bash scripts/local.sh doctor
+bash scripts/local.sh infra
+bash scripts/local.sh run
 ```
 
-PostgreSQL, Redis, Kafka y MongoDB deben aparecer como `healthy` antes de iniciar las aplicaciones. Los pasos con Docker Compose no se verificaron en el entorno de desarrollo asistido; consulta la advertencia de [LOCAL_RUN](docs/LOCAL_RUN.md).
+The API listens on localhost port 8080 by default. In a separate terminal:
 
-## Comandos útiles
+```bash
+cd frontend
+npm ci
+cd ..
+bash scripts/local.sh ui
+```
 
-| Comando | Alcance |
-| --- | --- |
-| `./mvnw test` | Pruebas unitarias Surefire (`*Test.java`); no ejecuta Failsafe |
-| `./mvnw clean verify -DskipITs` | Unitarias, build, JaCoCo y Spotless; omite integración |
-| `./mvnw clean verify` | Verificación completa, incluidas pruebas Failsafe `*IT.java`; requiere Docker |
-| `./mvnw -pl ticketing-api -am package -DskipTests` | Empaqueta API y módulo compartido sin tests |
+The browser demo listens on `http://localhost:5173`. The Python dev server binds to `127.0.0.1`, obtains order totals from the authenticated backend and signs simulated callbacks server-side. **Do not deploy it publicly**. See the [local operations guide](docs/LOCAL_RUN.md) for exact environment and smoke-test steps.
 
-## Fase 4 — alcance implementado
+For Phase 3/4 work, start **only PostgreSQL and Redis**; Kafka and MongoDB must not be required.
 
-- Caché-aside Redis solo para metadatos del catálogo, con TTL configurable mediante `TICKET_TYPES_CACHE_TTL` (5 minutos por defecto).
-- La disponibilidad de inventario se consulta siempre en PostgreSQL; no se cachea stock.
-- Las escrituras del catálogo invalidan la caché mediante `RedisCacheManager` transaccional.
-- Los fallos de caché Redis contemplados por `CacheErrorHandler` permiten fallback a PostgreSQL. Si falla una invalidación, una entrada anterior puede permanecer hasta su TTL.
-- Caché pública de eventos con TTL de 60 s para detalle publicado y primera página popular; la disponibilidad de inventario permanece fuera de caché.
-- Proyección Redis `ticketing:reservation:{id}` para reservas activas, escrita después del commit con TTL restante y eliminada tras cancelación, expiración o confirmación; PostgreSQL sigue siendo la autoridad.
-- Rate limiting Redis fail-open para login (5/60 s), creación de reservas (20/60 s por usuario) y creación de órdenes (10/60 s por usuario).
-- Refresh token store fail-closed: las operaciones que requieren Redis fallan con HTTP 503 si no se puede comprobar o persistir el estado de sesión.
-- Los access tokens JWT se validan localmente mediante Spring Security Resource Server, sin consultar Redis.
+### Quality commands
 
-La degradación y sus límites están documentados en [ADR-014](docs/adr/ADR-014-redis-resilience-and-auth-degradation.md).
+```bash
+./mvnw -B clean verify
+(cd frontend && npm ci && npm test && npm run build && npm run format:check)
+python3 -m unittest discover -s frontend -p 'test_*.py' -v
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+docker compose --profile infra config --quiet
+```
 
-## Evidencia CI de código
+Maven `clean verify` runs Surefire unit tests, Failsafe integration tests with Testcontainers, Spotless and JaCoCo. PostgreSQL/Redis tests require a working Docker daemon. Angular and Python must be checked separately unless the GitHub Actions workflow includes them. Do not equate a Java-only green CI with full frontend or browser validation.
 
-La evidencia cuantitativa histórica de Fase 4 corresponde al commit `aabc02301deda4b983c5f3e56af00ed4ecd717ec` (run #116). Para Fase 2, la evidencia más reciente es [GitHub Actions run #154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946), SHA `06490392e86866094ee9dddbff450f4e76e646ad`, rama `dev`, conclusión `success`. Los conteos de esta ejecución proceden de los XML del artefacto `test-reports`:
+### Verified historical baseline
 
-| Suite | Ejecutados | Fallidos | Errores | Omitidos |
-| --- | ---: | ---: | ---: | ---: |
-| Surefire (todos los módulos) | 315 | 0 | 0 | 0 |
-| Failsafe (`ticketing-api`) | 61 | 0 | 0 | 0 |
-| **Total** | **376** | **0** | **0** | **0** |
+- [CI #322](https://github.com/dab960405/tickeringsystem/actions/runs/44974013851) on `main@236b31f46534f65c1249ff1f4cbd25586dc4938b`: **407 unit tests and 179 integration tests**, Spotless, JaCoCo, build success.
+- [CI #324](https://github.com/dab960405/tickeringsystem/actions/runs/44981366848) on `main@11dab6d00d8298024a2d10aee4857a0de11f236d`: **407 unit tests and 181 integration tests**, including new operation-recovery and cancelled-reservation expiration regressions, all checks green.
+- Older runs and coverage snapshots remain available in [PROGRESS](docs/PROGRESS.md). Historical results must retain their original SHA and scope.
 
-Surefire por módulo: `ticketing-api` 309, `common-events` 5 y `notification-service` 1. Failsafe ejecutó 61 tests en `ticketing-api`.
+## Core domain guarantees
 
-Cobertura JaCoCo de paquetes de `ticketing-api`, desde el XML del artefacto `jacoco-reports` del mismo run #116:
+- **Atomic stock:** PostgreSQL conditional updates prevent overselling. `ReservationConcurrencyIT` and `ReservationHttpConcurrencyIT` each repeat a 100-request/10-ticket scenario 20 times; a successful repeat yields 10 reservations and 90 conflicts.
+- **Reservations:** an active hold has a TTL. Confirmation, cancellation and expiration obey inventory-disposition invariants, with one-time stock release.
+- **Orders:** one order per reservation, idempotency-key conflicts, immutable captured price and clear pending/cancelled/expired/paid states.
+- **Simulated payments:** raw-body HMAC validation, separate provider event and operation identities, append-only evidence, semantic digests, late captures without invented refunds, and explicit business-application outcomes.
+- **Tickets:** commercial units and generations prevent duplicate issuance and support cancellation or replacement.
+- **Concurrency:** ADR-016 governs global lock ordering, including implicit foreign-key locks and ORM flushes. PostgreSQL time is used after obtaining critical locks.
+- **Redis degradation:** public catalog reads can fall back to PostgreSQL, while authentication operations dependent on Redis fail closed. JWT access tokens remain locally verifiable.
+- **Security:** access control uses JWT roles and resource ownership, with unauthorised resources concealed according to ADR-021.
 
-| Paquetes | Líneas cubiertas | Cobertura de líneas | Ramas cubiertas | Cobertura de ramas |
-| --- | ---: | ---: | ---: | ---: |
-| `service` | 501 / 522 | **95,98 %** | 126 / 151 | 83,44 % |
-| `domain` | 291 / 296 | **98,31 %** | 84 / 101 | 83,17 % |
+Finite integration tests verify their named scenarios, not every possible interleaving.
 
+## Roadmap and formal acceptance
 
-**CI #154 — verificación de Fase 2:** 379 tests Surefire y 100 Failsafe; 479 en total, con 0 fallos, 0 errores y 0 omitidos. Spotless pasó y JaCoCo confirmó que se cumplieron los checks de cobertura. El run #43545520476 validó el HEAD previo al registro de cierre (`7146517ef80f3fe350a57d00e272f66b59ffc923`): `BUILD SUCCESS`, Spotless correcto, checks JaCoCo cumplidos y 100 tests Failsafe sin fallos. Con la autorización expresa del responsable, Fase 2 queda cerrada formalmente.
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 0 | Maven modules, base configuration and infrastructure scaffold | **CLOSED** |
+| 1 | Entities, APIs, Flyway, domain and repositories | **CLOSED** |
+| 2 | Authentication, JWT, permissions and owned-resource isolation | **CLOSED** (approved 2026-11-13) |
+| 3 | Reservations, orders, payments and tickets | **OPEN** — fixes under verification; ADR-024 and independent decision pending |
+| 4 | Redis, cache/rate limiting and audited H75–H84 recovery work | **OPEN** — ADR-022, H84-01 and final verdict pending |
+| 5 | Kafka outbox, producer, consumer and Mongo notification persistence | **BLOCKED; not started** |
+| 6 | Full Compose, observability and deployment-quality improvements | Not started |
+| 7 | CI/CD evolution and cloud deployment options | Not started |
+| 8 | Polish, documentation and optional improvements | Not started |
 
-Los runs documentales posteriores no modificaron código funcional. El detalle de CI y los estados por criterio están en [docs/PROGRESS.md](docs/PROGRESS.md).
+For every phase closure, the owner requires a traceable technical dossier, explicit Tech Lead verdict, the exact commit and matching CI, plus formal owner acceptance. A passing build does **not** approve a proposed ADR or close a phase. Phase 4 closure depends on prior Phase 3 closure. No Kafka producer, relay, consumer or Mongo notification functionality may be implemented under the current authorization.
 
-## Concurrencia
+## Known boundaries and technical debt
 
-La prueba [`ReservationConcurrencyIT`](ticketing-api/src/test/java/com/portfolio/ticketing/reservation/ReservationConcurrencyIT.java) crea un tipo con **10 unidades**, lanza **100 virtual threads** sincronizados con `CountDownLatch` y repite el escenario **20 veces** mediante `@RepeatedTest(20)`. Cada repetición espera 10 reservas exitosas, 90 conflictos por stock, inventario en 0 y 10 unidades en reservas activas.
+- ADR-024 proposes a narrowly scoped transactional exception for `EventCancellationService`; a broader cross-module-access inventory is still subject to design review.
+- ADR-022 defines the proposed stable-reference and independently signed subsequent refund-event contract for the `SIMULATED` provider. There is no automatic financial reconciliation or real payment provider.
+- Refresh tokens do not rotate on each refresh under the current contract.
+- HMAC webhooks do not provide a separate timestamp/replay window; persistence identities and signed evidence are the current simulator controls.
+- Other scoped findings and the owner-mandated English-language migration are tracked in the [remediation report](docs/audit/MAIN-REMEDIATION-2026-11-21.md).
 
-El descuento se valida mediante un `UPDATE` condicional atómico en PostgreSQL. La ejecución histórica [CI run #62](https://github.com/dab960405/tickeringsystem/actions/runs/42332571762) confirmó `Tests run: 20, Failures: 0`; el escenario también forma parte de la suite de integración del run #116.
-
-## Hoja de ruta
-
-- [x] Fase 0: esqueleto Maven multi-módulo, Maven Wrapper, Compose `infra` y configuración base.
-- [x] Fase 1: dominio base, migraciones Flyway V1–V11, entidades/repositorios, CRUD, errores y OpenAPI.
-- [x] Fase 2: autenticación/autorización JWT, roles, propiedad de recursos, refresh tokens y rate limiting implementados; matriz de permisos documentada; aislamiento entre organizadores y usuarios validado con JWT reales; CI #154 (479 tests, 0 fallos/errores) y CI #43545520476 satisfactorias. Cierre formal autorizado el 2026-11-13.
-- [ ] Fase 3: reservas, órdenes, pagos SIMULATED, tickets, expiraciones y cancelación implementadas. Expediente [F3-01](docs/phase-3/F3-01-closure-review.md), excepción arquitectónica [ADR-024](docs/adr/ADR-024-event-cancellation-transactional-exception.md) **propuesta**. CI #315 validó la nueva regresión de rollback; requiere dictamen técnico y cierre formal.
-- [ ] Fase 4: H75–H84 implementados y probados en los escenarios documentados. Contrato de reembolsos simulados [ADR-022](docs/adr/ADR-022-simulated-refund-evidence-contract.md) pendiente de dictamen; [F4-05](docs/phase-4/F4-05-closure-review.md) preparado y ERD actualizado hasta V16. Cierre formal sujeto al cierre previo de F3.
-- [ ] Fase 5: bloqueada. [F5-00](docs/phase-5/F5-00-plan-and-local-validation.md) prepara su ejecución; **primero** pruebas manuales en local, **después** outbox/Kafka y consumidor `notification-service`.
-- [ ] Fase 6: calidad e infraestructura (Dockerfiles, Compose `full`, observabilidad/Grafana y revisión N+1).
-- [ ] Fase 7: CI/CD y despliegue en AWS.
-- [ ] Fase 8: pulido, documentación de operación y mejoras finales.
-
-## Deuda técnica conocida
-
-- `EventCancellationService` coordina cancelación con repositorios/tablas ajenos; se propone **excepción transaccional estrecha** en ADR-024, pendiente de aprobación del Tech Lead. No se extiende a otros servicios.
-- El reembolso no devuelve stock automáticamente; decisión documentada en [ADR-009](docs/decisions.md).
-- Los refresh tokens no rotan durante la operación de refresh.
-- El webhook HMAC no incluye timestamp ni mecanismo anti-replay temporal.
-
-## Criterio permanente de cierre de fase
-
-Una fase no se considera cerrada solo porque el código compile o la funcionalidad esté implementada. Su cierre exige README y hoja de ruta actualizados, ERD actualizado cuando cambie el esquema, ADRs para decisiones importantes y evidencia verificable de los criterios de aceptación. Los tests no ejecutados se marcan como pendientes, nunca como aprobados.
-
-Las Fases 3 y 4 siguen abiertas a efectos formales. La evidencia CI #312 validó 390 unitarias y 170 integraciones sin fallos; la prueba adicional de rollback de Fase 3 pasó en CI #315 (171 integraciones). ADR-024 y ADR-022 son **propuestas**, no decisiones aprobadas. La primera validación manual local permanece prevista para el inicio autorizado de Fase 5.
-
-## Auditoría de locks de Fase 4
-
-La auditoría transversal de ADR-016 revisó locks explícitos y locks implícitos por claves foráneas/flush. Se corrigieron dos inversiones: reemisión de tickets (EN → U) y creación de órdenes (R → T por la FK de `order_items`). CI #292 sobre `24be7cbe670e7076d8e6999a9d708ef4cad09fe1` validó 390 unitarios y 148 integraciones de `ticketing-api`, incluidos los escenarios de concurrencia e integridad; H75, H76 y H83 quedan validados para ese modelo. Véase [F4-03](docs/phase-4/F4-03-lock-audit.md).
-
-## Validación de operaciones y reembolsos
-
-CI #312 validó la regresión de pagos y recuperación (390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12), con Spotless y JaCoCo conformes. La clasificación, el fencing y el reenvío firmado están cubiertos en F4-04; H84-01 exige aceptación del contrato SIMULATED descrito en ADR-022.
-
-## Decisiones técnicas
-
-Consulta el [registro ADR](docs/decisions.md). El ERD y el flujo de módulos están en [docs/erd.md](docs/erd.md) y [docs/architecture.md](docs/architecture.md).
+This is an educational/portfolio system. Do not configure it for real money transfers or send real email based on its mock capabilities.

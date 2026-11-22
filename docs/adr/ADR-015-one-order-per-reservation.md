@@ -1,22 +1,23 @@
-# ADR-015: Una orden por reserva
+# ADR-015 — Exactly one order per reservation
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-12
-- **Fase:** 3
+- **Status:** ACCEPTED
+- **Date:** 2026-11-12
+- **Phase:** 3
 
-## Contexto
+## Context
 
-El modelo permitía crear dos órdenes pagables para una misma reserva. Ambas podían emitir tickets contra el mismo inventario. Además, un webhook `FAILED` asociado a la segunda orden podía cancelar o liberar la reserva compartida y afectar a la primera orden, aunque esta fuera la que debía conservarla.
+The previous model could create two payable orders for the same reservation. Both might issue tickets against the same inventory. A `FAILED` webhook for the second order could also cancel/release the reservation used by the first, even if that first order should remain valid.
 
-## Decisión
+## Decision
 
-- `OrderService.create` comprueba si ya existe una orden para la reserva antes de crear otra. Si existe, rechaza la solicitud como conflicto.
-- La migración Flyway V11 crea el índice único `ux_orders_reservation_id` sobre `orders(reservation_id)`. La restricción en PostgreSQL es la última defensa ante dos creaciones concurrentes que superen simultáneamente el guard de aplicación.
-- `DataIntegrityViolationException` se mapea globalmente a HTTP `409 Conflict`, por lo que la colisión de unicidad durante esa carrera se presenta como conflicto y no como error interno.
-- En la carrera con la MISMA `Idempotency-Key` y la misma reserva, el log del job de CI permite inferir un `409` por la violación de unicidad; no registra directamente los códigos HTTP individuales. El test acepta `200` o `409` para la petición concurrente. Véase [ADR-011, carrera concurrente con la misma clave y reserva](ADR-011-order-and-webhook-idempotency.md#carrera-concurrente-con-la-misma-clave-y-reserva).
+- `OrderService.create` checks whether the reservation already has an order; if so, reject creation as a conflict.
+- Flyway V11 adds `ux_orders_reservation_id`, a **UNIQUE index over orders(reservation_id)**, as the last defense against simultaneous inserts that both passed the service check.
+- Map `DataIntegrityViolationException` to HTTP **409 Conflict**, not HTTP 500.
+- With the **same** `Idempotency-Key` and reservation in a truly simultaneous race, the CI job's uniqueness error suggests a 409 but does **not** capture the exact individual response codes. The test accepts 200 or 409, as documented in [ADR-011's concurrent race](ADR-011-order-and-webhook-idempotency.md#concurrent-race-same-key-and-same-reservation).
 
-## Consecuencias
+## Consequences
 
-- El índice cubre todas las órdenes, incluidas las canceladas; no es un índice parcial condicionado por el estado.
-- Una reserva asociada a una orden cancelada no se reutiliza para crear otra orden. En particular, `cancelPending` libera la reserva y conserva la orden cancelada, por lo que la unicidad de `reservation_id` continúa impidiendo una segunda orden para esa misma reserva.
-- La restricción de base de datos protege el inventario y la relación orden-reserva incluso cuando las solicitudes llegan en paralelo.
+- The index covers **all orders, including canceled orders**; it is not a partial index by status.
+- A reservation with a canceled order cannot be reused for a new order; `cancelPending` releases that reservation while preserving the canceled order.
+- Database uniqueness protects order/reservation identity and inventory under concurrent requests.
+- The later canceled-reservation expiration remediation, REV-DEV-02, changes how a still-pending order is resolved after direct reservation cancellation; it does **not** weaken this unique constraint.

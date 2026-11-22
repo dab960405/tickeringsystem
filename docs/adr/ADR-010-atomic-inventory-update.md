@@ -1,24 +1,24 @@
-# ADR-010: Descuento de inventario mediante UPDATE atómico condicional
+# ADR-010 — Conditional atomic inventory update
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-06
-- **Fase:** 3
+- **Status:** ACCEPTED
+- **Date:** 2026-11-06
+- **Phase:** 3
 
-## Contexto
+## Context
 
-Varios compradores pueden intentar reservar las últimas entradas del mismo `ticket_type` simultáneamente. La operación debe impedir que `available_quantity` sea negativa o que dos transacciones vendan la misma unidad. Se evaluaron tres mecanismos de concurrencia en PostgreSQL/JPA.
+Several buyers can attempt to reserve the last units of the same ticket type simultaneously. The system must prevent a negative `available_quantity` and avoid selling the same unit twice. We evaluated three PostgreSQL/JPA concurrency strategies.
 
-## Opciones consideradas
+## Options considered
 
-| Estrategia | Ventajas | Desventajas |
+| Strategy | Advantages | Disadvantages |
 | --- | --- | --- |
-| **UPDATE atómico condicional** | Una sola sentencia comprueba y descuenta; la base de datos serializa la escritura de la fila; el número de filas afectadas indica éxito o falta de stock; evita la ventana de carrera entre lectura y escritura; reduce viajes a la base de datos. | La lógica de negocio queda expresada en SQL; requiere interpretar correctamente 0/1 filas afectadas; operaciones que deban leer varios datos relacionados pueden requerir consultas adicionales. |
-| **Bloqueo pesimista** (`SELECT ... FOR UPDATE`) | Lectura y validación bajo bloqueo explícito; apropiado para invariantes que requieren inspeccionar y modificar varias filas dentro de una transacción; evita que otra transacción modifique la fila bloqueada. | Mantiene bloqueos durante la lógica de aplicación; aumenta espera y contención en picos; mayor riesgo de deadlocks si se bloquean filas en distinto orden; normalmente añade una lectura y exige transacciones cortas. |
-| **Bloqueo optimista** (`@Version`) | No bloquea durante la lectura; funciona bien con baja contención; detecta escrituras concurrentes al actualizar y permite reintentar. | En inventario caliente puede producir muchos conflictos/reintentos; exige política de retry y manejo de conflictos; un contador de stock necesita igualmente una condición que preserve el límite inferior. |
+| **Conditional atomic UPDATE** | One SQL statement checks and decrements stock; PostgreSQL serializes updates to the row; affected-row count indicates success or insufficient inventory; no read/write race window; fewer round trips. | Business logic in SQL, precise interpretation of 0/1 affected rows, additional queries for other related invariants. |
+| **Pessimistic SELECT FOR UPDATE** | Validation under an explicit row lock; suitable for multi-row invariants; concurrent writers wait. | Holds locks across application processing, increases contention/wait time, risks deadlocks under inconsistent lock ordering, typically requires another read. |
+| **Optimistic @Version** | Avoids locking during reads; efficient when contention is low; detects concurrent updates and supports retry. | Hot inventory creates frequent conflicts and retries; stock bounds must still be enforced; retry policy is required. |
 
-## Decisión
+## Decision
 
-Usar un **UPDATE condicional atómico** para reservar inventario:
+Reserve inventory through a **single conditional atomic update**:
 
 ```sql
 UPDATE ticket_types
@@ -28,13 +28,13 @@ WHERE id = :id
   AND available_quantity >= :quantity;
 ```
 
-Una fila actualizada significa reserva de stock exitosa; cero filas significa que el tipo de entrada no existe o que no hay unidades suficientes (la capa de servicio distingue/normaliza el resultado según el caso). La restauración de stock también es condicional para no superar `total_quantity`.
+Exactly one affected row means success. Zero means that the ticket type does not exist or lacks sufficient inventory; the service resolves the response. Stock restoration is also conditional and must not exceed `total_quantity`.
 
-El test de integración [`ReservationConcurrencyIT`](../../ticketing-api/src/test/java/com/portfolio/ticketing/reservation/ReservationConcurrencyIT.java) valida el escenario de alta contención con PostgreSQL real.
+[ReservationConcurrencyIT](../../ticketing-api/src/test/java/com/portfolio/ticketing/reservation/ReservationConcurrencyIT.java) verifies the high-contention scenario against actual PostgreSQL.
 
-## Consecuencias
+## Consequences
 
-- La condición de disponibilidad y el decremento forman una única operación indivisible a nivel de base de datos.
-- La columna `version` se incrementa en la sentencia, pero la estrategia de inventario elegida no depende de un ciclo JPA de lectura-modificación con `@Version`.
-- Se reserva el bloqueo pesimista explícito para operaciones donde la transición de una entidad existente requiere leer y validar su estado, como la confirmación de una reserva para pago.
-- Los resultados bajo contención deben seguir verificándose con Testcontainers en CI/entorno Docker; un test que no se haya ejecutado no se considera evidencia de estabilidad.
+- Validation and stock decrement are one indivisible database operation.
+- The `version` column increments in SQL; this decision does not rely on JPA entity read/modify/write for inventory.
+- Pessimistic locks remain appropriate for transitions that must inspect an existing entity (for example, payment confirmation).
+- Concurrency stability must be proved with Testcontainers and real CI execution; an unexecuted test is not evidence.

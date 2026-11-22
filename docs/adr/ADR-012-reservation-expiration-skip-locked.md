@@ -1,16 +1,16 @@
-# ADR-012: Expiración concurrente de reservas con FOR UPDATE SKIP LOCKED
+# ADR-012 — Concurrent reservation expiration using FOR UPDATE SKIP LOCKED
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-06
-- **Fase:** 3
+- **Status:** ACCEPTED
+- **Date:** 2026-11-06
+- **Phase:** 3
 
-## Contexto
+## Context
 
-La expiración periódica debe procesar reservas vencidas y devolver sus unidades al inventario. En despliegues con más de una instancia de la API, todos los schedulers pueden ejecutarse al mismo tiempo. Un `SELECT` normal permitiría que dos workers seleccionaran la misma reserva y ambos intentaran liberar su stock.
+Scheduled expiration processes overdue reservations and returns held units to inventory. Multiple API instances can run workers simultaneously; plain SELECT might select the same reservation for two workers and trigger duplicate release attempts.
 
-## Decisión
+## Decision
 
-Reclamar lotes de hasta 100 reservas mediante una consulta PostgreSQL equivalente a:
+Claim batches of at most 100 reservations using PostgreSQL logic equivalent to:
 
 ```sql
 SELECT *
@@ -22,9 +22,9 @@ LIMIT :limit
 FOR UPDATE SKIP LOCKED;
 ```
 
-El método `ReservationRepository.findExpiredForUpdate` se ejecuta dentro de la transacción del job. `SKIP LOCKED` hace que cada worker omita filas que otro worker ya bloqueó y continúe con otras filas elegibles. Así se distribuye el trabajo sin que los schedulers esperen por las mismas reservas.
+`ReservationRepository.findExpiredForUpdate` runs inside the job transaction. `SKIP LOCKED` makes a worker skip rows already claimed by another worker rather than block on those same candidates.
 
-Por cada fila reclamada, el servicio ejecuta una transición condicional:
+For each claimed row the service conditionally transitions the reservation:
 
 ```sql
 UPDATE reservations
@@ -34,20 +34,21 @@ WHERE id = :id
   AND expires_at < :now;
 ```
 
-El inventario se libera **solo si el UPDATE afecta exactamente una fila**. La selección/bloqueo, el cambio de estado y la restauración de stock ocurren en la misma transacción.
+Release inventory **only if exactly one row was updated**. Candidate claiming, state change and stock restoration belong to one database transaction.
 
-## Alternativas
+## Alternatives rejected
 
-- **Un scheduler único:** simple, pero crea un punto único de ejecución y limita escalado/recuperación.
-- **SELECT sin bloqueo:** puede entregar la misma fila a varios workers.
-- **Bloquear sin SKIP LOCKED:** evita duplicidad, pero los workers pueden quedarse esperando por filas que otro worker ya procesa, reduciendo throughput del lote.
-- **Cambiar estado y liberar stock en transacciones separadas:** abre una ventana de inconsistencia si falla uno de los pasos.
+- A single scheduler simplifies coordination but introduces a single execution bottleneck/failure point.
+- Plain SELECT allows multiple workers to select the same reservation.
+- Locking without SKIP LOCKED prevents duplication but unnecessarily makes other workers wait for blocked rows.
+- State update and stock release in separate transactions create a partial-commit inconsistency window.
 
-## Consecuencias
+## Consequences
 
-- Workers concurrentes reclaman conjuntos disjuntos de filas bloqueadas.
-- Si el proceso falla antes del commit, PostgreSQL revierte el cambio de estado y la liberación de stock; la fila podrá procesarse en la siguiente ejecución.
-- La transición condicional protege la devolución de inventario contra una segunda ejecución lógica.
-- El índice parcial `ix_reservations_active_expires_at` reduce el conjunto que debe inspeccionar el job.
-- El tamaño del lote es 100 y el intervalo de ejecución es configurable mediante `ticketing.reservation.expiration-fixed-delay-ms`.
-- Debe mantenerse el trabajo dentro de una transacción corta. La prueba `ReservationExpirationIT` y la ejecución multi-instancia en PostgreSQL deben formar parte de la verificación con Docker/CI.
+- Concurrent workers process disjoint sets of locked rows.
+- A crash before commit rolls back the state and stock change, allowing future execution.
+- Conditional transitions prevent a second logical inventory release.
+- Partial index `ix_reservations_active_expires_at` bounds candidate scanning.
+- Batch size is 100 and scheduling interval is configurable through `ticketing.reservation.expiration-fixed-delay-ms`.
+- Keep transactions short. Test `ReservationExpirationIT` and multi-worker execution against PostgreSQL in Docker/CI.
+- **Later evolution:** [ADR-016](ADR-016-global-lock-order.md) defines the global lock-order requirements, and later processors may use a discovery scan followed by revalidation under E → T → R locks. This original decision remains historical context; do not reintroduce an R → T lock inversion based on its example query.
