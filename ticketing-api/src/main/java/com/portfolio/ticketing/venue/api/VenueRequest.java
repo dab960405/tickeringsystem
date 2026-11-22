@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record VenueRequest(
-    @Schema(example = "Estadio Nacional")
+    @Schema(example = "National Stadium")
         @NotBlank(message = "name is required")
         @Size(max = 150, message = "name must have at most 150 characters")
         String name,
@@ -15,7 +15,7 @@ public record VenueRequest(
         @NotBlank(message = "city is required")
         @Size(max = 100, message = "city must have at most 100 characters")
         String city,
-    @Schema(example = "Av. José Díaz s/n")
+    @Schema(example = "123 Stadium Avenue")
         @NotBlank(message = "address is required")
         @Size(max = 255, message = "address must have at most 255 characters")
         String address,
