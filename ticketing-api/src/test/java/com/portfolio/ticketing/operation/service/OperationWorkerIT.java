@@ -248,6 +248,45 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_notReapplyEarlyRefundWhenOnlyItsProjectionIsRecoveredAfterCapture()
+      throws Exception {
+    OrderFixture fixture = createOrder();
+    PaymentWebhookRequest earlyRefund =
+        new PaymentWebhookRequest(
+            fixture.orderId(),
+            PaymentStatus.REFUNDED,
+            "early-refund-" + UUID.randomUUID(),
+            UUID.randomUUID(),
+            "early-refund-operation-" + UUID.randomUUID(),
+            ProviderOperationKind.PAYMENT_REFUND,
+            new BigDecimal("40.00"),
+            "USD");
+    String refundPayload = objectMapper.writeValueAsString(earlyRefund);
+    ProviderEventReceipt receipt = inboxService.receive(earlyRefund, refundPayload);
+    UUID jobId = jobService.findEffectiveJobIdForEvent(receipt.eventId()).orElseThrow();
+    OperationClaim interrupted = jobService.claim(jobId, "early-refund").orElseThrow();
+
+    paymentOperationService.apply(interrupted);
+    assertThat(dispositionTypes(jobId)).containsExactly("NO_OP");
+
+    PaymentWebhookRequest capture = webhook(fixture, new BigDecimal("40.00"));
+    String capturePayload = objectMapper.writeValueAsString(capture);
+    paymentWebhookService.handle(signature(capturePayload), capturePayload);
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("SUCCEEDED");
+    assertThat(ticketCount(fixture.orderId())).isEqualTo(1);
+
+    paymentOperationService.processJob(jobId, "projection-recovery");
+
+    assertThat(orderStatus(fixture.orderId())).isEqualTo("PAID");
+    assertThat(paymentStatus(fixture.orderId())).isEqualTo("SUCCEEDED");
+    assertThat(ticketCount(fixture.orderId())).isEqualTo(1);
+    assertThat(dispositionTypes(jobId)).containsExactly("NO_OP", "NO_OP");
+    assertThat(projectionStatus(jobId)).isEqualTo("COMPLETED");
+    assertThatThrownBy(() -> paymentOperationService.project(interrupted))
+        .isInstanceOf(OperationFencingException.class);
+  }
+
+  @Test
   void should_recoverRefundProjectionWithoutRepeatingFinancialEffects() throws Exception {
     OrderFixture fixture = createOrder();
     PaymentWebhookRequest capture = webhook(fixture, new BigDecimal("40.00"));

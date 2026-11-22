@@ -175,6 +175,37 @@ class OrderPaymentFlowIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void should_expirePendingOrderAfterDirectReservationCancellationWithoutSecondStockRelease() {
+    OrderFixture fixture = createOrder(1);
+    asUser(
+        fixture.userId(),
+        () -> {
+          reservationService.cancel(fixture.reservationId(), fixture.userId());
+          return null;
+        });
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() - INTERVAL '3 minutes' WHERE id = ?",
+        fixture.reservationId());
+
+    orderExpirationService.expireOverdue();
+    orderExpirationService.expireOverdue();
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "PENDING", "CANCELLED", 0, 1));
+
+    PaymentWebhookRequest lateCapture =
+        webhook(fixture, PaymentStatus.SUCCEEDED, "capture-after-direct-cancellation");
+    orderPaymentService.process(lateCapture);
+
+    assertThat(paymentFlowResult(fixture))
+        .isEqualTo(new PaymentFlowResult("EXPIRED", "SUCCEEDED", "CANCELLED", 0, 1));
+    assertThat(queryString("SELECT fulfillment_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("UNFULFILLABLE");
+    assertThat(queryString("SELECT refund_status FROM orders WHERE id = ?", fixture.orderId()))
+        .isEqualTo("REQUIRED");
+  }
+
+  @Test
   void should_deleteReservationProjection_when_orderExpirationResolvesActiveReservation() {
     OrderFixture fixture = createOrder(1);
     String projectionKey = ReservationRedisProjectionService.KEY_PREFIX + fixture.reservationId();

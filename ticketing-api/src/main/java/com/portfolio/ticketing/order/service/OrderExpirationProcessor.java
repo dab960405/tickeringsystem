@@ -75,7 +75,8 @@ public class OrderExpirationProcessor {
       redisProjectionService.deleteAfterCommit(reservation.getId());
     } else if (reservation.getStatus() == ReservationStatus.CANCELLED
         && reservation.getInventoryDisposition() == ReservationInventoryDisposition.RELEASED) {
-      return;
+      // Stock was already released by direct cancellation. Resolve only the
+      // attached pending order after the recovery grace; never release twice.
     } else if (reservation.getStatus() == ReservationStatus.CONFIRMED
         && reservation.getInventoryDisposition() == ReservationInventoryDisposition.CONSUMED) {
       return;

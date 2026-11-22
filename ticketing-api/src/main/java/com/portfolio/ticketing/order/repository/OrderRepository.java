@@ -36,7 +36,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             AND r.expires_at
                 < clock_timestamp()
                     - (CAST(:graceSeconds AS double precision) * INTERVAL '1 second')
-            AND r.status IN ('ACTIVE', 'EXPIRED')
+            AND r.status IN ('ACTIVE', 'EXPIRED', 'CANCELLED')
           ORDER BY r.expires_at, o.id
           LIMIT :limit
           """,

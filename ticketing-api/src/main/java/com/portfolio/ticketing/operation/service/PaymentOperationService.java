@@ -10,6 +10,7 @@ import com.portfolio.ticketing.payment.service.ProviderEventReceipt;
 import com.portfolio.ticketing.payment.service.SemanticApplicationService;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -81,9 +82,25 @@ public class PaymentOperationService {
       ProviderEventReceipt receipt =
           new ProviderEventReceipt(
               claim.eventId(), claim.operationId(), claim.payloadDigest(), request);
+      // A recovered projection must reuse the committed business decision for this job.
+      // A different signed provider event owns a different participation/job and may
+      // still be evaluated against the new commercial state (ADR-018/ADR-019).
+      List<String> previousOutcomes =
+          jdbcTemplate.query(
+              """
+              SELECT d.disposition_type
+              FROM operation_dispositions d
+              JOIN operation_executions e ON e.id = d.execution_id
+              WHERE e.job_id = ? AND d.disposition_type IN ('APPLIED', 'NO_OP')
+              LIMIT 1
+              """,
+              (resultSet, rowNum) -> resultSet.getString(1),
+              claim.jobId());
       PaymentEffectOutcome outcome =
-          semanticApplicationService.apply(
-              receipt, () -> orderPaymentService.processWithOutcome(request));
+          previousOutcomes.isEmpty()
+              ? semanticApplicationService.apply(
+                  receipt, () -> orderPaymentService.processWithOutcome(request))
+              : PaymentEffectOutcome.NO_OP;
       boolean applied = outcome == PaymentEffectOutcome.APPLIED;
       jdbcTemplate.update(
           """
