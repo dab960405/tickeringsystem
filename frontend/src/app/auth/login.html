@@ -1,10 +1,10 @@
 <section class="auth-panel panel" aria-labelledby="auth-title">
-  <p class="eyebrow">BIENVENIDO A TICKETING</p>
-  <h1 id="auth-title">{{ registration() ? 'Crear cuenta' : 'Iniciar sesión' }}</h1>
-  <p class="muted">Entra para reservar y consultar tus entradas.</p>
+  <p class="eyebrow">WELCOME TO TICKETING</p>
+  <h1 id="auth-title">{{ registration() ? 'Create account' : 'Sign in' }}</h1>
+  <p class="muted">Sign in to reserve tickets and view your purchases.</p>
   <form [formGroup]="form" (ngSubmit)="submit()" [attr.aria-busy]="busy()">
     @if (registration()) {
-      <label for="full-name">Nombre completo</label>
+      <label for="full-name">Full name</label>
       <input
         id="full-name"
         formControlName="fullName"
@@ -13,10 +13,10 @@
         required
       />
       @if (form.controls.fullName.touched && form.controls.fullName.invalid) {
-        <p class="form-error">Escribe tu nombre.</p>
+        <p class="form-error">Enter your name.</p>
       }
     }
-    <label for="email">Correo electrónico</label>
+    <label for="email">Email address</label>
     <input
       id="email"
       formControlName="email"
@@ -26,9 +26,9 @@
       required
     />
     @if (form.controls.email.touched && form.controls.email.invalid) {
-      <p class="form-error">Escribe un correo válido.</p>
+      <p class="form-error">Enter a valid email address.</p>
     }
-    <label for="password">Contraseña</label>
+    <label for="password">Password</label>
     <input
       id="password"
       formControlName="password"
@@ -41,27 +41,27 @@
     <p id="password-help" class="hint">
       {{
         registration()
-          ? 'De 8 a 72 caracteres, con una letra y un número.'
-          : 'Utiliza la contraseña de tu cuenta.'
+          ? '8–72 characters, including a letter and a number, within 72 UTF-8 bytes.'
+          : 'Enter your account password.'
       }}
     </p>
     @if (form.controls.password.touched && form.controls.password.invalid) {
-      <p class="form-error">Revisa los requisitos de la contraseña.</p>
+      <p class="form-error">Check the password requirements.</p>
     }
     @if (error()) {
       <p class="form-error" role="alert">{{ error() }}</p>
     }
     <button class="button full" type="submit" [disabled]="busy()">
-      {{ busy() ? 'Procesando…' : registration() ? 'Crear cuenta y entrar' : 'Entrar' }}
+      {{ busy() ? 'Processing…' : registration() ? 'Create account and sign in' : 'Sign in' }}
     </button>
   </form>
   <a
     class="text-button"
-    [routerLink]="registration() ? '/entrar' : '/registro'"
+    [routerLink]="registration() ? '/login' : '/register'"
     [queryParams]="{ returnUrl }"
     >{{
-      registration() ? 'Ya tengo cuenta. Iniciar sesión' : '¿Aún no tienes cuenta? Regístrate'
+      registration() ? 'Already have an account? Sign in' : 'New to Ticketing? Register'
     }}</a
   >
-  <p class="hint">La sesión permanece en memoria. Al recargar la página debes volver a entrar.</p>
+  <p class="hint">Your session is stored in memory. Reloading requires signing in again.</p>
 </section>

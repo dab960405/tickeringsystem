@@ -46,10 +46,10 @@ export class Tickets {
   async copy(code: string) {
     try {
       await navigator.clipboard.writeText(code);
-      this.notice.show('Código de entrada copiado.');
+      this.notice.show('Ticket code copied.');
     } catch {
       this.notice.show(
-        'No se pudo copiar automáticamente. Puedes seleccionar el código y copiarlo.',
+        'Automatic copying failed. Select the ticket code and copy it manually.',
         true,
       );
     }

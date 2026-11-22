@@ -38,15 +38,15 @@ describe('Registration form', () => {
     });
     await fixture.componentInstance.submit();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Escribe un correo válido.');
-    expect(fixture.nativeElement.textContent).toContain('Revisa los requisitos');
+    expect(fixture.nativeElement.textContent).toContain('Enter a valid email address.');
+    expect(fixture.nativeElement.textContent).toContain('Check the password requirements');
     backend.expectNone('/api/v1/auth/register');
   });
 
   it('does not register twice if registration succeeds but login needs retrying', async () => {
     const component = TestBed.createComponent(Login).componentInstance;
     component.form.setValue({
-      fullName: 'Comprador',
+      fullName: 'Buyer',
       email: 'buyer@example.com',
       password: 'Portfolio123',
     });
@@ -63,6 +63,6 @@ describe('Registration form', () => {
       .expectOne('/api/v1/auth/login')
       .flush({ accessToken: 'token', refreshToken: 'refresh', expiresIn: 60 });
     await second;
-    expect(TestBed.inject(Router).navigateByUrl).toHaveBeenCalledWith('/eventos');
+    expect(TestBed.inject(Router).navigateByUrl).toHaveBeenCalledWith('/events');
   });
 });

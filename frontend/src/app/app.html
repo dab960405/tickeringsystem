@@ -2,19 +2,19 @@
   class="skip-link"
   [href]="router.url.split('#')[0] + '#main'"
   (click)="$event.preventDefault(); focusContent()"
-  >Saltar al contenido</a
+  >Skip to content</a
 >
 <header class="header">
-  <a class="brand" routerLink="/eventos" aria-label="Ticketing, eventos"
+  <a class="brand" routerLink="/events" aria-label="Ticketing, events"
     ><span class="brand-icon" aria-hidden="true">T</span>ticketing<span class="demo-tag"
       >DEMO</span
     ></a
   >
-  <nav aria-label="Navegación principal">
-    <a routerLink="/eventos" routerLinkActive="active" ariaCurrentWhenActive="page">Eventos</a>
-    <a routerLink="/compras" routerLinkActive="active" ariaCurrentWhenActive="page">Mis compras</a>
-    <a routerLink="/entradas" routerLinkActive="active" ariaCurrentWhenActive="page"
-      >Mis entradas</a
+  <nav aria-label="Main navigation">
+    <a routerLink="/events" routerLinkActive="active" ariaCurrentWhenActive="page">Events</a>
+    <a routerLink="/orders" routerLinkActive="active" ariaCurrentWhenActive="page">My orders</a>
+    <a routerLink="/tickets" routerLinkActive="active" ariaCurrentWhenActive="page"
+      >My tickets</a
     >
   </nav>
   <div class="account">
@@ -24,17 +24,17 @@
         [disabled]="loggingOut() || purchase.busy()"
         (click)="logout()"
       >
-        Salir
+        Sign out
       </button>
     } @else {
-      <a class="button small" routerLink="/entrar" [queryParams]="{ returnUrl: router.url }"
-        >Entrar / Registrarme</a
+      <a class="button small" routerLink="/login" [queryParams]="{ returnUrl: router.url }"
+        >Sign in / Register</a
       >
     }
   </div>
 </header>
 <div class="demo-banner">
-  Proyecto de demostración · Los pagos y reembolsos son simulados. No se cobra dinero real.
+  Portfolio demonstration · All payments and refunds are simulated. No real money is charged.
 </div>
 <main #main id="main" tabindex="-1">
   <div
@@ -48,13 +48,13 @@
   </div>
   @if (purchase.pending()) {
     <p class="resume-checkout">
-      <a [routerLink]="['/eventos', purchase.event()?.id]"
-        >Tienes una compra en curso. Continuar →</a
+      <a [routerLink]="['/events', purchase.event()?.id]"
+        >You have an unfinished checkout. Continue →</a
       >
     </p>
   }
   <router-outlet (activate)="focusContent()" />
 </main>
 <footer>
-  <span>ticketing · Portfolio</span><span>Catálogo → Reserva → Orden → Pago → Entrada</span>
+  <span>ticketing · Portfolio</span><span>Catalog → Reservation → Order → Payment → Ticket</span>
 </footer>

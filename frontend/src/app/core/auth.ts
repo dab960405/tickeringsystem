@@ -28,7 +28,7 @@ export class Auth {
   refresh(): Observable<Tokens> {
     if (this.refreshing) return this.refreshing;
     const original = this.current();
-    if (!original) return throwError(() => new Error('Inicia sesión para continuar.'));
+    if (!original) return throwError(() => new Error('Sign in to continue.'));
     this.refreshing = this.http
       .post<Tokens>('/api/v1/auth/refresh', {
         refreshToken: original.refreshToken,
@@ -36,7 +36,7 @@ export class Auth {
       .pipe(
         map((tokens) => {
           // A late response must never restore a session that has already been closed.
-          if (this.current() !== original) throw new Error('La sesión cambió. Vuelve a entrar.');
+          if (this.current() !== original) throw new Error('The session changed. Sign in again.');
           this.current.set({ ...original, ...tokens });
           return tokens;
         }),

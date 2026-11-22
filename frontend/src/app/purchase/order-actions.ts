@@ -16,13 +16,13 @@ import { Purchase } from './purchase';
     <div class="actions" [attr.aria-busy]="purchase.busy()">
       @if (order().status === 'PENDING_PAYMENT') {
         <button class="button" [disabled]="purchase.busy()" (click)="pay('capture')">
-          Simular pago aprobado
+          Simulate approved payment
         </button>
         <button class="button secondary" [disabled]="purchase.busy()" (click)="pay('failure')">
-          Simular rechazo
+          Simulate declined payment
         </button>
         <button class="button danger" [disabled]="purchase.busy()" (click)="cancel()">
-          Cancelar orden
+          Cancel order
         </button>
       }
       @if (
@@ -31,12 +31,12 @@ import { Purchase } from './purchase';
         order().refundStatus === 'NONE'
       ) {
         <button class="button secondary" [disabled]="purchase.busy()" (click)="cancel()">
-          Solicitar reembolso
+          Request refund
         </button>
       }
       @if (canRefund()) {
         <button class="button secondary" [disabled]="purchase.busy()" (click)="pay('refund')">
-          Confirmar reembolso simulado
+          Confirm simulated refund
         </button>
       }
     </div>

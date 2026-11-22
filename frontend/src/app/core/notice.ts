@@ -4,22 +4,22 @@ import { Injectable, signal } from '@angular/core';
 export function errorMessage(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
     const messages: Record<number, string> = {
-      0: 'No se pudo confirmar la respuesta. Consulta Mis compras antes de repetir la operación.',
-      401: 'La sesión o las credenciales no son válidas. Vuelve a entrar.',
-      403: 'Esta acción requiere una cuenta de comprador con acceso al recurso.',
-      429: 'Has realizado varios intentos. Espera un minuto y vuelve a intentarlo.',
+      0: 'The response could not be confirmed. Check My orders before retrying.',
+      401: 'The session or credentials are invalid. Sign in again.',
+      403: 'This action requires an authorized buyer account.',
+      429: 'Too many attempts. Wait a minute and try again.',
     };
     return (
       messages[error.status] ??
       (typeof error.error?.detail === 'string'
         ? error.error.detail
-        : 'No se pudo completar la operación.')
+        : 'The operation could not be completed.')
     );
   }
   if (error instanceof Error && error.name === 'TimeoutError') {
-    return 'La respuesta tardó demasiado. Consulta Mis compras antes de repetir la operación.';
+    return 'The response timed out. Check My orders before retrying.';
   }
-  return error instanceof Error ? error.message : 'No se pudo completar la operación.';
+  return error instanceof Error ? error.message : 'The operation could not be completed.';
 }
 
 @Injectable({ providedIn: 'root' })

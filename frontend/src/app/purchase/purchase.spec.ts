@@ -12,7 +12,7 @@ const event: EventDetail = {
   title: 'Festival',
   description: '',
   startsAt: '2030-01-01',
-  venue: { name: 'Estadio', city: 'Lima' },
+  venue: { name: 'Stadium', city: 'Lima' },
   ticketTypes: [],
 };
 const order: Order = {
@@ -143,7 +143,7 @@ describe('Purchase workflow', () => {
       .expectOne('/api/v1/orders/order-one')
       .flush({ ...order, status: 'PAID', fulfillmentStatus: 'FULFILLED' });
     await second;
-    expect(navigate).toHaveBeenCalledWith(['/entradas']);
+    expect(navigate).toHaveBeenCalledWith(['/tickets']);
   });
 
   it('clears checkout on logout without persisting credentials', async () => {

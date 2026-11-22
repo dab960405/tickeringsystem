@@ -1,17 +1,17 @@
 <section aria-labelledby="events-title">
   <div class="page-intro">
-    <p class="eyebrow">TU PRÓXIMA EXPERIENCIA</p>
-    <h1 id="events-title">Un plan. Tu entrada.</h1>
-    <p>Explora los eventos, elige tu lugar y lleva tus entradas contigo.</p>
+    <p class="eyebrow">YOUR NEXT EXPERIENCE</p>
+    <h1 id="events-title">Your next event. Your ticket.</h1>
+    <p>Explore events, choose your venue, and keep your tickets at hand.</p>
   </div>
   <form class="search" (submit)="$event.preventDefault(); search()">
-    <label for="query">Buscar un evento</label>
+    <label for="query">Search for an event</label>
     <div class="inline">
       <input
         id="query"
         type="search"
         [formControl]="query"
-        placeholder="Nombre del evento"
+        placeholder="Event name"
         maxlength="150"
       />
       <button class="button" type="submit">Buscar</button>
@@ -20,17 +20,17 @@
   <div class="catalog-layout">
     <div [attr.aria-busy]="loading()">
       <div class="section-heading">
-        <h2>Eventos disponibles</h2>
+        <h2>Available events</h2>
         @if (result(); as data) {
-          <span>{{ data.totalElements }} evento(s)</span>
+          <span>{{ data.totalElements }} event(s)</span>
         }
       </div>
       @if (loading()) {
-        <p class="empty" role="status">Cargando eventos…</p>
+        <p class="empty" role="status">Loading events…</p>
       } @else if (error()) {
         <div class="notice error" role="alert">
           <p>{{ error() }}</p>
-          <button class="button secondary" (click)="reload()">Reintentar</button>
+          <button class="button secondary" (click)="reload()">Try again</button>
         </div>
       } @else if (result(); as data) {
         @for (event of data.content; track event.id) {
@@ -48,47 +48,47 @@
             </div>
             <a
               class="button secondary small"
-              [routerLink]="['/eventos', event.id]"
-              [attr.aria-label]="'Ver entradas de ' + event.title"
-              >Ver entradas</a
+              [routerLink]="['/events', event.id]"
+              [attr.aria-label]="'View tickets for ' + event.title"
+              >View tickets</a
             >
           </article>
         } @empty {
           <div class="empty">
-            <h2>No encontramos eventos</h2>
-            <p>Prueba otro nombre o vuelve a consultar el catálogo.</p>
+            <h2>No events found</h2>
+            <p>Try another search or refresh the catalog.</p>
           </div>
         }
         @if (data.totalPages > 1) {
-          <nav class="pagination" aria-label="Páginas del catálogo">
+          <nav class="pagination" aria-label="Catalog pages">
             <button
               class="button secondary small"
               [disabled]="data.page === 0"
               (click)="search(data.page - 1)"
             >
-              Anterior
+              Previous
             </button>
-            <span>Página {{ data.page + 1 }} de {{ data.totalPages }}</span>
+            <span>Page {{ data.page + 1 }} of {{ data.totalPages }}</span>
             <button
               class="button secondary small"
               [disabled]="data.page + 1 >= data.totalPages"
               (click)="search(data.page + 1)"
             >
-              Siguiente
+              Next
             </button>
           </nav>
         }
       }
     </div>
-    <aside class="panel" aria-label="Pasos de compra">
-      <p class="eyebrow">TU COMPRA</p>
-      <h2>Elige un evento</h2>
-      <p>Podrás consultar la disponibilidad y seguir cada paso de tu compra.</p>
+    <aside class="panel" aria-label="Checkout steps">
+      <p class="eyebrow">YOUR ORDER</p>
+      <h2>Choose an event</h2>
+      <p>Check availability and complete the purchase steps.</p>
       <ol class="preview-steps">
-        <li>Elige tus entradas</li>
-        <li>Reserva y crea tu orden</li>
-        <li>Simula el pago</li>
-        <li>Recibe tu entrada</li>
+        <li>Choose your tickets</li>
+        <li>Reserve tickets and create an order</li>
+        <li>Simulate payment</li>
+        <li>Get your ticket</li>
       </ol>
     </aside>
   </div>

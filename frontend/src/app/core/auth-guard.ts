@@ -5,7 +5,7 @@ import { Auth } from './auth';
 /** Navigation convenience only: ownership and authorization are enforced by the API. */
 export const authGuard: CanActivateFn = (_route, state) =>
   inject(Auth).signedIn() ||
-  inject(Router).createUrlTree(['/entrar'], { queryParams: { returnUrl: state.url } });
+  inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 
 export const guestGuard: CanActivateFn = () =>
-  !inject(Auth).signedIn() || inject(Router).createUrlTree(['/eventos']);
+  !inject(Auth).signedIn() || inject(Router).createUrlTree(['/events']);

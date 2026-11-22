@@ -50,7 +50,7 @@ export class Purchase {
     await this.run(async () => {
       this.activeReservation.set(await firstValueFrom(this.api.reserve(ticketTypeId, quantity)));
       this.key = crypto.randomUUID();
-      this.notice.show('Entradas reservadas temporalmente. Continúa creando la orden.');
+      this.notice.show('Tickets reserved temporarily. Continue by creating your order.');
     });
   }
 
@@ -60,7 +60,7 @@ export class Purchase {
     const key = this.key;
     await this.run(async () => {
       this.activeOrder.set(await firstValueFrom(this.api.createOrder(reservation.id, key)));
-      this.notice.show('Orden creada. Ahora puedes simular el pago, sin cobros reales.');
+      this.notice.show('Order created. You can simulate payment; no real money is charged.');
     });
   }
 
@@ -73,7 +73,7 @@ export class Purchase {
         await firstValueFrom(this.api.release(reservation.id));
       this.clearCheckout();
       this.selectedEvent.set(await firstValueFrom(this.api.event(event.id)));
-      this.notice.show('Reserva liberada o vencida. Consulta la disponibilidad actualizada.');
+      this.notice.show('Reservation released or expired. Check the updated availability.');
     });
   }
 
@@ -83,8 +83,8 @@ export class Purchase {
       this.update(order);
       this.notice.show(
         order.refundStatus === 'REQUESTED'
-          ? 'Solicitud registrada. Confirma el reembolso simulado para completar la devolución.'
-          : 'Orden cancelada.',
+          ? 'Request received. Confirm the simulated refund to complete it.'
+          : 'Order cancelled.',
       );
       return order;
     });
@@ -100,14 +100,14 @@ export class Purchase {
         order.status === 'PAID' &&
         order.fulfillmentStatus === 'FULFILLED'
       ) {
-        this.notice.show('¡Compra completada! Tus entradas están disponibles.');
-        await this.router.navigate(['/entradas']);
+        this.notice.show('Purchase complete! Your tickets are ready.');
+        await this.router.navigate(['/tickets']);
       } else if (action === 'refund' && order.refundStatus === 'CONFIRMED') {
-        this.notice.show('Reembolso simulado confirmado. Las entradas dejaron de estar vigentes.');
+        this.notice.show('Simulated refund confirmed. Your tickets are no longer valid.');
       } else if (order.status === 'CANCELLED') {
-        this.notice.show('Pago de prueba rechazado. La orden quedó cancelada.');
+        this.notice.show('Simulated payment declined. The order was cancelled.');
       } else {
-        this.notice.show('Respuesta recibida. Consulta el estado de la orden antes de continuar.');
+        this.notice.show('Response received. Check your order status before continuing.');
       }
       return order;
     });

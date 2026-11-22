@@ -51,7 +51,7 @@ export class Catalog {
   }
 
   search(page = 0) {
-    void this.router.navigate(['/eventos'], {
+    void this.router.navigate(['/events'], {
       queryParams: { q: this.query.value.trim() || null, page: page || null },
     });
   }

@@ -51,7 +51,7 @@ export class Login {
       }
       await firstValueFrom(this.auth.login(email.trim(), password));
       this.form.reset();
-      this.notice.show('Sesión iniciada. Ya puedes reservar y consultar tus compras.');
+      this.notice.show('Signed in. You can now reserve tickets and view your orders.');
       await this.router.navigateByUrl(this.returnUrl);
     } catch (error) {
       this.error.set(errorMessage(error));
@@ -61,9 +61,9 @@ export class Login {
   }
 
   private destination() {
-    const value = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/eventos';
-    return /^\/(eventos(?:\/[a-f0-9-]+)?|compras|entradas)(?:\?|$)/.test(value)
+    const value = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/events';
+    return /^\/(events(?:\/[a-f0-9-]+)?|orders|tickets)(?:\?|$)/.test(value)
       ? value
-      : '/eventos';
+      : '/events';
   }
 }

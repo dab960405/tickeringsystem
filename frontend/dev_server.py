@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlsplit
 from uuid import UUID, NAMESPACE_URL, uuid5
 
 WEB_ROOT = Path(__file__).resolve().parent / "dist" / "ticketing-ui" / "browser"
-CLIENT_ROUTE = re.compile(r"/(?:|index\.html|eventos(?:/[a-zA-Z0-9-]+)?|entrar|registro|compras|entradas)/?$")
+CLIENT_ROUTE = re.compile(r"/(?:|index\.html|events(?:/[a-zA-Z0-9-]+)?|login|register|orders|tickets|eventos(?:/[a-zA-Z0-9-]+)?|entrar|registro|compras|entradas)/?$")
 ASSET_TYPES = {".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon",
                ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg",
                ".webp": "image/webp", ".woff2": "font/woff2"}
@@ -44,27 +44,27 @@ def upstream(method, path, body=None, authorization=None, extra_headers=None):
 def simulate_payment(order_id, action, authorization):
     """Read ownership and amount from the API; the browser never chooses financial evidence."""
     if not authorization or not authorization.startswith("Bearer "):
-        return 401, {"detail": "Inicia sesión para continuar."}
+        return 401, {"detail": "Sign in to continue."}
     try:
         order_id = str(UUID(order_id))
     except (ValueError, TypeError, AttributeError):
-        return 400, {"detail": "Orden inválida."}
+        return 400, {"detail": "Invalid order identifier."}
     operations = {"capture": ("SUCCEEDED", "PAYMENT_CAPTURE"),
                   "failure": ("FAILED", "PAYMENT_FAILURE"), "refund": ("REFUNDED", "PAYMENT_REFUND")}
     if action not in operations:
-        return 400, {"detail": "Operación inválida."}
+        return 400, {"detail": "Invalid operation."}
     secret = os.environ.get("PAYMENT_WEBHOOK_SECRET")
     if not secret:
-        return 503, {"detail": "Configura el secreto del simulador en el .env local."}
+        return 503, {"detail": "Configure the local simulator secret in your .env file."}
     status, raw_order, _ = upstream("GET", f"/api/v1/orders/{order_id}", authorization=authorization)
     if status != 200:
-        return status, {"detail": "No se pudo acceder a esta orden con tu sesión."}
+        return status, {"detail": "This order is not available to the current session."}
     order = json.loads(raw_order)
     if action in ("capture", "failure") and order["status"] not in ("PENDING_PAYMENT", "PAID"):
-        return 409, {"detail": "Esta orden ya no admite pagos."}
+        return 409, {"detail": "This order no longer accepts payments."}
     if action == "refund" and order["refundStatus"] not in (
             "REQUESTED", "REQUIRED", "PENDING_RECONCILIATION", "FAILED", "CONFIRMED"):
-        return 409, {"detail": "Primero solicita el reembolso de la orden."}
+        return 409, {"detail": "Request an order refund before confirming it."}
     payment_status, kind = operations[action]
     identity = f"local-demo:{order_id}:{action}"
     payload = {"orderId": order_id, "status": payment_status,
@@ -77,7 +77,7 @@ def simulate_payment(order_id, action, authorization):
     status, result, _ = upstream("POST", "/api/v1/payments/webhook", raw,
                                  extra_headers={"X-Signature": signature})
     if status != 204:
-        return status, json.loads(result) if result else {"detail": "El simulador no confirmó el pago."}
+        return status, json.loads(result) if result else {"detail": "The simulator did not confirm the payment."}
     return 200, {"simulated": True, "orderId": order_id}
 
 
@@ -102,17 +102,17 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_port
         authorities = {f"localhost:{port}", f"127.0.0.1:{port}"}
         if self.headers.get("Host") not in authorities:
-            self.send_body(403, {"detail": "Servidor disponible solo en localhost."})
+            self.send_body(403, {"detail": "The server is available only on localhost."})
             return
         origin = self.headers.get("Origin")
         if origin and origin not in {"http://" + host for host in authorities}:
-            self.send_body(403, {"detail": "Origen no permitido."})
+            self.send_body(403, {"detail": "Origin not allowed."})
             return
         path = urlsplit(self.path).path
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 <= length <= 65536:
-                self.send_body(413, {"detail": "Solicitud demasiado grande."})
+                self.send_body(413, {"detail": "Request body too large."})
                 return
             body = self.rfile.read(length) if length else None
             authorization = self.headers.get("Authorization")
@@ -120,7 +120,7 @@ class Handler(BaseHTTPRequestHandler):
             if asset:
                 file, content_type = asset
                 if not file.is_file():
-                    self.send_body(503, {"detail": "Compila Angular primero: cd frontend && npm ci && npm run build"})
+                    self.send_body(503, {"detail": "Build Angular first: cd frontend && npm ci && npm run build"})
                     return
                 self.send_body(200, file.read_bytes(), content_type)
             elif path.startswith("/api/v1/"):
@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_body(status, data, content_type.split(";")[0])
             elif path == "/demo/payment" and self.command == "POST":
                 if not origin or self.headers.get("X-Demo-Action") != "simulate":
-                    self.send_body(403, {"detail": "Usa el simulador desde la interfaz local."})
+                    self.send_body(403, {"detail": "Use the simulator from the local interface."})
                     return
                 data = json.loads(body or b"{}")
                 if not isinstance(data, dict):
@@ -137,11 +137,11 @@ class Handler(BaseHTTPRequestHandler):
                 status, result = simulate_payment(data.get("orderId"), data.get("action"), authorization)
                 self.send_body(status, result)
             else:
-                self.send_body(404, {"detail": "Ruta no disponible."})
+                self.send_body(404, {"detail": "Route not found."})
         except (ValueError, TypeError):
-            self.send_body(400, {"detail": "Solicitud inválida."})
+            self.send_body(400, {"detail": "Invalid request."})
         except (OSError, TimeoutError):
-            self.send_body(502, {"detail": "No se pudo conectar con la API. Comprueba que esté iniciada."})
+            self.send_body(502, {"detail": "Could not connect to the API. Check that it is running."})
 
     do_GET = handle_request
     do_POST = handle_request
@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(os.environ.get("FRONTEND_PORT", "5173"))
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Ticketing: http://localhost:{port} — demostración local, pagos ficticios", flush=True)
+    print(f"Ticketing: http://localhost:{port} — local demo with simulated payments", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

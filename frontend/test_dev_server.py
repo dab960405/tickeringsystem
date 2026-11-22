@@ -101,7 +101,7 @@ class LocalServerTest(unittest.TestCase):
             (root / "main-ABC.js").write_text('/* built Angular */')
             (root / "source.ts").write_text('private source')
             with patch("dev_server.WEB_ROOT", root):
-                for path in ("/", "/eventos", "/eventos/abc-123", "/compras", "/entradas", "/entrar", "/registro"):
+                for path in ("/", "/events", "/events/abc-123", "/orders", "/tickets", "/login", "/register", "/eventos/abc-123"):
                     status, body = self.request("GET", path)
                     self.assertEqual(status, 200)
                     self.assertIn(b'<app-root>', body)
@@ -124,7 +124,7 @@ class LocalServerTest(unittest.TestCase):
 
     def test_missing_build_explains_how_to_start(self):
         with tempfile.TemporaryDirectory() as directory, patch("dev_server.WEB_ROOT", Path(directory)):
-            self.assertEqual(self.request("GET", "/eventos")[0], 503)
+            self.assertEqual(self.request("GET", "/events")[0], 503)
 
 
 if __name__ == "__main__":

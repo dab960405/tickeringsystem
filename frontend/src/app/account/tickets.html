@@ -1,39 +1,39 @@
 <section id="tickets-view" aria-labelledby="tickets-title">
   <div class="page-intro">
-    <p class="eyebrow">LISTO PARA EL EVENTO</p>
-    <h1 id="tickets-title">Mis entradas</h1>
-    <p>Tus entradas vigentes, con su código único.</p>
+    <p class="eyebrow">READY FOR THE EVENT</p>
+    <h1 id="tickets-title">My tickets</h1>
+    <p>Your valid tickets, each with a unique code.</p>
   </div>
   @if (!auth.signedIn()) {
     <p class="empty">
-      Tu sesión terminó.
-      <a routerLink="/entrar" [queryParams]="{ returnUrl: '/entradas' }">Volver a entrar</a>
+      Your session has ended.
+      <a routerLink="/login" [queryParams]="{ returnUrl: '/tickets' }">Sign in again</a>
     </p>
   } @else if (busy()) {
-    <p class="empty" role="status">Cargando tus entradas…</p>
+    <p class="empty" role="status">Loading your tickets…</p>
   } @else if (error()) {
     <div class="notice error" role="alert">
       <p>{{ error() }}</p>
-      <button class="button secondary" (click)="load()">Reintentar</button>
+      <button class="button secondary" (click)="load()">Try again</button>
     </div>
   } @else if (items().length) {
-    <button id="print-tickets" class="button secondary" (click)="print()">Imprimir entradas</button>
+    <button id="print-tickets" class="button secondary" (click)="print()">Print tickets</button>
     <div class="ticket-grid">
       @for (ticket of items(); track ticket.code) {
         <article class="ticket">
-          <span class="badge">ENTRADA VÁLIDA</span>
-          <h2>Tu entrada al evento</h2>
-          <p class="muted">Compra #{{ ticket.orderId.slice(0, 8) }}</p>
+          <span class="badge">VALID TICKET</span>
+          <h2>Your event ticket</h2>
+          <p class="muted">Order #{{ ticket.orderId.slice(0, 8) }}</p>
           <div class="ticket-code">
-            <p>Código de entrada</p>
+            <p>Ticket code</p>
             <code>{{ ticket.code }}</code>
           </div>
-          <button class="text-button" (click)="copy(ticket.code)">Copiar código</button>
+          <button class="text-button" (click)="copy(ticket.code)">Copy code</button>
           <details>
-            <summary>Detalles de la entrada</summary>
+            <summary>Ticket details</summary>
             <p class="identifier">
-              Orden: {{ ticket.orderId }}<br />Tipo de entrada: {{ ticket.ticketTypeId
-              }}<br />Unidad: {{ ticket.unitId }}
+              Order: {{ ticket.orderId }}<br />Ticket type: {{ ticket.ticketTypeId
+              }}<br />Unit: {{ ticket.unitId }}
             </p>
           </details>
         </article>
@@ -41,12 +41,11 @@
     </div>
   } @else {
     <div class="empty">
-      <h2>No tienes entradas vigentes</h2>
+      <h2>You have no valid tickets</h2>
       <p>
-        Las entradas aparecerán aquí al confirmarse el pago. Las reembolsadas dejan de estar
-        disponibles.
+        Tickets appear here after a successful payment. Refunded tickets are no longer valid.
       </p>
-      <a class="button" routerLink="/eventos">Ver eventos</a>
+      <a class="button" routerLink="/events">View events</a>
     </div>
   }
 </section>

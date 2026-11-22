@@ -34,12 +34,12 @@ export class App {
     this.loggingOut.set(true);
     try {
       await firstValueFrom(this.auth.logout());
-      this.notice.show('Sesión cerrada. Tus compras se conservan en tu cuenta.');
+      this.notice.show('Signed out. Your orders remain available in your account.');
     } catch (error) {
       this.notice.error(error);
     } finally {
       this.loggingOut.set(false);
-      await this.router.navigate(['/eventos']);
+      await this.router.navigate(['/events']);
     }
   }
 }
