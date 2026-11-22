@@ -158,6 +158,22 @@ class TicketTypeNameConcurrencyIT extends AbstractIntegrationTest {
     assertThat(nameCount("vip")).isEqualTo(1);
   }
 
+  @RepeatedTest(4)
+  void should_createOrRenameCaseVariantButNeverBoth_whenRequestsRace() throws Exception {
+    UUID existingId = service.create(eventId, request("General")).id();
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      CountDownLatch start = new CountDownLatch(1);
+      CompletableFuture<Boolean> creator =
+          CompletableFuture.supplyAsync(() -> createAfter(start, "VIP"), executor);
+      CompletableFuture<Boolean> renamer =
+          CompletableFuture.supplyAsync(() -> renameAfter(start, existingId, "vip"), executor);
+      start.countDown();
+      assertThat(List.of(creator.get(10, TimeUnit.SECONDS), renamer.get(10, TimeUnit.SECONDS)))
+          .containsExactlyInAnyOrder(true, false);
+    }
+    assertThat(nameCount("vip")).isEqualTo(1);
+  }
+
   private boolean createAfter(CountDownLatch start, String name) {
     return afterStart(start, () -> service.create(eventId, request(name)));
   }

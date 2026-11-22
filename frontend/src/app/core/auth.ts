@@ -22,14 +22,12 @@ export class Auth {
   }
 
   login(email: string, password: string) {
-    return this.http
-      .post<Tokens>('/api/v1/auth/login', { email, password })
-      .pipe(
-        tap((tokens) => {
-          this.current.set({ ...tokens, email });
-          this.epoch.update((value) => value + 1);
-        }),
-      );
+    return this.http.post<Tokens>('/api/v1/auth/login', { email, password }).pipe(
+      tap((tokens) => {
+        this.current.set({ ...tokens, email });
+        this.epoch.update((value) => value + 1);
+      }),
+    );
   }
 
   refresh(): Observable<Tokens> {

@@ -58,6 +58,9 @@ jobs:
       - name: Build Angular production bundle
         working-directory: frontend
         run: npm run build
+      - name: Verify deep links and reload with real Chrome
+        working-directory: frontend
+        run: python3 browser_smoke.py
       - name: Check Angular formatting
         id: format
         working-directory: frontend
