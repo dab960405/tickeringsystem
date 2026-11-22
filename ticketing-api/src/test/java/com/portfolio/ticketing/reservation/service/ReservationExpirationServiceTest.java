@@ -14,9 +14,7 @@ import com.portfolio.ticketing.reservation.repository.ReservationExpirationCandi
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,8 +47,7 @@ class ReservationExpirationServiceTest {
             reservationRepository,
             inventoryService,
             eventLockService,
-            redisProjectionService,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            redisProjectionService);
   }
 
   @Test
@@ -97,6 +94,7 @@ class ReservationExpirationServiceTest {
 
   @Test
   void should_useBoundedBatch_when_noReservationIsOverdue() {
+    when(reservationRepository.databaseNow()).thenReturn(NOW);
     when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of());
 
     expirationService.expireOverdue();

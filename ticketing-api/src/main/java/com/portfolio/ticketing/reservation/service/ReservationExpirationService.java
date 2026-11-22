@@ -8,7 +8,6 @@ import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationExpirationCandidate;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -28,19 +27,16 @@ public class ReservationExpirationService {
   private final TicketTypeInventoryService inventoryService;
   private final EventLockService eventLockService;
   private final ReservationRedisProjectionService redisProjectionService;
-  private final Clock clock;
 
   public ReservationExpirationService(
       ReservationRepository reservationRepository,
       TicketTypeInventoryService inventoryService,
       EventLockService eventLockService,
-      ReservationRedisProjectionService redisProjectionService,
-      Clock clock) {
+      ReservationRedisProjectionService redisProjectionService) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
     this.eventLockService = eventLockService;
     this.redisProjectionService = redisProjectionService;
-    this.clock = clock;
   }
 
   @Scheduled(
@@ -49,7 +45,7 @@ public class ReservationExpirationService {
   @Transactional
   public void expireOverdue() {
     List<ReservationExpirationCandidate> candidates =
-        reservationRepository.findExpiredCandidates(clock.instant(), BATCH_SIZE);
+        reservationRepository.findExpiredCandidates(reservationRepository.databaseNow(), BATCH_SIZE);
     if (candidates.isEmpty()) {
       return;
     }
