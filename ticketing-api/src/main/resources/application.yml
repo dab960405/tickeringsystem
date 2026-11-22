@@ -13,6 +13,9 @@ spring:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:ticketing}
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
+  jackson:
+    deserialization:
+      accept-float-as-int: false
   jpa:
     open-in-view: false
     hibernate:
@@ -32,6 +35,12 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 500ms
+
+# Hibernate's SQL exception logger can include rejected constraint values (PII).
+# The application handler records only the safe conflict category.
+logging:
+  level:
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF
 
 springdoc:
   swagger-ui:

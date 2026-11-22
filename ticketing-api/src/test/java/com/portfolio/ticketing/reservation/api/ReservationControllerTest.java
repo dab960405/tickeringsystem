@@ -129,6 +129,19 @@ class ReservationControllerTest {
   }
 
   @Test
+  void should_rejectFractionalQuantityBeforeReachingReservationService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/reservations")
+                .with(userJwt())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ticketTypeId\":\"" + TICKET_TYPE_ID + "\",\"quantity\":1.5}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(reservationService);
+  }
+
+  @Test
   @WithAnonymousUser
   void should_return401_when_reservationIsAnonymous() throws Exception {
     mockMvc

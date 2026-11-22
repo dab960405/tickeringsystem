@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.auth.api;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -67,6 +68,22 @@ class AuthControllerTest {
                     "{\"email\":\"user@example.com\",\"password\":\"password\",\"fullName\":\"Example User\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors.password").exists());
+  }
+
+  @Test
+  void should_rejectUnicodePasswordLongerThanBcryptByteLimit() throws Exception {
+    String password = "A1" + "é".repeat(36);
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"email\":\"user@example.com\",\"password\":\""
+                        + password
+                        + "\",\"fullName\":\"Example User\"}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(userService);
   }
 
   @Test

@@ -1,10 +1,13 @@
 package com.portfolio.ticketing.auth.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.nio.charset.StandardCharsets;
 
 public record RegisterRequest(
     @Schema(example = "new.user@example.com")
@@ -22,4 +25,11 @@ public record RegisterRequest(
     @Schema(example = "New User")
         @NotBlank(message = "fullName is required")
         @Size(max = 150, message = "fullName must have at most 150 characters")
-        String fullName) {}
+        String fullName) {
+
+  @JsonIgnore
+  @AssertTrue(message = "password must not exceed 72 UTF-8 bytes")
+  public boolean isPasswordWithinBcryptLimit() {
+    return password == null || password.getBytes(StandardCharsets.UTF_8).length <= 72;
+  }
+}
