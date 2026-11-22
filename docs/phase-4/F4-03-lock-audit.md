@@ -1,103 +1,102 @@
-# F4-03 — Auditoría transversal de locks
+# F4-03 — Cross-cutting PostgreSQL lock audit
 
-- **Fecha:** 2026-11-14
-- **Alcance:** H75, H76 y H83; ADR-016.
-- **Referencia validada:** `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`, CI #292.
-- **Estado:** auditoría técnica completada para el modelo y los flujos existentes. Fase 4 permanece abierta.
+- **Date:** 2026-11-14.
+- **Scope:** H75, H76 and H83, under ADR-016.
+- **Historically verified SHA:** `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`, CI #292.
+- **Historical status:** Lock audit completed for the then-current schema and flows; **Phase 4 still formally OPEN**.
 
-## Método
+## Methodology
 
-Se revisaron todos los `service` y `repository` de `ticketing-api` que adquieren locks explícitos o ejecutan escrituras capaces de introducir locks implícitos por claves foráneas. La revisión incluyó `FOR SHARE`, `FOR UPDATE`, `SKIP LOCKED`, actualizaciones condicionales, inserts con FK y los flushes de JPA.
+The review inspected `ticketing-api` service and repository methods acquiring explicit PostgreSQL locks or performing writes that can introduce **implicit foreign-key locks**. It included `FOR SHARE`, `FOR UPDATE`, `SKIP LOCKED`, conditional updates, FK inserts and JPA flush.
 
-El contrato contrastado es el orden de ADR-016:
+The canonical [ADR-016](../adr/ADR-016-global-lock-order.md) lock sequence is:
 
 `E → D → PE → J → XA → V → N → CR → C → DS → T → R → O → P → I → U → EN → IS → K`
 
-Las lecturas sin lock usadas para descubrir IDs no se contabilizan como adquisiciones; cuando una decisión depende de estado mutable, el servicio revalida después de adquirir los locks correspondientes. Los inserts de filas nuevas no son equivalentes a un lock de una fila existente, pero sus FK sí pueden adquirir `KEY SHARE` sobre filas padre y por tanto forman parte de esta auditoría.
+Unlocked discovery queries that only obtain candidate IDs do not count as acquiring existing-row locks. When decisions depend on mutable data, the application rechecks it **after** obtaining required locks. An INSERT of a new row is not itself a row lock on an existing row, but FK checks can lock its parent with `KEY SHARE`; these are part of the audit.
 
-## Secuencias verificadas
+## Historically verified flow sequences
 
-| Flujo | Secuencia relevante | Resultado |
+| Flow | Relevant lock sequence | Historical result |
 | --- | --- | --- |
-| Edición/publicación de evento | E | Compatible |
-| Creación/edición de ticket type | E → T | Compatible |
-| Creación de reserva | E → T → R (insert) | Compatible |
-| Cancelación de reserva | T → R | Compatible |
-| Confirmación/recuperación de reserva | E → T → R | Compatible |
-| Expiración de reservas | E ordenado → T ordenado → R ordenado/`SKIP LOCKED` | Compatible |
-| Creación de orden | E → T → R; después O/P/I nuevos | Compatible tras H83-02 |
-| Cancelación de orden pendiente | E → T → R → O | Compatible |
-| Cancelación de evento | E → T → R → O | Compatible |
-| Expiración de orden | E → T → R → O | Compatible |
-| Captura/fallo de pago | E → T → R → O → P → I → U → EN | Compatible |
-| Aplicación recuperable | E → J → XA → T → R → O → P → I → U → EN → IS | Compatible |
-| Claim/reintento de worker | J → XA | Compatible |
-| Proyección de operación | J → XA → K | Compatible |
-| Reembolso confirmado | O → P → EN | Compatible |
-| Emisión inicial | O → I → U → EN | Compatible |
-| Reemisión | O → U → EN | Compatible tras H83-01 |
+| Event editing/publishing | E | Compatible |
+| Ticket-type create/edit | E → T | Compatible, subject to separately tracked BACK-01 case-insensitive name race |
+| Reservation creation | E → T → R (INSERT) | Compatible |
+| Reservation cancellation | T → R | Compatible |
+| Reservation confirmation/recovery | E → T → R | Compatible |
+| Reservation expiration | Sorted E → sorted T → sorted R / `SKIP LOCKED` | Compatible |
+| Order creation | E → T → R, then new O/P/I rows | Compatible after H83-02 |
+| Pending-order cancellation | E → T → R → O | Compatible |
+| Event cancellation | E → T → R → O | Compatible |
+| Order expiration | E → T → R → O | Compatible |
+| Capture/payment failure | E → T → R → O → P → I → U → EN | Compatible |
+| Recoverable application | E → J → XA → T → R → O → P → I → U → EN → IS | Compatible |
+| Worker claim/retry | J → XA | Compatible |
+| Operation projection | J → XA → K | Compatible |
+| Confirmed refund | O → P → EN | Compatible |
+| Initial ticket issuance | O → I → U → EN | Compatible |
+| Ticket reissuance | O → U → EN | Compatible after H83-01 |
 
-`DS`, `CR`, `C` y las identidades recibidas se crean como evidencia append-only en sus transacciones correspondientes; no existe una ruta que bloquee una fila existente posterior y después adquiera una fila existente anterior del orden canónico. Las actualizaciones posteriores de J/XA en APPLY/PROJECT recaen sobre filas que ya fueron bloqueadas al inicio de la transacción.
+`DS`/`CR`/`C` and inbound identities are created as append-only evidence in their relevant transactions. The original audit did not find an existing-row lock inversion after the two fixes; later J/XA updates in APPLY/PROJECT refer to rows already locked at transaction start. Any future change needs a new review.
 
-## H83-01 — reemisión EN → U
+## H83-01 — Reissuance could acquire EN → U
 
-### Hallazgo
+### Root cause
 
-`TicketService.reissueForOrder` cancelaba en memoria los tickets de la generación anterior y luego ejecutaba `generationRepository.saveAndFlush(current)`. Ese flush podía materializar primero los UPDATE de `tickets` (EN). Más tarde, la creación de asociaciones de la nueva generación valida FK contra `commercial_units` y puede adquirir locks implícitos sobre U.
+`TicketService.reissueForOrder` marked tickets in the older generation as cancelled in memory, then called `generationRepository.saveAndFlush(current)`. Hibernate could flush UPDATEs to older `tickets` (EN) first. New generation association inserts then validate FK against `commercial_units`, potentially acquiring implicit locks on U afterward.
 
-La secuencia efectiva podía ser EN → U, inversa a ADR-016.
+The effective order **EN → U** would invert ADR-016.
 
-### Corrección
+### Implemented correction, historical commits
 
 - `92fc29957f968bb26486c230eab07720058297db` — `fix(tickets): preserve global lock order during reissue`.
-- `798537ba0d7f0b2d153a3d521e735dd91317d3e8` — ajuste Spotless.
+- `798537ba0d7f0b2d153a3d521e735dd91317d3e8` — Spotless follow-up.
 
-La generación anterior se marca `SUPERSEDED` y se hace flush antes de crear la sucesora, pero los tickets anteriores no se cancelan hasta después de persistir los enlaces U/generación y los tickets EN de la sucesora. Todo sigue ocurriendo en la misma transacción: no existe un estado intermedio observable tras commit.
+The former generation is marked `SUPERSEDED` and flushed before inserting its successor, but **old ticket cancellation occurs only after** persisting the new U/generation associations and successor tickets (EN). All steps remain in one PostgreSQL transaction, so no intermediate state becomes committed/visible.
 
-`TicketServiceTest` fija el orden de interacción: transición de generación → enlaces de unidades → tickets nuevos → cancelación de tickets anteriores. `CommercialIssuanceIT` mantiene 14 casos de emisión, reemisión, concurrencia y carrera con reembolso.
+`TicketServiceTest` asserts the ordering: generation transition → commercial-unit links → new tickets → old-ticket cancellation. `CommercialIssuanceIT` contains 14 issuance, reissuance, concurrency and refund-race tests.
 
-## H83-02 — creación de orden R → T por FK
+## H83-02 — Order creation could acquire R → T through FK
 
-### Hallazgo
+### Root cause
 
-`ReservationService.lockActiveForOrder` bloqueaba E → R y omitía T porque la creación de la orden no modifica inventario. Sin embargo, V7 define `order_items.ticket_type_id REFERENCES ticket_types(id)`. Al hacer flush del `Order` y sus items, PostgreSQL puede adquirir `KEY SHARE` sobre T para validar esa FK.
+`ReservationService.lockActiveForOrder` locked E → R, skipping T because order creation does not directly mutate inventory. But V7 defines `order_items.ticket_type_id REFERENCES ticket_types(id)`. During order/item flush, PostgreSQL could acquire a `KEY SHARE` parent lock on T.
 
-Por tanto, la ruta podía mantener R y adquirir T después: R → T. En paralelo, cancelación/expiración siguen T → R, formando la inversión que ADR-016 pretende eliminar.
+Therefore the path could already hold R and **later acquire T**, opposite to the global T → R protocol used by cancellation/expiration.
 
-### Corrección
+### Implemented correction, historical commits
 
 - `ea4a061eec20cf1fd02eb305163d9d0c14937c36` — `fix(orders): lock ticket type before reservation`.
-- `7a7b75a50b1e2c125c44d4bdfe15fc1bad81ede3` — corrección del fixture Mockito.
-- `24be7cbe670e7076d8e6999a9d708ef4cad09fe1` — ajuste Spotless y SHA final validado.
+- `7a7b75a50b1e2c125c44d4bdfe15fc1bad81ede3` — Mockito fixture correction.
+- `24be7cbe670e7076d8e6999a9d708ef4cad09fe1` — Spotless and successfully validated baseline.
 
-`lockActiveForOrder` sigue ahora E → T → R. T no se bloquea para modificar inventario, sino para garantizar que la futura validación FK de `order_items` no introduzca una adquisición tardía T después de R.
+`lockActiveForOrder` now obtains **E → T → R**. T is not taken to change stock, but to ensure the FK check on `order_items` does not acquire it after R.
 
-`ReservationServiceTest` verifica E → T → R mediante `InOrder`. `OrderCreationIntegrityIT.should_lockTicketTypeBeforeReservation_when_orderCreationCompetesWithRelease` usa PostgreSQL real: mantiene T bloqueado, demuestra que la creación de orden espera en T y comprueba que la transacción bloqueadora todavía puede adquirir R, lo que descarta que la creación haya tomado R antes que T.
+`ReservationServiceTest` verifies E → T → R with Mockito `InOrder`. `OrderCreationIntegrityIT.should_lockTicketTypeBeforeReservation_when_orderCreationCompetesWithRelease` uses real PostgreSQL: holds T locked, proves order creation waits at T and asserts the blocking transaction can still acquire R, ruling out a premature R lock.
 
-## Evidencia CI
+## Historical CI evidence
 
-CI #292 sobre `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`:
+**CI #292** at SHA `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`:
 
-- Surefire `ticketing-api`: **390**, 0 fallos, 0 errores, 0 omitidos.
-- Failsafe `ticketing-api`: **148**, 0 fallos, 0 errores, 0 omitidos.
-- `OrderCreationIntegrityIT`: 5/5.
-- `CommercialIssuanceIT`: 14/14.
-- `EventGuardConcurrencyIT`: 9/9.
-- `OperationWorkerIT`: 9/9.
-- `ReservationConcurrencyIT`: 20/20.
-- `ReservationHttpConcurrencyIT`: 20/20.
-- Spotless: 220 archivos Java de `ticketing-api` limpios.
-- JaCoCo: checks cumplidos.
-- Resultado Maven: `BUILD SUCCESS`.
+- API Surefire **390**, zero failures/errors/skips.
+- API Failsafe **148**, zero failures/errors/skips.
+- `OrderCreationIntegrityIT` 5/5.
+- `CommercialIssuanceIT` 14/14.
+- `EventGuardConcurrencyIT` 9/9.
+- `OperationWorkerIT` 9/9.
+- `ReservationConcurrencyIT` 20/20.
+- `ReservationHttpConcurrencyIT` 20/20.
+- Spotless: 220 clean API Java files.
+- JaCoCo checks satisfied; Maven `BUILD SUCCESS`.
 
-## Dictamen
+## Audit disposition and reopening criteria
 
-- **H75:** validado para el HEAD auditado. No quedan inversiones de locks de filas existentes ni de locks padre por FK identificadas en los flujos actuales.
-- **H76:** validado. Todos los flujos que coordinan inventario y reserva adquieren T antes de R; las decisiones temporales de lifecycle se realizan con hora de PostgreSQL después de los locks donde corresponde.
-- **H83:** validado para el modelo actual tras corregir H83-01 y H83-02.
+- **H75:** historical technical check passed for that SHA. No additional explicit existing-row or FK-parent lock inversion was found in the then-current flows.
+- **H76:** T before R was verified across the relevant inventory/reservation coordinators; lifecycle time decisions used PostgreSQL time after locks where applicable.
+- **H83:** passed for the historical schema after H83-01 and H83-02 were corrected.
 
-Este dictamen debe reabrirse si una migración añade nuevas FK a tablas de la cadena, si un servicio introduce un nuevo `FOR UPDATE/FOR SHARE`, o si un flush de JPA pasa a materializar escrituras sobre una entidad anterior al lock que debe precederla.
+**Reopen** when a new migration adds FKs in the lock chain, a service adds `FOR UPDATE`/`FOR SHARE`, or a JPA flush changes the order of writes relative to parent locks.
 
-La excepción arquitectónica cross-module de `EventCancellationService` es un asunto separado: su secuencia de locks es E → T → R → O y no viola ADR-016, pero su acceso directo a repositorios/tablas de módulos vecinos sigue pendiente de decisión del Tech Lead para el cierre formal de Fase 3.
+The cross-module coupling of `EventCancellationService` is a **separate architecture question**: its E → T → R → O order conforms to ADR-016, but its direct neighbor-repository/SQL access is only **proposed** for exemption in [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md). Other AUD-05 cross-module dependencies need their own dispositions.
 
-Este documento no cierra formalmente Fase 4 ni autoriza Fase 5.
+**This dossier does not formally close Phase 4 or authorize Phase 5.**

@@ -1,45 +1,52 @@
-# F5-00 — Plan de Fase 5 y primera validación local
+# F5-00 — Proposed Phase 5 plan and local validation
 
-- **Estado:** planificación exclusivamente documental. **Fase 5 no iniciada**.
-- **Diseño propuesto:** [F5-01](F5-01-technical-design.md), [F5-02](F5-02-test-and-acceptance-plan.md), [ADR-023](../adr/ADR-023-phase-5-outbox-and-notification-delivery.md). Pendiente de aprobación del Tech Lead.
-- **Requisito de entrada:** cierres expresos de Fase 3 y Fase 4 y autorización independiente del Tech Lead/responsable para implementar Fase 5.
-- **Objetivo:** probar primero la aplicación actual en local; después incorporar Transactional Outbox, Kafka y notificaciones simuladas con MongoDB.
+- **Status:** **DOCUMENTATION-ONLY PROPOSAL. Phase 5 has NOT started and is BLOCKED.**
+- **Proposed design:** [F5-01](F5-01-technical-design.md), [F5-02](F5-02-test-and-acceptance-plan.md) and [ADR-023](../adr/ADR-023-phase-5-outbox-and-notification-delivery.md); independent Tech Lead review is pending.
+- **Entry requirement:** explicit formal Phase 3 and Phase 4 closures and a separate owner/Tech Lead authorization to implement Phase 5.
+- **Original intent:** first validate the current application locally; **after authorization**, implement transactional outbox, Kafka and simulated notification persistence in MongoDB.
 
-## Orden previsto
+**Historical note:** the original text described the first manual local run as future work. Later evidence in [LOCAL_RUN](../LOCAL_RUN.md) documents a 2026-11-15 PostgreSQL/Redis API smoke walkthrough (34 HTTP checks). Preserve that historical evidence; new Phase 5 validation must still prove its own exact SHA and scope. This document grants **no permission to start messaging work**.
 
-### 0. Prueba manual local de la plataforma actual (primera tarea de Fase 5)
+## Proposed work order — only after Phase 5 authorization
 
-Antes de editar mensajería: usar la guía existente [LOCAL_RUN](../LOCAL_RUN.md) con Java 21, Docker Compose v2 y Maven Wrapper. No ejecutar este paso ni modificar `docker-compose.yml` durante el cierre de Fase 4.
+### 0. Verify the current platform locally
 
-1. Preparar `.env` desde `.env.example`, generar secretos distintos JWT/HMAC y exportar variables al proceso Java; no versionar secretos.
-2. Ejecutar `docker compose --profile infra up -d` y `docker compose ps`; comprobar `healthy` en PostgreSQL, Redis, Kafka y MongoDB.
-3. Ejecutar `./mvnw -B clean verify` con Docker/Testcontainers disponible y registrar resultado y advertencias.
-4. Arrancar la API mediante `./mvnw -pl ticketing-api -am package -DskipTests` y `java -jar ticketing-api/target/ticketing-api-0.1.0-SNAPSHOT.jar`.
-5. Comprobar `http://localhost:8080/actuator/health`, `/swagger-ui.html` y el catálogo público sembrado por el perfil `dev`.
-6. Probar el camino registro/login → reserva → orden → webhook HMAC de pago **simulado** → tickets, según [flow.http](../flow.http), ajustando importe/referencia a la orden real. Comprobar errores y un caso de repetición idempotente.
-7. Registrar evidencia verificable de la prueba local y errores concretos. Corregir fallos detectados antes de desarrollar el siguiente incremento.
+Before editing messaging, use [LOCAL_RUN](../LOCAL_RUN.md) with Java 21, Docker Compose v2 and Maven Wrapper. Do not use F4 closure work as a pretext to start Kafka/Mongo business processing.
 
-### 1. Publicación de eventos con Transactional Outbox
+1. Prepare trusted `.env` from `.env.example`, generate independent JWT/HMAC secrets and export process variables; do not commit secrets.
+2. Start required PostgreSQL/Redis services and verify health. The original F5 plan additionally requested `docker compose --profile infra up -d` to run all four services (PostgreSQL, Redis, Kafka, MongoDB); do this **only after Phase 5 authorization**, because current 0–4 validation requires PostgreSQL/Redis alone.
+3. Run `./mvnw -B clean verify` with Docker/Testcontainers available; record exact result and warnings.
+4. Start the API using `./mvnw -pl ticketing-api -am package -DskipTests` followed by `java -jar ticketing-api/target/ticketing-api-0.1.0-SNAPSHOT.jar`.
+5. Check `http://localhost:8080/actuator/health`, `/swagger-ui.html` and the public catalog seeded with explicit `dev` profile.
+6. Walk through registration/login → reservation → order → **simulated** HMAC payment webhook → ticket issuance using [flow.http](../flow.http). Derive amount/reference from the real order; test failure and an idempotent retry.
+7. Keep verifiable local evidence, record concrete defects, and correct them before proceeding to the next authorized increment.
 
-Reutilizar la tabla `outbox_events` existente; insertar eventos de negocio dentro de las mismas transacciones que los cambios correspondientes. Publicador programado entrega a Kafka y marca publicación; diseñar reintentos e idempotencia sin prometer exactly-once de extremo a extremo.
+### 1. Event publishing through transactional outbox — NOT IMPLEMENTED
 
-### 2. Kafka y servicio de notificaciones
+The proposed architecture reuses existing `outbox_events`, inserting business events in the **same PostgreSQL transactions** as their corresponding state changes. A future scheduled relay would deliver to Kafka and record publication state. Design retry/idempotency explicitly and do not claim end-to-end exactly-once delivery.
 
-Crear y documentar tópicos `ticketing.orders`, `ticketing.reservations` y `ticketing.events` con tres particiones/replicación 1 en desarrollo. Configurar consumidor de `notification-service`, ack manual, tres reintentos y DLT; registrar IDs procesados con restricción única en MongoDB. Notificación de correo **simulada** (log y documento), nunca email externo.
+### 2. Kafka and notification service — NOT IMPLEMENTED
 
-### 3. Prueba de integración funcional completa
+The original design proposes three topics, `ticketing.orders`, `ticketing.reservations` and `ticketing.events`, each with three partitions and development replication factor 1. A future `notification-service` consumer would use manual acknowledgements, a bounded retry policy and DLT. MongoDB uniqueness should deduplicate processed event IDs. Email remains **simulated**, as log/document evidence, never real outbound messages.
 
-Probar registro → orden → captura simulada → outbox → Kafka → consumidor → notificación en MongoDB mediante Testcontainers y Awaitility, además de duplicados y caída/reintento. Confirmar CI `clean verify` verde con SHA exacto. Probar localmente el recorrido completo con Compose antes de solicitar cierre de Fase 5.
+**Pending design decision:** original text says “three retries,” while other proposed documents say three total attempts; decide unambiguously before implementation.
 
-## Alcance y exclusiones
+### 3. Future full functional integration — NOT EXECUTED
 
-- Fase 5 **solo**: mensajería y evidencia de flujo, con pruebas locales. El perfil Compose `full`, Dockerfiles multi-stage y Grafana corresponden principalmente a Fase 6.
-- Ninguna integración financiera real, correo real, pagos de nube ni despliegue AWS.
-- `main` permanece sin cambios; ningún recurso AWS se crea sin autorización expresa y evaluación de costo $0.
+After implementation is separately authorized, verify registration → order → simulated capture → outbox → Kafka → consumer → Mongo notification through Testcontainers and Awaitility. Include duplicate delivery, outages and retries. Record exact SHA and green CI and run the complete local Compose journey before requesting **Phase 5** acceptance.
 
-## Fuentes
+## Scope and exclusions
 
-- Especificación técnica Ticketing, secciones 12, 13, 15, 16 y 22.
-- [Docker Compose: perfiles](https://docs.docker.com/compose/how-tos/profiles/).
-- [Spring Kafka 3.3: contenedores y ack manual](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html).
-- [PostgreSQL: ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html), para registros únicos de idempotencia.
+- Future Phase 5 covers messaging, local evidence and delivery tests **only after authorization**. Multi-stage Dockerfiles, full Compose and Grafana belong primarily to Phase 6.
+- No real payments, real external email, paid cloud services or AWS deployment.
+- Current permanent branch is **`main` only**; the historical statement that `main` was not to be touched described an earlier branching policy. Do not recreate `dev`.
+- No cloud resource may be created without explicit owner authorization and a documented zero-cost assessment.
+
+## Original official references
+
+- Original Ticketing technical specification, ``12, 13, 15, 16 and 22.
+- [Docker Compose profiles](https://docs.docker.com/compose/how-tos/profiles/).
+- [Spring Kafka 3.3 message listener containers and manual acknowledgements](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html) — **historical versioned source; verify actual version before implementation**.
+- [PostgreSQL 17 ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html) for persistent idempotent identity writes.
+
+**Phase 5 entry verdict: BLOCKED until Phases 3/4 have formal closure and a new explicit start authorization.** See [F5-READINESS](F5-READINESS.md).

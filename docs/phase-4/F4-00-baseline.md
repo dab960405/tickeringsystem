@@ -1,97 +1,101 @@
-# F4-00 — Informe de línea base
+# F4-00 — Historical Phase 4 baseline report
 
-- **Fecha:** 2026-11-13 (UTC)
-- **Repositorio:** `dab960405/tickeringsystem`
-- **Rama autorizada:** `dev`
-- **SHA inicial y HEAD remoto verificado:** `c6917e152c5440fbd346b1f21e1b98d065bca519`
-- **Estado de trabajo inicial:** limpio, sin archivos modificados ni pendientes
-- **Alcance auditado:** el mismo SHA `c6917e152c5440fbd346b1f21e1b98d065bca519`; el commit que publica este informe queda identificado por `git log -1 -- docs/phase-4/F4-00-baseline.md` y se relaciona en la auditoría final.
+- **Date:** 2026-11-13 (UTC).
+- **Repository:** `dab960405/tickeringsystem`.
+- **Authorized branch at the time:** `dev` (**historical; only `main` exists now**).
+- **Initial verified remote HEAD:** `c6917e152c5440fbd346b1f21e1b98d065bca519`.
+- **Original worktree state:** clean, no pending tracked file changes.
+- **Audited scope:** that exact SHA; the document publication commit can be recovered from `git log -1 -- docs/phase-4/F4-00-baseline.md`.
 
-## 1. Objetivo
+**Historical baseline, not current findings.** Later Phase 4 increments implemented most gaps found below. For current status, consult [PROGRESS](../PROGRESS.md), [F4-05](F4-05-closure-review.md) and the pending decision register.
 
-Establecer una línea base reproducible antes de modificar código, contrastar el estado real con el encargo F4-00–F4-07 y detectar brechas que impidan considerar cerrada la Fase 4.
+## 1. Objective
 
-## 2. Archivos y documentos revisados
+Establish a reproducible baseline before modifying code, compare the actual repository against the assigned F4-00–F4-07 work and identify gaps preventing Phase 4 closure.
 
-- Especificación técnica completa suministrada con el encargo, incluidas las secciones 3, 6–12, 15, 22 y 24.
-- Encargo integral F4-00–F4-07 y autorización de autonomía técnica/entrega continua.
-- `README.md`, `docs/PROGRESS.md`, `docs/architecture.md`, `docs/decisions.md`, `docs/erd.md` y `docs/LOCAL_RUN.md`.
-- ADR-009 en `docs/decisions.md` y ADR-010 a ADR-015 en `docs/adr/`.
-- POM padre, POM de `ticketing-api`, Maven Wrapper y `.github/workflows/ci.yml`.
-- Migraciones V1–V11, con revisión específica de reservas, órdenes, tickets y pagos.
-- `ReservationService`, `ReservationExpirationService`, `ReservationRepository`, `TicketTypeInventoryService`, `TicketTypeRepository`, `OrderService`, `OrderPaymentService`, `OrderCancellationService`, `TicketService` y entidades asociadas.
-- `AbstractIntegrationTest` y `ReservationConcurrencyIT`.
-- Historial completo de `dev`: no contiene las cadenas `H-75` ni `ADR-016`; los diseños 03-E mencionados por el encargo no están versionados en este repositorio.
+## 2. Inspected sources
 
-## 3. Criterios originales de Fase 4
+- Complete original technical specification, particularly ``3, 6–12, 15, 22 and 24.
+- The integrated F4-00–F4-07 engineering assignment and authorization of bounded implementation.
+- `README.md`, `docs/PROGRESS.md`, `docs/architecture.md`, `docs/decisions.md`, `docs/erd.md` and `docs/LOCAL_RUN.md`.
+- ADR-009 in the decisions register and ADR-010–015 in `docs/adr/`.
+- Root/API Maven POMs, Maven Wrapper and `.github/workflows/ci.yml`.
+- Flyway V1–V11, with reservations, orders, tickets and payments scrutinized.
+- `ReservationService`, `ReservationExpirationService`, `ReservationRepository`, `TicketTypeInventoryService`, `TicketTypeRepository`, `OrderService`, `OrderPaymentService`, `OrderCancellationService`, `TicketService` and associated domain entities.
+- `AbstractIntegrationTest` and `ReservationConcurrencyIT`.
+- At that time the history of `dev` contained neither strings `H-75` nor `ADR-016`; the complete 03-E designs cited by the assignment were not versioned in this repository.
 
-La especificación original, sección 22, define para Fase 4: **Redis: caché con invalidación, TTL de reservas y rate limiting**. Su aceptación exige una prueba de degradación con Redis caído y verificación de aciertos de caché. Las secciones 9–11 precisan además:
+## 3. Original Phase 4 acceptance criteria
 
-1. Caché de `GET /events/{id}` y listados populares, TTL de 60 segundos e invalidación al editar/publicar/cancelar.
-2. Claves `reservation:{id}` con TTL equivalente a la reserva.
-3. Rate limiting en login y en creación de reservas/órdenes.
-4. Redis nunca como fuente de verdad y funcionamiento degradado con PostgreSQL como autoridad.
+Original specification `22 defines **Redis cache with invalidation, reservation TTL and rate limiting**; acceptance requires a Redis-outage degradation test and demonstrable cache hits. Specification ``9–11 additionally require:
 
-El encargo actual amplía la evidencia necesaria con H-75–H-80: orden global de locks, unidades/generaciones/tickets, ciclos/workers/recuperación, recuperación de reservas y tres identidades de idempotencia. La Fase 5 sigue bloqueada.
+1. Cache published `GET /events/{id}` and popular catalog lists, default 60-second TTL, and invalidate when editing/publishing/cancelling.
+2. `reservation:{id}` cache/projection keys with reservation-equivalent TTL.
+3. Login and reservation/order creation rate limiting.
+4. Redis never as the business source of truth; PostgreSQL remains authoritative during degradation.
 
-## 4. Estado inicial de compilación, pruebas, cobertura y CI
+The later F4 assignment expanded acceptance evidence with H75–H80: global lock order, stable commercial units/ticket generations, operation cycles/jobs/recovery, late reservation recovery and three persistent idempotency identities. Phase 5 remained blocked.
 
-### Verificación local
+## 4. Initial compilation, tests, coverage and CI
 
-- Toolchain instalado fuera del repositorio: Temurin `21.0.13+9` LTS.
-- Comando: `JAVA_HOME=/tmp/jdk21 PATH=/tmp/jdk21/bin:$PATH ./mvnw -B test`.
-- Resultado: `BUILD SUCCESS`; 46 informes Surefire, **315 tests, 0 fallos, 0 errores, 0 omitidos**.
-- Docker no está instalado en el entorno asistido; no se ejecutó localmente Failsafe/Testcontainers. Esta limitación no se sustituye por una afirmación de éxito.
+### Local verification at the original SHA
 
-### Verificación independiente en GitHub Actions
+- Toolchain outside repository: Temurin `21.0.13+9` LTS.
+- Command: `JAVA_HOME=/tmp/jdk21 PATH=/tmp/jdk21/bin:$PATH ./mvnw -B test`.
+- Result: `BUILD SUCCESS`; 46 Surefire reports, **315 tests, zero failures/errors/skips**.
+- Docker was unavailable in that assisted environment; Failsafe/Testcontainers were **not** run locally. The original report did not claim otherwise.
 
-- Run: [43283365129](https://github.com/dab960405/tickeringsystem/actions/runs/43283365129).
-- SHA: `c6917e152c5440fbd346b1f21e1b98d065bca519`.
-- Job `Build and test`: `completed` / `success`; `./mvnw -B clean verify` correcto.
-- Artefactos descargados y contados desde XML:
-  - Surefire: **315 tests, 0 fallos, 0 errores, 0 omitidos**.
-  - Failsafe: **61 tests, 0 fallos, 0 errores, 0 omitidos**.
-  - Total: **376 tests**.
-- JaCoCo de `ticketing-api`, calculado desde los nodos `package` del XML:
+### Independent GitHub Actions verification
 
-| Paquetes | Líneas | Cobertura de líneas | Ramas | Cobertura de ramas |
+- [Run #43283365129](https://github.com/dab960405/tickeringsystem/actions/runs/43283365129), SHA `c6917e152c5440fbd346b1f21e1b98d065bca519`.
+- `Build and test` was `completed/success`; `./mvnw -B clean verify` passed.
+- Downloaded report XML: Surefire **315/315**, Failsafe **61/61**, total **376**, zero failures/errors/skips.
+- API package-scoped JaCoCo counters:
+
+| Packages | Covered/total lines | Line coverage | Covered/total branches | Branch coverage |
 | --- | ---: | ---: | ---: | ---: |
-| `service` | 501 / 522 | **95,98 %** | 126 / 151 | 83,44 % |
-| `domain` | 291 / 296 | **98,31 %** | 84 / 101 | 83,17 % |
+| `service` | 501 / 522 | **95.98%** | 126 / 151 | 83.44% |
+| `domain` | 291 / 296 | **98.31%** | 84 / 101 | 83.17% |
 
-## 5. Hallazgos pendientes verificados
+These are **historical** coverage numbers for that exact SHA, not current main percentages.
 
-| Hallazgo | Estado real en el SHA inicial | Brecha |
+## 5. Gaps identified in the original baseline
+
+| Finding | Original state | Missing behavior at that SHA |
 | --- | --- | --- |
-| H-75 | Existe `UPDATE` condicional y prueba de 100 compradores/10 unidades repetida 20 veces | La evidencia física inicial es válida para ese escenario, pero no cubre todos los flujos de escritura ni los nuevos protocolos |
-| H-76 | `confirmForPayment`, `releaseForPayment` y expiración bloquean/consultan R antes de descontar/restaurar T | Implementa `R → T`, incompatible con el protocolo consolidado `T → R`; ADR-012 no define el orden global y ADR-016 no existe |
-| H-77 | `OrderItem.quantity` y tickets relacionados solo con `order_item_id` | No hay unidades comerciales, generaciones, relación unidad-ticket ni unicidad por unidad/generación |
-| H-78 | Solo existe un scheduler de expiración con `SKIP LOCKED` | No hay ciclos, participaciones, jobs, ejecuciones, disposiciones, leases con fencing ni proyecciones |
-| H-79 | Un éxito tardío intenta recuperar stock; sin stock marca orden/pago `REFUNDED` | No distingue recepción, evidencia financiera y reembolso ejecutado; puede declarar reembolso sin confirmación del proveedor |
-| H-80 | Webhook con `orderId`, `status` y `providerReference`; deduplicación por estado/referencia | Faltan identidad de evento, identidad de operación, aplicación semántica global, digest y restricciones persistentes |
-| Redis original | Caché de metadatos de tipos, rate limit de login y refresh tokens | ADR-014 documenta como desviaciones la ausencia de caché de eventos, claves de reserva y rate limit de reservas/órdenes; no se marcarán como cumplidas |
+| H75 | Conditional stock UPDATE and a 100-buyers/10-units test repeated 20 times existed | Scenario covered, but not all writes or the consolidated global locking protocol |
+| H76 | Payment confirmation/release and expiration acquired or consulted R before mutating T | `R → T` was incompatible with the later consolidated `T → R`; ADR-016 did not yet exist |
+| H77 | `OrderItem.quantity` and tickets linked only to `order_item_id` | No stable commercial units, generations, unit-to-ticket links or per-unit/generation uniqueness |
+| H78 | Reservation expiration scheduler with `SKIP LOCKED` only | No cycles, participations, durable jobs, worker executions/dispositions, fenced leases or projections |
+| H79 | Late successful capture attempted stock recovery; failure marked payment/order `REFUNDED` | No separation of financial capture evidence, outstanding refund obligation and confirmed provider refund |
+| H80 | Webhook based on `orderId`/`status`/`providerReference` with status-based deduplication | Missing event identity, provider operation identity, global semantic application identity, digests and persistent constraints |
+| Original Redis scope | Ticket-type metadata cache, login limits and refresh tokens | ADR-014 explicitly deferred event cache, reservation projection and order/reservation rate limiting |
 
-## 6. Riesgos y contradicciones
+**These were baseline gaps, not claims that the current main branch still lacks V14–V16 or Redis features.**
 
-1. **Diseños 03-E ausentes:** el encargo resume las decisiones consolidadas, pero los documentos completos no existen en el historial del repositorio. Se usará el texto del encargo como requisito suministrado y cada decisión de diseño quedará formalizada antes del código correspondiente. No se afirmará que se reprodujeron documentos no disponibles.
-2. **ADR-014 frente al encargo:** sus tres desviaciones explícitas impiden cerrar la Fase 4 original. Deben implementarse o mantener el dictamen como no viable; este trabajo las incluye en remediación.
-3. **H-79 frente a ADR-009/ADR-011:** el comportamiento actual de reembolso automático no aporta evidencia financiera independiente. La política nueva debe separar pago recibido, necesidad de reembolso y reembolso confirmado.
-4. **Cobertura:** añadir servicios/dominio sin pruebas hará fallar el umbral JaCoCo del 70 %; cada incremento funcional debe incluir tests.
-5. **Entorno local sin Docker:** la concurrencia y las restricciones PostgreSQL deben validarse en CI con Testcontainers; los resultados se registrarán por SHA y run.
-6. **Alcance:** no se añadirán publicación Kafka, consumidor de notificaciones, despliegue, AWS ni integraciones externas.
+## 6. Risks and source conflicts recorded then
 
-No se detectó una contradicción que exija detener todo el trabajo: el encargo actual autoriza resolver mediante ADR las decisiones de implementación y prohíbe expresamente declarar reembolsos sin evidencia. H-79 se tratará como obligatorio y bloqueante hasta contar con código y pruebas.
+1. **Unavailable 03-E sources:** The assignment summarized settled decisions, but full source documents were absent from Git history. The review used the actual supplied assignment as input and required each implementable decision to be recorded. It did not claim to read unavailable originals.
+2. **ADR-014 deferrals:** Three deferrals conflicted with original Phase 4 acceptance and had to be implemented or remained blocking. ADR-020 later completed them.
+3. **H79 vs ADR-009/011:** Immediate refund transition could falsely claim financial refund without independent provider evidence. The subsequent model separates `SUCCEEDED`, refund `REQUIRED` and signed `REFUNDED`.
+4. **Coverage:** New business packages would be subject to the per-package 70% JaCoCo threshold; each code increment needed tests.
+5. **No local Docker:** PostgreSQL constraints/concurrency needed independent CI Testcontainers with exact SHA.
+6. **Out of scope:** No Kafka publisher, notification consumer, deployment, AWS or external gateway.
 
-## 7. Plan de ejecución propuesto
+The original audit found no reason to stop all work: H79's financial evidence issue was a **blocking implementation requirement** and had to be solved before closure.
 
-1. **F4-01:** ADR-016 para orden global `T → R`; decisiones de unidades/generaciones, workers, identidades, recuperación, roles, retención, timeouts y parámetros; matriz de compatibilidad.
-2. **F4-02:** bloqueo de inventario ordenado antes de reserva, revalidación con `clock_timestamp()`, lotes ≤100, pruebas de carreras y rollback.
-3. **F4-03:** unidades comerciales y generaciones con FK/unicidad parcial en PostgreSQL; emisión idempotente y sustitución controlada.
-4. **F4-04:** ciclos, participaciones, jobs efectivos, ejecuciones con lease/fencing, disposiciones y proyecciones; TX-RX/TX-CLAIM/TX-APPLY/TX-PROJECT.
-5. **F4-05:** inbox de eventos, operaciones del proveedor y aplicaciones semánticas globales con digest; política H-79 sin reembolso no evidenciado.
-6. **F4-06:** completar los requisitos Redis originales, validar migraciones limpias/evolutivas, regresión, concurrencia, seguridad, cobertura y CI.
-7. **F4-07:** matrices de aceptación y H-75–H-80, riesgos residuales y dictamen; no declarar el cierre formal sin aprobación del usuario.
+## 7. Historical proposed implementation sequence
 
-## 8. Dictamen de la entrega F4-00
+1. **F4-01:** ADR-016 and policy for global `T → R`, commercial units/generations, workers, identity, recovery, roles, evidence retention, timeouts and compatibility.
+2. **F4-02:** Inventory locking before reservations, database `clock_timestamp()` after locks, batches of at most 100, concurrency and rollback tests.
+3. **F4-03:** Commercial units and ticket generations with composite FK/partial uniqueness, idempotent issuance and controlled replacement.
+4. **F4-04:** Cycles, participations, effective jobs, executions/leases/fencing, dispositions and projections; separate RX/CLAIM/APPLY/PROJECT.
+5. **F4-05:** Provider-event inbox, provider operations and global semantic identity with immutable digest, plus H79 rules without an unevidenced refund.
+6. **F4-06:** Original Redis scope, fresh/evolutionary Flyway tests, regression/concurrency/security/coverage/CI.
+7. **F4-07:** Acceptance/H75–H80 matrices, residual risks and reviewer verdict; formal closure only with owner approval.
 
-**LÍNEA BASE VERIFICADA; IMPLEMENTACIÓN NO APTA TODAVÍA PARA CIERRE.** La compilación y las pruebas existentes pasan, pero los requisitos H-76–H-80 y tres desviaciones Redis permanecen abiertos. No se modificó código, no se creó ninguna rama, no se tocó `main`, no se desplegó y no se inició Fase 5.
+The later repository uses some F4-02/F4-03 numbers for different delivery milestones; **use filenames and SHAs**, not numbering alone, to match work.
+
+## 8. Original F4-00 verdict
+
+**BASELINE VERIFIED; IMPLEMENTATION NOT YET READY FOR CLOSURE at the audited SHA.** The existing build passed, but H76–H80 and three Redis deferrals were open. The F4-00 analysis modified no code, created no branch, did not touch `main`, deployed nothing and did not start Phase 5.

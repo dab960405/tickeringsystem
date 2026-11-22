@@ -1,69 +1,65 @@
-# F4-02 — Procesamiento recuperable de operaciones
+# F4-02 — Recoverable operation processing
 
-- **Fecha:** 2026-11-13
-- **Alcance:** H78, H80 y H82; ADR-016, ADR-018 y ADR-019.
-- **Estado:** implementado y probado con PostgreSQL/Testcontainers. Fase 4 permanece abierta.
+- **Date:** 2026-11-13.
+- **Scope:** H78, H80 and H82; ADR-016, ADR-018 and ADR-019.
+- **Historical status:** Implemented and tested with real PostgreSQL/Testcontainers. **Phase 4 still formally open.**
 
-## Modelo persistido
+## Persisted model
 
-La migración `V15__operation_cycles_jobs_and_projections.sql` crea:
+Flyway `V15__operation_cycles_jobs_and_projections.sql` creates:
 
-- `operation_cycles`: ciclo numerado por agregado.
-- `operation_participations`: relación inequívoca entre ciclo y evento recibido.
-- `operation_jobs`: generación, vigencia, estado técnico, intentos y `fencing_token`.
-- `operation_executions`: worker, token, lease y estado de ejecución.
-- `operation_dispositions`: evidencia append-only `APPLIED`, `NO_OP` o `FAILED` por ejecución.
-- `operation_projections`: estado técnico, comercial y financiero separado, con token y versión.
+- `operation_cycles`: numbered cycles per aggregate.
+- `operation_participations`: unambiguous association of cycle and received provider event.
+- `operation_jobs`: generation, effective flag, technical status, attempt count and `fencing_token`.
+- `operation_executions`: worker ID, token, lease and execution status.
+- `operation_dispositions`: append-only `APPLIED`, `NO_OP` or `FAILED` result per execution.
+- `operation_projections`: separate technical, commercial and financial statuses with version/token.
 
-V14 conserva las tres identidades de proveedor/aplicación. La unicidad semántica es global: una participación o ciclo nuevo no vuelve a aplicar una operación ya registrada.
+V14 retains separate provider event, operation and semantic application identities. **Important refinement:** global semantic operation identity does not mean a legitimate *new signed provider event* can never change business state; proposed ADR-022 specifies valid progression. It does prevent reapplying an already committed event/job due merely to a technical retry.
 
-## Límites transaccionales
+## Transaction boundaries
 
-`OperationTransactionExecutor` crea transacciones independientes y aplica los valores validados de `OperationProperties`:
+`OperationTransactionExecutor` creates independent transactions using validated `OperationProperties` values:
 
-| Operación | Implementación | Reglas |
+| Transaction | Implementation | Invariant |
 | --- | --- | --- |
-| TX-RX | `ProviderEventInboxService` + `OperationCycleService` | Registra identidades, evento, participación, job y proyección inicial; no aplica negocio |
-| TX-CLAIM | `OperationJobService.claim` | Bloquea J antes de escribir XA, invalida leases vencidos y emite un token nuevo |
-| TX-APPLY | `PaymentOperationService.apply` | Revalida J → XA, token y lease con `clock_timestamp()`; aplica la operación semántica y negocio en la misma transacción |
-| TX-PROJECT | `PaymentOperationService.project` | Lee evidencia confirmada y actualiza K sin repetir la operación comercial |
+| TX-RX | `ProviderEventInboxService` + `OperationCycleService` | Persists identities, received event, participation, job and initial projection; no commercial side effect |
+| TX-CLAIM | `OperationJobService.claim` | Locks J before writing XA, invalidates expired leases and produces new fencing token |
+| TX-APPLY | `PaymentOperationService.apply` | Rechecks J → XA, token and lease with PostgreSQL `clock_timestamp()`; persists semantic identity and business effect in the same TX |
+| TX-PROJECT | `PaymentOperationService.project` | Reads committed evidence and updates K; **must never invoke an already committed commercial callback again** |
 
-Cada transacción configura `lock_timeout` y `statement_timeout` mediante `SET LOCAL`/`set_config`. Los tiempos máximos proceden de `tx-rx-timeout`, `tx-claim-timeout`, `tx-apply-timeout` y `tx-project-timeout`.
+Each transaction configures PostgreSQL `lock_timeout` and `statement_timeout` through SET LOCAL/`set_config`. Upper time limits come from `tx-rx-timeout`, `tx-claim-timeout`, `tx-apply-timeout` and `tx-project-timeout`.
 
-## Leases, fencing y recuperación
+## Leases, fencing and recovery
 
-- Dos workers no pueden reclamar el mismo job mientras exista un lease activo.
-- `renewLease` solo renueva una ejecución vigente con token actual.
-- La expiración permite otro claim con token superior; el worker antiguo no puede aplicar ni proyectar.
-- `replace` marca el job anterior `REPLACED`, lo deja no efectivo, invalida sus ejecuciones y crea una generación superior.
-- Un fallo de aplicación revierte la aplicación semántica y registra una disposición `FAILED`. El job vuelve a `PENDING` con backoff o queda `FAILED` al agotar `max-attempts`.
-- Si el proceso se interrumpe después de APPLY, la recuperación crea otra ejecución, registra `NO_OP` por idempotencia semántica y completa la proyección sin duplicar tickets ni efectos financieros.
-- `OperationRecoveryWorker` procesa lotes con `batch-size` cada `recovery-interval`. El perfil `test` desactiva el scheduler para evitar claims desde otros contextos Spring que comparten contenedores; `OperationRecoveryWorkerTest` verifica el lote y la continuación tras fencing, y los tests de integración controlan la recuperación explícitamente. Producción conserva `recovery-enabled=true` por defecto.
+- Two workers cannot claim one job while an effective lease is active.
+- `renewLease` can renew only a current execution with its valid fencing token.
+- Expiration allows a new claim with a greater token; the stale worker must not apply or project.
+- `replace` marks the former job `REPLACED` and ineffective, invalidates its executions and creates a greater job generation.
+- A failed APPLY rolls back its semantic business change and records failure disposition; job returns to `PENDING` with backoff or becomes `FAILED` after attempt exhaustion.
+- **Original design requirement:** If a process stops after a committed APPLY, recovery only resumes the unfinished projection; it reuses the **durable original outcome**, including `NO_OP`. The old implementation incorrectly invoked APPLY again and later failed the adversarial REV-DEV-01. A subsequent main-branch correction adds a permanent regression for that exact interruption. Do not describe the old behavior as valid idempotence.
+- `OperationRecoveryWorker` processes bounded batches at `recovery-interval`. The test profile disables its scheduler so another Spring test context cannot steal jobs from shared containers. `OperationRecoveryWorkerTest` checks batching and continuation after fencing; integration tests explicitly control recovery. Production defaults to `recovery-enabled=true`.
 
-## Evidencia de pruebas
+## Historical test evidence
 
-En la evidencia histórica de este documento, `OperationWorkerIT` ejecutaba 9 casos con PostgreSQL real:
+The original baseline of this document included **9** `OperationWorkerIT` cases on PostgreSQL:
 
-1. Dos workers compitiendo por el mismo job.
-2. Renovación de lease.
-3. Reemplazo de job y fencing de la ejecución anterior.
-4. Lease vencido y rechazo del worker antiguo.
-5. Adquisición del lock de evento antes de J/XA durante APPLY.
-6. Recuperación de proyección sin reaplicar negocio.
-7. Reintentos y agotamiento sin aplicación semántica.
-8. Nueva operación de ciclo sin repetir la aplicación semántica global.
-9. Webhook duplicado concurrente con una sola emisión.
+1. Competing workers claiming the same job.
+2. Lease renewal.
+3. Job generation replacement and prior execution fencing.
+4. Expired lease and stale-worker rejection.
+5. Event lock before J/XA during APPLY.
+6. Projection recovery without intended business reapplication.
+7. Retry exhaustion with no lasting semantic application.
+8. Another operation cycle without duplicate global semantic effects.
+9. Concurrent duplicate webhook with one ticket issuance.
 
-En esa misma evidencia histórica, `OrderPaymentFlowIT` ejecutaba 17 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes, concurrencia de identidad de operación y evidencia append-only.
+The same historical `OrderPaymentFlowIT` report contained **17** end-to-end cases for purchase/failure, late capture, concurrent expiration, refunds, persisted identity, operation identity races and append-only evidence.
 
-### Recuento posterior de referencia
+### Later reference count
 
-La auditoría del 21 de noviembre de 2026 reporta `OperationWorkerIT` **12/12** y
-`OrderPaymentFlowIT` **36/36** en [CI #320](https://github.com/dab960405/tickeringsystem/actions/runs/43670018463),
-SHA `76a0fbb2380d009e13df75e1ab7e9a80f14b69e7`. Los números 9 y 17 anteriores se
-conservan como evidencia histórica, no como inventario vigente. La nueva ejecución local
-se documenta por separado en [el expediente de auditoría](../audit/AUD-2026-11-21.md).
+The 2026-11-21 audit recorded `OperationWorkerIT` **12/12** and `OrderPaymentFlowIT` **36/36** at [CI #320](https://github.com/dab960405/tickeringsystem/actions/runs/43670018463), SHA `76a0fbb2380d009e13df75e1ab7e9a80f14b69e7`. Counts of 9 and 17 above are historical. A local run is separately recorded in the [audit dossier](../audit/AUD-2026-11-21.md). Later REV-DEV-01 main regression changed recovery behavior and needs its own matching CI evidence.
 
-## Pendientes
+## Remaining governance
 
-H77 y H81 están implementados y validados. La auditoría transversal [F4-03](F4-03-lock-audit.md) validó H75/H76/H83 sobre CI #292 después de corregir dos inversiones implícitas de locks. H78/H80 conservan la evidencia de workers e idempotencia de este documento, pero H78/H79/H80/H82/H84 deben someterse todavía a la validación integral final y al expediente de cierre. Este documento no representa el cierre formal de Fase 4 ni autoriza Fase 5.
+H77 and H81 were implemented and technically verified. [F4-03](F4-03-lock-audit.md) recorded H75/H76/H83 lock checks at CI #292 after two implicit-lock inversions were corrected. H78/H79/H80/H82/H84 still require independent final technical acceptance under [F4-05](F4-05-closure-review.md). This document does **not** formally close Phase 4 or authorize Kafka/Phase 5.
