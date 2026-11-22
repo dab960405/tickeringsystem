@@ -208,9 +208,7 @@ class TicketTypeNameConcurrencyIT extends AbstractIntegrationTest {
               AND ? = ANY(pg_blocking_pids(pid))
               AND query ILIKE '%events%FOR UPDATE%'
             """,
-            Integer.class,
-            blockerPid,
-            blockerPid);
+            Integer.class, blockerPid, blockerPid);
     return count != null && count > 0;
   }
 
