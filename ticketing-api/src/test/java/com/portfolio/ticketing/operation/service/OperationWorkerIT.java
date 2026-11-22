@@ -248,8 +248,7 @@ class OperationWorkerIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void should_notReapplyEarlyRefundWhenOnlyItsProjectionIsRecoveredAfterCapture()
-      throws Exception {
+  void should_notReapplyEarlyRefundWhenOnlyItsProjectionIsRecoveredAfterCapture() throws Exception {
     OrderFixture fixture = createOrder();
     PaymentWebhookRequest earlyRefund =
         new PaymentWebhookRequest(
