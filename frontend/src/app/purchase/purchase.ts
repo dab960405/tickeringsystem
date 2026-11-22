@@ -43,12 +43,16 @@ export class Purchase {
   }
 
   newSelection() {
-    if (!this.pending()) this.clearCheckout();
+    if (!this.pending() && !this.busy()) this.clearCheckout();
   }
 
   async reserve(ticketTypeId: string, quantity: number) {
-    await this.run(async () => {
-      this.activeReservation.set(await firstValueFrom(this.api.reserve(ticketTypeId, quantity)));
+    await this.run(async (session) => {
+      const reservation = await firstValueFrom(this.api.reserve(ticketTypeId, quantity));
+      // An in-flight request may have committed under the previous user. The server TTL
+      // reclaims that hold; never attach it to a different signed-in account.
+      if (!this.sameSession(session)) return;
+      this.activeReservation.set(reservation);
       this.key = crypto.randomUUID();
       this.notice.show('Tickets reserved temporarily. Continue by creating your order.');
     });
@@ -58,8 +62,10 @@ export class Purchase {
     const reservation = this.reservation();
     if (!reservation || !this.key || this.order()) return;
     const key = this.key;
-    await this.run(async () => {
-      this.activeOrder.set(await firstValueFrom(this.api.createOrder(reservation.id, key)));
+    await this.run(async (session) => {
+      const order = await firstValueFrom(this.api.createOrder(reservation.id, key));
+      if (!this.sameSession(session)) return;
+      this.activeOrder.set(order);
       this.notice.show('Order created. You can simulate payment; no real money is charged.');
     });
   }
@@ -68,18 +74,22 @@ export class Purchase {
     const reservation = this.reservation();
     const event = this.event();
     if (!reservation || this.order() || !event) return;
-    await this.run(async () => {
+    await this.run(async (session) => {
       if (Date.parse(reservation.expiresAt) > Date.now())
         await firstValueFrom(this.api.release(reservation.id));
+      if (!this.sameSession(session)) return;
       this.clearCheckout();
-      this.selectedEvent.set(await firstValueFrom(this.api.event(event.id)));
+      const updatedEvent = await firstValueFrom(this.api.event(event.id));
+      if (!this.sameSession(session)) return;
+      this.selectedEvent.set(updatedEvent);
       this.notice.show('Reservation released or expired. Check the updated availability.');
     });
   }
 
   async cancel(id: string): Promise<Order | null> {
-    return this.run(async () => {
+    return this.run(async (session) => {
       const order = await firstValueFrom(this.api.cancel(id));
+      if (!this.sameSession(session)) return null;
       this.update(order);
       this.notice.show(
         order.refundStatus === 'REQUESTED'
@@ -91,9 +101,11 @@ export class Purchase {
   }
 
   async pay(id: string, action: PaymentAction): Promise<Order | null> {
-    return this.run(async () => {
+    return this.run(async (session) => {
       await firstValueFrom(this.api.pay(id, action));
+      if (!this.sameSession(session)) return null;
       const order = await firstValueFrom(this.api.order(id));
+      if (!this.sameSession(session)) return null;
       this.update(order);
       if (
         action === 'capture' &&
@@ -121,13 +133,18 @@ export class Purchase {
     this.activeOrder.set(null);
     this.key = null;
   }
-  private async run<T>(action: () => Promise<T>): Promise<T | null> {
+  private sameSession(session: number): boolean {
+    return this.auth.signedIn() && this.auth.sessionVersion() === session;
+  }
+
+  private async run<T>(action: (session: number) => Promise<T>): Promise<T | null> {
     if (this.busy() || !this.auth.signedIn()) return null;
+    const session = this.auth.sessionVersion();
     this.busy.set(true);
     try {
-      return await action();
+      return await action(session);
     } catch (error) {
-      this.notice.error(error);
+      if (this.sameSession(session)) this.notice.error(error);
       return null;
     } finally {
       this.busy.set(false);

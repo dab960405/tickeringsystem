@@ -7,6 +7,8 @@ import { Session, Tokens } from './models';
 export class Auth {
   private readonly http = inject(HttpClient);
   private readonly current = signal<Session | null>(null);
+  private readonly epoch = signal(0);
+  readonly sessionVersion = this.epoch.asReadonly();
   private refreshing?: Observable<Tokens>;
   readonly email = computed(() => this.current()?.email ?? null);
   readonly signedIn = computed(() => this.current() !== null);
@@ -22,7 +24,12 @@ export class Auth {
   login(email: string, password: string) {
     return this.http
       .post<Tokens>('/api/v1/auth/login', { email, password })
-      .pipe(tap((tokens) => this.current.set({ ...tokens, email })));
+      .pipe(
+        tap((tokens) => {
+          this.current.set({ ...tokens, email });
+          this.epoch.update((value) => value + 1);
+        }),
+      );
   }
 
   refresh(): Observable<Tokens> {
@@ -41,7 +48,10 @@ export class Auth {
           return tokens;
         }),
         catchError((error) => {
-          if (this.current() === original) this.current.set(null);
+          if (this.current() === original) {
+            this.current.set(null);
+            this.epoch.update((value) => value + 1);
+          }
           return throwError(() => error);
         }),
         finalize(() => {
@@ -56,6 +66,7 @@ export class Auth {
     const session = this.current();
     this.current.set(null);
     if (!session) return of(null);
+    this.epoch.update((value) => value + 1);
     return this.http.post('/api/v1/auth/logout', { refreshToken: session.refreshToken });
   }
 }

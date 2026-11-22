@@ -78,6 +78,15 @@ describe('Authentication HTTP boundary', () => {
     expect(auth.signedIn()).toBe(false);
   });
 
+  it('keeps the session generation stable during a normal token refresh', () => {
+    const before = auth.sessionVersion();
+    auth.refresh().subscribe();
+    backend
+      .expectOne('/api/v1/auth/refresh')
+      .flush({ accessToken: 'new', refreshToken: 'rotated', expiresIn: 60 });
+    expect(auth.sessionVersion()).toBe(before);
+  });
+
   it('does not automatically retry a failed payment mutation', () => {
     http
       .post('/demo/payment', { orderId: 'one', action: 'capture' })
