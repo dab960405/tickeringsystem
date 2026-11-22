@@ -1,304 +1,256 @@
-# Progreso del proyecto
+# Ticketing project progress
 
-Última actualización: 2026-11-14 · Rama de trabajo: `dev`
+**Updated:** 2026-11-21 (America/Bogota). **Permanent branch:** `main` only. Historical `dev` commits and CI references below are retained solely as provenance; the branch no longer exists.
 
-## Estado actual
+## Current status and formal gates
 
-**Fases 3 y 4 en preparación de cierre formal; Fase 5 bloqueada y no iniciada.** El cierre exige evidencia para H75–H84 y aprobación independiente; los pipelines verdes anteriores no demuestran ese cierre.
+**Phases 3 and 4: technically implemented but formally OPEN. Phase 5: BLOCKED, not implemented.** The independent Tech Lead verdict on ADR-024 and Phase 3 must precede formal Phase 3 closure. An explicit verdict on ADR-022/H84-01 and H75–H84, plus Phase 3 closure, must precede formal Phase 4 closure. Green CI does **not** constitute an architectural decision or owner authorization.
 
-La auditoría reinició desde `ed0628982c3a9af10d919b8e02195c4ccf6fbe3b`, cuyo CI `43437152585` estaba en verde. En ese punto existían configuración operativa y mejoras de reservas/pagos, pero no las estructuras de H77/H78 ni las identidades persistentes de H80.
+- [Phase 3 closure dossier](phase-3/F3-01-closure-review.md), [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), [issue #5](https://github.com/dab960405/tickeringsystem/issues/5) — **pending independent verdict**.
+- [Phase 4 closure dossier](phase-4/F4-05-closure-review.md), [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md), [issue #6](https://github.com/dab960405/tickeringsystem/issues/6) — **pending independent verdict and prior Phase 3 closure**.
+- [Current remediation record](audit/MAIN-REMEDIATION-2026-11-21.md), [remaining decisions](audit/PENDING-DECISIONS.md), [architecture](architecture.md), [ERD Flyway V1–V16](erd.md), and [engineering evidence policy](engineering-decision-verification.md).
+- [ADR-025](adr/ADR-025-english-only-project-policy.md) records the explicit owner's English-only repository policy; it **does not** approve other ADRs.
+- Kafka, functional outbox writing/relay, Mongo notification storage and notification consumers remain Phase 5 work and **must not start** without separate authorization.
 
-## Matriz de cierre H75–H84
+### Latest directly verified CI for recent changes
 
-| Requisito | Estado demostrado | Pendiente |
+| Main SHA | GitHub Actions result | Scope |
 | --- | --- | --- |
-| H75 — orden global de locks | **Validado en CI #292:** auditoría de locks explícitos, FK implícitas y flushes JPA; secuencias existentes compatibles tras dos correcciones | Reabrir si cambian FK, locks o materialización de flush |
-| H76 — protocolo T → R | **Validado en CI #292:** creación, cancelación, confirmación, recuperación, expiración y creación de orden mantienen T antes de R | Integrar en expediente final |
-| H77 — unidades y generaciones | **Implementado y validado en CI:** V16, unidades comerciales estables, generaciones, backfill, emisión/reemisión y restricciones de integridad | Integrar en expediente final |
-| H78 — ciclos, jobs, ejecuciones, leases, fencing y proyecciones | **Verificado en CI #306:** V15, RX/CLAIM/APPLY/PROJECT, recuperación, fencing y reemplazo; `OperationWorkerIT` 12/12, incluida transición `PENDING → REFUNDED` interrumpida entre APPLY y PROJECT | Consolidar expediente y aceptación |
-| H79 — pagos tardíos | **Probado en CI #296:** captura tardía, gracia, expiración concurrente, recuperación y `UNFULFILLABLE`/`REQUIRED` | Integración documental y dictamen de cierre |
-| H80 — identidades e idempotencia persistente | **Implementado y verificado en CI #298/#306:** V14+V15, inbox, tres identidades, append-only, digest, duplicados y disposiciones según efecto real | Aprobación del contrato mínimo del proveedor simulado (ADR-022, propuesto) |
-| H81 — Redis | **Implementado y validado en CI:** caché de tipos/eventos, proyección de reservas, rate limiting login/reservas/órdenes y degradación | Cierre documental dentro del expediente integral de Fase 4 |
-| H82 — configuración operativa | **Verificado en CI #296:** límites, defaults y lectura real de lock/statement timeout en TX-RX/CLAIM/APPLY/PROJECT | Integrar en expediente final |
-| H83 — consistencia global de locks | **Validado en CI #292:** corregidas las inversiones implícitas EN → U en reemisión y R → T por FK en creación de orden | Reabrir ante cambios de esquema/locks/flush |
-| H84 — reembolsos | **Validado en CI #306:** 35/35 `OrderPaymentFlowIT`, 12/12 `OperationWorkerIT`, 10 carreras `PENDING`/`REFUNDED`, `FAILED → REFUNDED`, recuperación y fencing; nueva regresión de reenvío firmado en CI #309 (`OrderPaymentFlowIT` 36/36, 170 integraciones) | Pendiente dictamen del Tech Lead sobre ADR-022; no cierre unilateral |
+| `7220e2741e20a30f09c23788460707c311e6e346` | [CI #330 SUCCESS](https://github.com/dab960405/tickeringsystem/actions/runs/44982893655) | Backend, Angular, Python; English UI/ADR adjustments |
+| `b275ea8ec190945db75f884884ab9427299021c3` | [CI #331 FAILURE](https://github.com/dab960405/tickeringsystem/actions/runs/44983063132) | **Expected RED regression**: JVM/PG clock skew in overdue reservation discovery |
+| `f6ecd12d9bd4b6f92757892585c97e599470006b` | [CI #332 FAILURE](https://github.com/dab960405/tickeringsystem/actions/runs/44983220100) | Regression passed, but two Spotless format violations |
+| `c7d21a452ca098557a468ff16a75fb31b8a14ae9` | [CI #333 SUCCESS](https://github.com/dab960405/tickeringsystem/actions/runs/44983475556) | PostgreSQL-authoritative expiry discovery, 5/5 service unit tests, Java/Angular/Python, JaCoCo/Spotless |
+| `6f4e14935428693705e0236289bf5db1b933b73b` | [CI #334 SUCCESS](https://github.com/dab960405/tickeringsystem/actions/runs/44983929859) | English frontend guides, CLI, HTTP sample and historical phase matrix |
+| `cf75faa0bddc0d7302bb59e8386501ceeea62bb3` | [CI #335 SUCCESS](https://github.com/dab960405/tickeringsystem/actions/runs/44984185620) | English current architecture, source-verification policy and local run instructions |
 
-## Incremento H80 — V14
+**Later document-only commits:** require their own completed, successful CI; do not infer a green conclusion from the historical rows above.
 
-- `provider_events`, `provider_operations` y `semantic_applications` tienen restricciones únicas independientes y triggers append-only.
-- `ProviderEventInboxService` registra la recepción en una transacción independiente y detecta reuso de identidad con payload o evidencia distinta.
-- `SemanticApplicationService` reserva `(application_scope, operation_kind, idempotency_key)` en la misma transacción que los efectos de negocio; un duplicado con el mismo digest es no-op.
-- `PaymentWebhookService` ya no depende únicamente del estado de la orden para deduplicar: persiste recepción e identidad semántica antes de devolver éxito.
-- Validación local: suite unitaria completa en verde y `OrderPaymentFlowIT` con **10 tests, 0 fallos y 0 errores** usando PostgreSQL/Testcontainers. Los nuevos casos cubren webhook repetido, eventos distintos de una misma operación, digest conflictivo y evidencia append-only.
-- Este incremento no implementa todavía ciclos, workers, leases ni recuperación; H80 permanece vinculado a H78 para el cierre.
+## H75–H84 closing matrix — historical implementation evidence
 
-## Incremento H78/H82 — V15
+The individually assigned original severity document was not recovered. **Do not invent or reassign historical severities.** The entries below record mechanisms and evidence; final dispositions still require the independent Tech Lead verdict.
 
-- V15 crea ciclos, participaciones, jobs, ejecuciones, disposiciones y proyecciones.
-- `OperationTransactionExecutor` aplica los timeouts y límites de `OperationProperties` en transacciones RX, CLAIM, APPLY y PROJECT.
-- `OperationJobService` implementa claims J → XA, renovación y expiración de leases, fencing, reemplazo de generaciones, backoff y agotamiento de intentos.
-- `PaymentOperationService` aplica la identidad semántica y el negocio en una sola transacción; la recuperación proyecta evidencia sin repetir efectos.
-- `OperationRecoveryWorker` procesa lotes configurables; el webhook conserva procesamiento síncrono y una ejecución superada por otro worker se trata como duplicado seguro.
-- Validación específica actual: `OperationWorkerIT` **9 tests** y `OrderPaymentFlowIT` **16 tests**, todos sin fallos con PostgreSQL/Testcontainers en CI #278. Detalles históricos en [F4-02](phase-4/F4-02-worker-processing.md), cuya cifra de casos debe sincronizarse.
-
-## Incremento H77 — V16
-
-- V16 crea `commercial_generations`, `commercial_units` y `commercial_unit_generations`, añade identidad de unidad/generación a `tickets` y realiza backfill de tickets existentes.
-- `TicketService` emite la generación inicial por unidad comercial, preserva la identidad de la unidad en reemisiones y cancela la generación activa al confirmar un reembolso.
-- Las restricciones de base de datos impiden enlaces cruzados entre órdenes, más de una generación activa por orden y más de un ticket por unidad/generación.
-- `CommercialIssuanceIT` contiene **14 tests** para compra multiunidad, idempotencia, emisión concurrente, reemisión, carreras con reembolso, restricciones y migración desde V15.
-- CI #278, SHA `715af51fad107ede9e152e0ae7b63f151a806133`: `CommercialIssuanceIT` 14/14, `OperationWorkerIT` 9/9, `OrderPaymentFlowIT` 16/16; suite de integración 140/140 y Surefire de `ticketing-api` 388/388, sin fallos, errores ni omitidos. JaCoCo y Spotless correctos.
-- H77 deja de clasificarse como “pendiente de implementación”; todavía participa en la auditoría global de locks H75/H83 y no implica cierre de Fase 4.
-
-## Incremento H81 — cierre del alcance Redis de ADR-020
-
-- La caché pública de eventos cubre detalle publicado y primera página popular con TTL de 60 s; la disponibilidad de inventario permanece en PostgreSQL.
-- Las escrituras de eventos y tipos de entrada invalidan detalle/listado después del commit. Los cambios de venue publican un evento de aplicación y el módulo de eventos invalida sus caches en `AFTER_COMMIT`, evitando una dependencia directa `venue → event`.
-- `ReservationRedisProjectionService` mantiene `ticketing:reservation:{id}` con `status=ACTIVE`, `expiresAt` y TTL restante. La escritura se programa después del commit y la clave se elimina tras cancelación, expiración o confirmación, incluidas las rutas de cancelación de evento y expiración de orden.
-- La proyección de reserva es fail-open: errores Redis se registran y no alteran la transacción PostgreSQL.
-- `ReservationController` aplica 20 creaciones/60 s por usuario y `OrderController` 10/60 s; login conserva 5/60 s. `RedisRateLimiter` usa incremento+expiración atómicos y degrada fail-open ante indisponibilidad Redis.
-- CI #286, SHA `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`: 390 unitarios y 147 integraciones de `ticketing-api`, sin fallos, errores ni omitidos. `EventCatalogCacheIT` 5/5, `RedisRateLimiterIT` 3/3 y `ReservationRedisProjectionIT` 5/5; Spotless y JaCoCo correctos; `BUILD SUCCESS`.
-- H81 deja de clasificarse como pendiente técnico. Esto no implica cierre de Fase 4: H75/H76/H83 y H79/H84 continúan pendientes de validación integral.
-
-## Auditoría H75/H76/H83 — F4-03
-
-- Se auditaron los `service` y `repository` que adquieren locks explícitos y las escrituras que pueden introducir locks implícitos por claves foráneas o por flush de JPA. La matriz completa está en [F4-03](phase-4/F4-03-lock-audit.md).
-- Se identificó una inversión potencial **EN → U** en reemisión: cancelar tickets antiguos antes de un `saveAndFlush` podía materializar UPDATE sobre `tickets` antes de las FK de la nueva generación hacia `commercial_units`. La corrección difiere la cancelación de los tickets antiguos hasta después de persistir enlaces U y nuevos EN.
-- Se identificó una inversión **R → T** en creación de orden: `lockActiveForOrder` bloqueaba R y el posterior insert de `order_items` podía adquirir `KEY SHARE` sobre T por la FK `ticket_type_id`. La corrección hace explícito E → T → R antes de persistir O/P/I.
-- `TicketServiceTest` fija el orden de reemisión y `ReservationServiceTest` fija E → T → R. `OrderCreationIntegrityIT` usa PostgreSQL real para demostrar que creación de orden espera en T antes de adquirir R.
-- CI #292, SHA `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`: 390 unitarios y 148 integraciones de `ticketing-api`, 0 fallos, 0 errores y 0 omitidos; `OrderCreationIntegrityIT` 5/5, `CommercialIssuanceIT` 14/14, `EventGuardConcurrencyIT` 9/9, `OperationWorkerIT` 9/9, `ReservationConcurrencyIT` 20/20 y `ReservationHttpConcurrencyIT` 20/20. Spotless y JaCoCo correctos; `BUILD SUCCESS`.
-- **Dictamen técnico:** H75, H76 y H83 quedan validados para el modelo del SHA auditado. Deben reabrirse si una nueva migración añade FK relevantes, si aparece un nuevo lock explícito o si cambia el orden de flush de escrituras relacionadas.
-
-## Validación integral H78/H79/H80/H82/H84 — F4-04
-
-- CI #295 sobre `88a8f717d4c3079d124166dff487167e373fec6d` ejecutó 390 unitarios y 152 integraciones de `ticketing-api`, con `OrderPaymentFlowIT` 20/20, `OperationWorkerIT` 10/10, Spotless limpio y `BUILD SUCCESS`.
-- CI #296 sobre `522a2dcf706122760ffee4fd46e8027e41e2723d` ejecutó 390 unitarios y 153 integraciones, con `OperationWorkerIT` 11/11. La nueva prueba verificó directamente en PostgreSQL los `lock_timeout` y `statement_timeout` aplicados por TX-RX, TX-CLAIM, TX-APPLY y TX-PROJECT. Spotless y JaCoCo correctos; `BUILD SUCCESS`.
-- La evidencia incluye reembolsos fallidos y pendientes sin declarar confirmación, evidencia fuera de orden y recuperación de reembolso tras interrupción del worker, además de idempotencia, fencing y pagos tardíos.
-- [F4-04](phase-4/F4-04-integrated-payment-audit.md) documenta H84-01: el SHA `23893305` mezclaba unicidad de operación con efecto comercial, por lo que `PENDING → REFUNDED` podía registrar `NO_OP` pese al cambio financiero. El commit `4acb8240` lo corrigió mediante `PaymentEffectOutcome` y cuatro pruebas de integración; CI #298 verde con 390 unitarias, 157 integraciones. La identidad única se conserva. CI #302 validó también `FAILED → REFUNDED` y diez carreras `PENDING`/`REFUNDED` (390 unitarias, 168 integraciones, `OrderPaymentFlowIT` 35/35). CI #304 añadió fencing contra proyección tardía tras recuperación de reembolso directo y completó en verde (390 unitarias, 168 integraciones, `OperationWorkerIT` 11/11). CI #306 validó además la recuperación de la transición `PENDING → REFUNDED` tras una interrupción controlada entre APPLY y PROJECT (390 unitarias, 169 integraciones, `OperationWorkerIT` 12/12); solo quedan como decisiones contractuales la referencia evolutiva y conciliación anticipada.
-- **Dictamen:** clasificación de efecto real y carreras de reembolso verificadas en CI #302; recuperación de reembolso directo y fencing de proyección tras recuperación validados en [CI #304](https://github.com/dab960405/tickeringsystem/actions/runs/43642792880), SHA `f12cc6c5ce9d48772c54dd729597d5f2ff51ce36`. H84-01 sigue abierto por contrato de referencia de proveedor y conciliación; la recuperación de transición está validada en [CI #306](https://github.com/dab960405/tickeringsystem/actions/runs/43644409880), SHA `b8f1037b9a6f923b70ab92ef0071423c0479b1c0`. Fase 4 no se considera cerrada sin dictamen expreso.
-
-## Cambios de integridad de órdenes — V11 y ADR-015
-
-**Implementado en código y esquema:**
-
-- `OrderService.create` comprueba si ya existe una orden para la reserva antes de crear otra.
-- Flyway V11 crea el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`.
-- La restricción se aplica a todas las órdenes, incluidas las que están en estado `CANCELLED`.
-- Una reserva cuya orden fue cancelada no se puede reutilizar; una compra posterior requiere una reserva nueva.
-- Los conflictos de integridad se mapean a HTTP `409 Conflict`.
-- La decisión está registrada en [ADR-015](adr/ADR-015-one-order-per-reservation.md).
-
-**Verificado mediante CI:** el commit de código `aabc02301deda4b983c5f3e56af00ed4ecd717ec`, run #116, incluye `OrderCreationIntegrityIT` (4 tests). La ejecución completó correctamente. La carrera con la misma clave se documenta con la salvedad de ADR-015: el log del job permite inferir el conflicto de unicidad, pero no registra directamente los códigos HTTP individuales.
-
-## Criterios de Fase 4 y evidencia
-
-| Criterio | Implementación / evidencia | Estado |
+| Finding | Technical status at historical evidence SHA | Remaining gate |
 | --- | --- | --- |
-| Cache-aside de metadatos del catálogo con TTL configurable | `TicketTypeCatalogCacheService`; TTL `TICKET_TYPES_CACHE_TTL`, 5 minutos por defecto; [ADR-013](adr/ADR-013-redis-catalog-cache.md) | Verificado |
-| No cachear disponibilidad de inventario | `availableQuantity` se consulta en PostgreSQL en cada lectura | Verificado |
-| Invalidación transaccional tras escrituras del catálogo | `RedisCacheManager.transactionAware()`; invalidación diferida hasta commit | Verificado |
-| Fallback ante fallos Redis de caché | `CacheErrorHandler` maneja `DataAccessException` y `SerializationException` para GET/PUT/EVICT/CLEAR | Verificado |
-| Expiración y recuperación del catálogo | `TicketTypeCatalogCacheIT` cubre hit, TTL y serialización con Redis real | Verificado |
-| Rate limiting de login | Redis con ventana fija; fail-open ante `DataAccessException`; pruebas unitarias y de integración | Verificado |
-| Refresh token store fail-closed | Operaciones de refresh fallan con HTTP 503 si Redis no responde; `should_failClosedForAuthenticationSessionsDuringRedisOutage` | Verificado |
-| Access JWT sin dependencia Redis | `should_acceptValidAccessTokenDuringRedisOutage` devuelve 200 durante la caída de Redis | Verificado |
-| Invalidación fallida conserva dato hasta TTL | `should_serveStaleCatalogUntilTtlAfterFailedInvalidation` comprueba dato obsoleto y posterior actualización | Verificado |
-| Timeout de Lettuce y aislamiento Redis | `should_configureShortCommandTimeoutOnLettuceClient`, `should_useDedicatedRedisContainerInSpringContext`; 500 ms | Verificado en integración |
-| Documentación de operación y decisión | ADR-014, LOCAL_RUN.md y flow.http publicados; Compose no se verificó en entorno asistido | Documentado; Compose pendiente de verificación local |
+| H75 — global lock order | CI #292 audited explicit locks, implicit FK locks and JPA flush, with two corrections | Reaudit when locks, FKs or flush order change |
+| H76 — T → R lock protocol | CI #292 covered creation, cancellation, confirmation, recovery, expiration and order creation | Record final reviewer acceptance |
+| H77 — commercial units/generations | V16, stable commercial unit identity, generations, backfill, issuance/reissuance, integrity constraints; CI #278 | Preserve under new changes and obtain verdict |
+| H78 — durable jobs, leases, fencing, recovery | V15 and RX/CLAIM/APPLY/PROJECT; CI #306 `OperationWorkerIT` 12/12 | Later **REV-DEV-01** exposed a same-job recovery defect; main corrected it in CI #324. Validate new evidence and obtain verdict |
+| H79 — late payment recovery | CI #296 covered expiry, grace, concurrent expiration, `UNFULFILLABLE` and `REQUIRED` | Confirm newer cancellation/expiry fixes and close dossier |
+| H80 — persistent identities and semantic idempotency | V14/V15 provider inbox, three identities, digests, append-only data and dispositions; CI #298/#306 | Tech Lead verdict on proposed ADR-022 |
+| H81 — Redis completion | Event/ticket-type cache, reservation projections, login/reservation/order rate limits and outage behavior; CI #286 | Acceptance documentation |
+| H82 — operation configuration | CI #296 tested configured RX/CLAIM/APPLY/PROJECT timeouts and defaults | Acceptance documentation |
+| H83 — implicit lock consistency | CI #292 corrected EN → U reissuance and R → T FK ordering during order creation | Reaudit when locks/FKs/flush change |
+| H84 — refunds and races | CI #302/#304/#306, CI #309 added a new signed refund event regression (36/36 `OrderPaymentFlowIT`, 170 integration tests) | ADR-022/H84-01 decision, plus latest durable projection recovery proof |
 
-### Evidencia cuantitativa del código
+## Increment H80 — Flyway V14
 
-Fuente: artefactos `test-reports` y `jacoco-reports` del [CI run #116](https://github.com/dab960405/tickeringsystem/actions/runs/43046441594), asociado al SHA `aabc02301deda4b983c5f3e56af00ed4ecd717ec`. GitHub Actions registró `status=completed` y `conclusion=success`.
+- `provider_events`, `provider_operations` and `semantic_applications` have independent uniqueness constraints and append-only triggers.
+- `ProviderEventInboxService` records receipt in an independent transaction and detects conflicting reuse of identities/payloads.
+- `SemanticApplicationService` registers a semantic `(application_scope, operation_kind, idempotency_key)` identity with business effects in the same TX; a matching duplicate digest produces no additional effect.
+- `PaymentWebhookService` relies on persisted event/operation identity, not only order status, when accepting signed callbacks.
+- The historical local checkpoint ran a full green unit suite and `OrderPaymentFlowIT` 10/10 with PostgreSQL/Testcontainers, including repeated/different events, digest conflicts and append-only proof. This increment alone did **not** implement cycles, leases or worker recovery; H80's completion depended on H78/V15.
 
-| Suite | Ejecutados | Fallidos | Errores | Omitidos |
+## Increment H78/H82 — Flyway V15
+
+- V15 introduced numbered operation cycles, participations, jobs, executions, dispositions and projections.
+- `OperationTransactionExecutor` applies validated `OperationProperties` limits and timeouts for RX/CLAIM/APPLY/PROJECT.
+- `OperationJobService` implements J → XA claims, lease renewal/expiration, fencing, generation replacement, backoff and attempt exhaustion.
+- `PaymentOperationService` coordinates semantic/business effects in one transaction; **projection recovery must reuse a committed APPLY outcome**, not apply again. That guarantee was later violated by REV-DEV-01 and subsequently repaired with a permanent regression.
+- `OperationRecoveryWorker` handles configurable batches; synchronous webhook processing remains and superseded workers are rejected safely.
+- The original V15 checkpoint in [F4-02](phase-4/F4-02-worker-processing.md) recorded `OperationWorkerIT` 9 and `OrderPaymentFlowIT` 16 tests in CI #278. Those are **historical counts**, not current totals.
+
+## Increment H77 — Flyway V16
+
+- V16 added `commercial_generations`, `commercial_units` and `commercial_unit_generations`, stable commercial-unit/generation associations on `tickets` and a backfill for existing issued tickets.
+- `TicketService` issues the initial generation per commercial unit, preserves unit identity across reissuance and invalidates active-generation tickets after confirmed refund.
+- DB constraints reject cross-order links, duplicate unit/generation ticket issuance and multiple active generations per order.
+- `CommercialIssuanceIT` historically contained 14 scenarios for multi-unit purchases, idempotence, concurrent issuance/reissuance, refund races, constraints and migration from V15.
+- **CI #278**, SHA `715af51fad107ede9e152e0ae7b63f151a806133`: `CommercialIssuanceIT` 14/14, `OperationWorkerIT` 9/9, `OrderPaymentFlowIT` 16/16, 140/140 integration and 388/388 `ticketing-api` unit tests, all successful; JaCoCo/Spotless passed.
+- V16 implementation did **not** itself close F4: H75/H83 locks still required a global audit.
+
+## Increment H81 — Phase 4 Redis, ADR-020
+
+- Published-event detail and unfiltered popular first page cache use 60-second metadata TTL. Available stock is read from PostgreSQL for **every** catalog request.
+- Event/ticket-type mutations invalidate cache after commit; venue mutation triggers a modular application event and downstream `AFTER_COMMIT` invalidation rather than a direct venue→event dependency.
+- `ReservationRedisProjectionService` stores `ticketing:reservation:{id}` with ACTIVE status/expiration/remaining TTL after commit and removes it upon cancellation, expiry, confirmation, event cancellation or order expiration.
+- Reservation projection/cache errors are fail-open relative to business writes; PostgreSQL remains authoritative.
+- Reservation/order limits are 20/60s and 10/60s per user; login 5/60s. Redis counter increment and expiration are atomic. Rate limiting fails open during Redis outages.
+- **CI #286**, SHA `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`: 390 `ticketing-api` units, 147 integration tests, `EventCatalogCacheIT` 5/5, `RedisRateLimiterIT` 3/3 and `ReservationRedisProjectionIT` 5/5, successful Maven/JaCoCo/Spotless.
+- H81 was technically implemented; F4 still required independent final acceptance.
+
+## Global lock audit H75/H76/H83 — F4-03
+
+- Audited `service` and `repository` paths with explicit PostgreSQL locks and implicit locks introduced by FKs and JPA flush.
+- Found an implicit **EN → U** inversion on ticket reissuance: cancelling older tickets before saving the new associations could update ticket rows before acquiring FK `KEY SHARE` on commercial units. The correction persists U/new EN links **before** cancelling older tickets.
+- Found an implicit **R → T** inversion when creating an order: `lockActiveForOrder` locked R before `order_items` insert could acquire an implicit T lock via `ticket_type_id` FK. The correction explicitly acquires E → T → R before inserting O/P/I.
+- `TicketServiceTest` and `ReservationServiceTest` pin the corrected ordering; `OrderCreationIntegrityIT` uses real PostgreSQL to verify waiting on T before R.
+- **CI #292**, SHA `24be7cbe670e7076d8e6999a9d708ef4cad09fe1`: 390 API unit and 148 integration tests; `OrderCreationIntegrityIT` 5/5, `CommercialIssuanceIT` 14/14, `EventGuardConcurrencyIT` 9/9, `OperationWorkerIT` 9/9 and both reservation concurrency suites 20/20; Spotless/JaCoCo/Maven successful.
+- Technical disposition was valid for the audited schema/paths; **reopen** when a relevant FK, explicit lock or JPA flush order changes.
+
+## Integrated payment and recovery audit H78/H79/H80/H82/H84 — F4-04
+
+- **CI #295** on `88a8f717d4c3079d124166dff487167e373fec6d`: 390 units, 152 integrations, `OrderPaymentFlowIT` 20/20, `OperationWorkerIT` 10/10, clean Spotless, successful build.
+- **CI #296** on `522a2dcf706122760ffee4fd46e8027e41e2723d`: 390 units, 153 integrations, `OperationWorkerIT` 11/11. PostgreSQL asserted configured `lock_timeout`/`statement_timeout` inside all RX/CLAIM/APPLY/PROJECT transactions.
+- Historical evidence includes failed and pending refunds without invented confirmation, out-of-order provider evidence, interrupted worker recovery, semantic idempotency, fencing and late capture.
+- [F4-04](phase-4/F4-04-integrated-payment-audit.md) documents H84-01: SHA `23893305` conflated operation uniqueness with commercial effect and could record `NO_OP` for a legitimate `PENDING → REFUNDED` change. Commit `4acb8240` introduced `PaymentEffectOutcome` and four integration tests; CI #298 passed 390 units and 157 integrations.
+- **CI #302** then covered `FAILED → REFUNDED` and ten `PENDING/REFUNDED` races (390 units, 168 integrations; `OrderPaymentFlowIT` 35/35).
+- **CI #304** added fencing against a late projection after direct refund recovery (390 units, 168 integrations; `OperationWorkerIT` 11/11).
+- **CI #306**, SHA `b8f1037b9a6f923b70ab92ef0071423c0479b1c0`, verified interrupted `PENDING → REFUNDED` between APPLY and PROJECT (390 units, 169 integrations; `OperationWorkerIT` 12/12).
+- **CI #309** later verified a distinct newly signed refund event after successful capture (`OrderPaymentFlowIT` 36/36, 170 integrations). Proposed ADR-022 still requires an explicit business contract verdict. **REV-DEV-01** later uncovered same-old-job replay despite these tests, and main corrected it; never treat the old CI as covering the later defect.
+
+## One order per reservation — Flyway V11 / ADR-015
+
+- `OrderService.create` checks whether a reservation already has an order.
+- V11 adds **non-partial unique** `ux_orders_reservation_id` on `orders(reservation_id)`, including CANCELLED orders.
+- A cancelled order does not make its original reservation reusable; subsequent purchases need another reservation.
+- Database integrity conflicts become HTTP `409 Conflict`. See [ADR-015](adr/ADR-015-one-order-per-reservation.md).
+- **CI #116** on `aabc02301deda4b983c5f3e56af00ed4ecd717ec` validated `OrderCreationIntegrityIT` four scenarios. A same-key race's 409 was inferred from SQL uniqueness in the CI log; the old test allowed 200 or 409 and did not record each HTTP result directly.
+
+## Original Phase 4 Redis acceptance matrix
+
+| Criterion | Evidence or implementation | Historical status |
+| --- | --- | --- |
+| Cache-aside metadata with configurable TTL | `TicketTypeCatalogCacheService`, `TICKET_TYPES_CACHE_TTL` default 5m; [ADR-013](adr/ADR-013-redis-catalog-cache.md) | Verified |
+| No cached availability | `availableQuantity` reads PostgreSQL for every catalog request | Verified |
+| Post-commit invalidation | `RedisCacheManager.transactionAware()`; eviction deferred to commit | Verified |
+| Cache failures fall back to PostgreSQL | `CacheErrorHandler` catches relevant `DataAccessException` / `SerializationException` for cache operations | Verified |
+| Cache hit/expiry and reload | `TicketTypeCatalogCacheIT` with real Redis and serialization/TTL | Verified |
+| Login rate limit | Fixed window; fail-open during Redis failure; unit and integration tests | Verified |
+| Refresh sessions fail closed | `should_failClosedForAuthenticationSessionsDuringRedisOutage` returns 503 | Verified |
+| Access JWT remains locally verifiable | `should_acceptValidAccessTokenDuringRedisOutage` returns 200 | Verified |
+| Failed eviction is TTL-bounded | `should_serveStaleCatalogUntilTtlAfterFailedInvalidation` | Verified |
+| Lettuce timeouts and Redis isolation | `should_configureShortCommandTimeoutOnLettuceClient`, `should_useDedicatedRedisContainerInSpringContext`, 500 ms | Integration verified |
+| Operating guide | [ADR-014](adr/ADR-014-redis-resilience-and-auth-degradation.md), [LOCAL_RUN](LOCAL_RUN.md), [flow.http](flow.http) | Published; subsequent local evidence has its own date/SHA |
+
+### Historical quantitative evidence from CI #116
+
+The [CI #116 test/coverage artifacts](https://github.com/dab960405/tickeringsystem/actions/runs/43046441594) correspond to `aabc02301deda4b983c5f3e56af00ed4ecd717ec` and completed successfully.
+
+| Test suite | Executed | Failures | Errors | Skipped |
 | --- | ---: | ---: | ---: | ---: |
-| Surefire (unitarios, todos los módulos) | 315 | 0 | 0 | 0 |
-| Failsafe (integración, `ticketing-api`) | 61 | 0 | 0 | 0 |
+| Surefire, all Maven modules | 315 | 0 | 0 | 0 |
+| Failsafe, API integration | 61 | 0 | 0 | 0 |
 | **Total** | **376** | **0** | **0** | **0** |
 
-Surefire por módulo: `ticketing-api` 309, `common-events` 5 y `notification-service` 1. Failsafe ejecutó 61 tests en `ticketing-api`.
+Surefire by module: API 309, common-events 5 and notification shell 1. Historical JaCoCo counters from the API package nodes in XML:
 
-JaCoCo — contadores agregados de paquetes de `ticketing-api`:
-
-| Paquetes | Líneas cubiertas | Líneas no cubiertas | Cobertura de líneas | Ramas cubiertas | Cobertura de ramas |
+| Packages | Covered lines | Missed lines | Line coverage | Covered branches | Branch coverage |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `service` | 501 | 21 | **95,98 %** | 126 / 151 | 83,44 % |
-| `domain` | 291 | 5 | **98,31 %** | 84 / 101 | 83,17 % |
+| `service` | 501 | 21 | **95.98%** | 126/151 | 83.44% |
+| `domain` | 291 | 5 | **98.31%** | 84/101 | 83.17% |
 
-Los porcentajes se calcularon como `covered / (covered + missed)` desde los contadores de los nodos `package` del XML JaCoCo de `ticketing-api` del artefacto del run #116.
+Percentages were calculated as `covered / (covered + missed)`. **Do not apply these old percentages to the current main SHA without new JaCoCo evidence.**
 
-### Latencia observada en Redis outage
+Historical Redis paused latencies: **1,014 ms** for catalog and **1,023 ms** for public event GET. They are observations, **not** production SLOs or latency guarantees.
 
-- Catálogo con Redis pausado: **1.014 ms**.
-- GET público del evento con Redis pausado: **1.023 ms**.
+## Historic CI event register
 
-Son observaciones de prueba, no objetivos ni garantías de latencia.
-
-## Historial de CI
-
-| Run | SHA | Resultado | Interpretación |
+| Run | SHA | Result | Historical interpretation |
 | --- | --- | --- | --- |
-| [#70](https://github.com/dab960405/tickeringsystem/actions/runs/42746676925) | `3054acf604e01fd8b4d18b1c909741e560b10274` | Failure | Spotless detectó formato en el incremento de caché. |
-| [#71](https://github.com/dab960405/tickeringsystem/actions/runs/42747004968) | `93092b9a7696e0b1d0cb31868e3a567d0c121a6d` | Success | Corrección de formato; build verde. |
-| [#105](https://github.com/dab960405/tickeringsystem/actions/runs/42952420841) | `cab03e43900550359567517ddbd9aa269fc115dc` | Success | Runner fijado a `ubuntu-24.04`. |
-| [#106](https://github.com/dab960405/tickeringsystem/actions/runs/42953061576) | `a53514ec76c690dd8e34976425ff6458652485b1` | Failure | Spotless detectó formato en `RedisOutageIT`; las pruebas finalizaron sin fallos. |
-| [#107](https://github.com/dab960405/tickeringsystem/actions/runs/42954580181) | `24d6a514f1f8a4d467b1c457d12a478e24f75c36` | Success | Evidencia anterior de Fase 4; conteos reemplazados por run #116. |
-| [#108](https://github.com/dab960405/tickeringsystem/actions/runs/42955123807) | `7d65089181309fa1a8c2ca641e85f24d4f3a150b` | Success | ADR-014 y registro de decisiones. |
-| [#109](https://github.com/dab960405/tickeringsystem/actions/runs/42955586010) | `ac6e7d061c2115ff6485937dcb371bfb25e8e55b` | Success | Guía local y flujo HTTP. |
-| [#116](https://github.com/dab960405/tickeringsystem/actions/runs/43046441594) | `aabc02301deda4b983c5f3e56af00ed4ecd717ec` | Success | **Run de referencia del código y de los XML de tests/cobertura.** |
-| [#117](https://github.com/dab960405/tickeringsystem/actions/runs/43048762317) | `c26a8cf5fa4b618ddd88063c05696bbe9a7ca43a` | Success | Actualización documental previa. |
-| [#118](https://github.com/dab960405/tickeringsystem/actions/runs/43264556420) | `244e998c6888f1f29e84c5dd2b6a27f8d8895e60` | Success | ADR-015 y corrección de ADR-011; sin cambios funcionales. |
+| [#70](https://github.com/dab960405/tickeringsystem/actions/runs/42746676925) | `3054acf604e01fd8b4d18b1c909741e560b10274` | Failure | Spotless catalog cache formatting |
+| [#71](https://github.com/dab960405/tickeringsystem/actions/runs/42747004968) | `93092b9a7696e0b1d0cb31868e3a567d0c121a6d` | Success | Format corrected |
+| [#105](https://github.com/dab960405/tickeringsystem/actions/runs/42952420841) | `cab03e43900550359567517ddbd9aa269fc115dc` | Success | Runner pinned to Ubuntu 24.04 |
+| [#106](https://github.com/dab960405/tickeringsystem/actions/runs/42953061576) | `a53514ec76c690dd8e34976425ff6458652485b1` | Failure | `RedisOutageIT` Spotless error; tests passed |
+| [#107](https://github.com/dab960405/tickeringsystem/actions/runs/42954580181) | `24d6a514f1f8a4d467b1c457d12a478e24f75c36` | Success | Prior Redis F4 evidence, superseded in scope by later runs |
+| [#108](https://github.com/dab960405/tickeringsystem/actions/runs/42955123807) | `7d65089181309fa1a8c2ca641e85f24d4f3a150b` | Success | ADR-014/decisions |
+| [#109](https://github.com/dab960405/tickeringsystem/actions/runs/42955586010) | `ac6e7d061c2115ff6485937dcb371bfb25e8e55b` | Success | Local guide and HTTP example |
+| [#116](https://github.com/dab960405/tickeringsystem/actions/runs/43046441594) | `aabc02301deda4b983c5f3e56af00ed4ecd717ec` | Success | Detailed historical API test/coverage evidence |
+| [#117](https://github.com/dab960405/tickeringsystem/actions/runs/43048762317) | `c26a8cf5fa4b618ddd88063c05696bbe9a7ca43a` | Success | Subsequent documentation |
+| [#118](https://github.com/dab960405/tickeringsystem/actions/runs/43264556420) | `244e998c6888f1f29e84c5dd2b6a27f8d8895e60` | Success | ADR-015 and correction of ADR-011 |
+| [#154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946) | `06490392e86866094ee9dddbff450f4e76e646ad` | Success | Phase 2 authorization and Spotless evidence |
+| #278 | `715af51fad107ede9e152e0ae7b63f151a806133` | Historical claim | V16, 388 API units and 140 integrations; use actual GitHub run link from dossier |
+| #292 | `24be7cbe670e7076d8e6999a9d708ef4cad09fe1` | Historical claim | Lock audit; use dossier for exact run URL |
+| [#315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) | `9d11d83344b88007e2b5d89de698bf62899817c0` | Success | Event-cancellation rollback |
+| [#317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) | `0e6f5d21ec1665cef19f5145cfcdf97a97097da1` | Success | F3/F4 audit dossiers and 390/171 test baseline |
 
-El run #116 es la evidencia de código usada para los conteos y cobertura. Los runs #117 y #118 verifican commits documentales posteriores y no sustituyen la evidencia cuantitativa del código.
+**Note:** The original historical register records CI #278/#292 by number and source SHA without verified GitHub run URLs. Do not invent those URLs; consult the historical dossier or GitHub Actions before citing them as direct links.
 
-## Decisiones registradas
+## CI stabilization #269–#281
 
-- ADR-001 a ADR-009: decisiones históricas preservadas.
-- ADR-010: actualización atómica condicional del inventario.
-- ADR-011: idempotencia de órdenes y webhooks.
-- ADR-012: expiración concurrente con `FOR UPDATE SKIP LOCKED`.
-- ADR-013: caché Redis de metadatos del catálogo.
-- ADR-014: resiliencia Redis y degradación diferenciada de autenticación.
-- ADR-015: una orden por reserva, con guard de aplicación e índice único PostgreSQL en V11.
+- **#269** failed because `UserRepositoryIT`'s `@DataJpaTest` slice did not import `JpaAuditingConfig`. Commit `7629e51de62509a9fb1bab3f64070967f479dbfd` added auditing config and explicit `createdAt`/`updatedAt` assertions. In **#270**, that test passed and 387 units/140 integrations succeeded; the build was red only from Spotless formatting in other increments.
+- **#280**, SHA `82032baf563c84b0d85315bfd6fa955ee4412b84`, succeeded with 388 API units/140 integrations, Spotless and JaCoCo.
+- #280 nevertheless showed a test-context lifecycle warning: a cached `RedisOutageIT` Spring context kept an expiration scheduler active after dedicated PostgreSQL stopped, causing asynchronous access to a closed Hikari pool even though the Maven build succeeded.
+- Commit `cc72f1bc3de90ed58f66cfb6da4c75b522208130` isolated expiration schedulers in that outage context. **#281** passed with no late access to `HikariPool-5`, `too many clients already` or unexpected scheduled-task error.
+- `spring.test.context.cache.maxSize=4` was preserved. The CI evidence did not reproduce the connection exhaustion seen at #268.
 
-## Estabilización de CI — runs #269 a #281
+## Historical public catalog cache increment — `889a5c5`
 
-- CI #269 falló en `UserRepositoryIT` porque el slice `@DataJpaTest` no importaba `JpaAuditingConfig`; el resto de los repository slices que persisten entidades auditadas sí lo hacía.
-- El commit `7629e51de62509a9fb1bab3f64070967f479dbfd` añadió la configuración de auditoría al slice y aserciones explícitas sobre `createdAt`/`updatedAt`. En CI #270, `UserRepositoryIT` pasó y la suite llegó a 387 unitarios y 140 integraciones sin fallos; el build quedó rojo únicamente por Spotless en archivos modificados por otros incrementos.
-- Tras las correcciones posteriores, CI #280 sobre `82032baf563c84b0d85315bfd6fa955ee4412b84` completó 388 unitarios y 140 integraciones de `ticketing-api`, sin fallos, errores ni omitidos; Spotless y JaCoCo pasaron.
-- CI #280 reveló un efecto secundario de lifecycle de tests: el contexto cacheado de `RedisOutageIT` conservaba activo `OrderExpirationService` después de detener su PostgreSQL dedicado, produciendo un error asíncrono contra un Hikari pool ya cerrado aunque el build terminaba en verde.
-- El commit `cc72f1bc3de90ed58f66cfb6da4c75b522208130` aisló los schedulers de expiración en `RedisOutageIT`. CI #281 terminó en verde sobre ese SHA exacto: 388 unitarios y 140 integraciones de `ticketing-api`, `BUILD SUCCESS`, Spotless limpio y sin `too many clients already`, sin acceso tardío a `HikariPool-5` y sin `Unexpected error occurred in scheduled task`.
-- Se mantiene `spring.test.context.cache.maxSize=4`; la evidencia actual muestra que permite completar la suite sin reproducir el agotamiento de conexiones observado en CI #268.
+Commit `889a5c5521c6f47f0604002c2d0425e31f534031` was integrated into the old `dev` branch by fast-forward from `5e9616458230c0ec5da49194854ff26c7afb7cf0`. It added 60-second published-event/first-unfiltered-page metadata cache, live PostgreSQL availability, after-commit invalidation, `ResilientRedisCacheWriter` and `EventCatalogCacheIT` scenarios for TTL/hits/invalidation/filtered queries. The original commit's CI #43532844492 was reported successful; a later merged-tree CI was still required at the time. The subsequent H81 solution added reservation projections, reservation/order rate limits and venue invalidation, culminating in CI #286 above.
 
-## Deuda técnica y trabajo diferido
+## Phase 2 authorization audit and formal closure (2026-11-13)
 
-1. H84-01: clasificación y carreras verificadas en CI #302, recuperación/fencing en CI #306. ADR-022 propone el contrato mínimo de referencia estable y nueva notificación HMAC para el simulador, sin conciliación automática; aceptación del Tech Lead pendiente. La regresión del reenvío posterior a captura pasó en CI #309, SHA `a8013f67`, con 390 unitarias, 170 integraciones, Spotless y JaCoCo correctos.
-2. `EventCancellationService`: excepción transaccional acotada **propuesta** en [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) y expediente [F3-01](phase-3/F3-01-closure-review.md). Regresión de rollback validada en [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223), SHA `9d11d83344b88007e2b5d89de698bf62899817c0`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10; pendiente dictamen del Tech Lead.
-3. Refresh token sin rotación y webhook sin timestamp anti-replay.
-4. Outbox/Kafka y consumidor de notificaciones pertenecen a Fase 5 y permanecen bloqueados.
+**Historical formal status: CLOSED with explicit owner approval.** The owner's authorization followed comparison of specification criteria with [the authorization matrix](phase-2/authorization-matrix.md), [ADR-021](adr/ADR-021-phase-2-authorization-resource-concealment.md), JWT-based ownership tests and CI evidence.
 
-## Verificación local y limitaciones
+- The matrix classifies HTTP endpoints by method, functional role, ownership and expected response.
+- ADR-021 maps foreign-owned and nonexistent private resources to concealed 404 while retaining 403 for missing functional roles.
+- `EventAuthorizationService` throws `ResourceNotFoundException` for an organizer accessing another organizer's event. ADMIN retains global access; nonexistent events still become 404 from the business service.
+- `AuthenticationFlowIT` uses real JWTs for two separate organizers and for two buyers to prove foreign-event and foreign-reservation/order denial while legitimate owners retain access.
 
-- Los tests de integración requieren Docker/Testcontainers; la evidencia de Fase 4 se obtuvo en GitHub Actions.
-- [LOCAL_RUN](LOCAL_RUN.md) describe comandos y dependencias, pero los pasos con Docker Compose no se verificaron en el entorno de desarrollo asistido.
-- [flow.http](flow.http) es manual y no se ejecuta en CI. La firma del webhook debe generarse sobre el cuerpo raw exacto.
-- Desde el incremento V14 se ejecutan Maven, Spotless y Testcontainers localmente con Java 21 y Docker. La evidencia histórica anterior procede de CI.
+Historical individual commits:
 
-## Próximos pasos
+| SHA | Original contribution |
+| --- | --- |
+| `4ba7117c594e315e775247abe6ba6b0b0a6ddad3` | Organizer JWT isolation integration test |
+| `f72fbe1d86646d4c827442c83b1693cdce4375cc` | Ownership concealment unit test |
+| `6890df100902b432fab06c5c251573a276782bbb` | Foreign organizer event concealment implementation |
+| `40007149a5a53415f8e7aedd646f6278c96057b6` | Initial HTTP authorization matrix |
+| `b281bebf8df5c79e5b04a5b035133b445fae0385` | ADR-021 |
+| `de05bc43ca7b512ebf677f442794a0d8ad5916f5` | Decisions register |
+| `3631e0407d1c92d43f5b23314b943a7a127fa9ec` | Two-buyer real-JWT order/reservation isolation |
+| `57246b3722f323c37a4f8f9e8e203bb5c8223877` | Updated matrix |
+| `87d92f5a0f9c9c034c1b7aa910eb86d5289c81c0` | ADR-021 evidence |
+| `75f69668859be13c3a5f8a76b5ddb98e892a4377` | README/progress correction |
 
-1. Dictamen del Tech Lead para la excepción transaccional [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) y [F3-01](phase-3/F3-01-closure-review.md), con CI #315 verde antes del cierre de Fase 3.
-2. Obtener dictamen del Tech Lead sobre el contrato mínimo simulado [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) y expediente [F4-05](phase-4/F4-05-closure-review.md), con regresión verificada en CI #309. No implementar reconciliador ni ampliar el esquema.
-3. Revisar el [ERD](erd.md) actualizado hasta Flyway V16 (22 tablas) y completar la trazabilidad de criterios de Fases 3 y 4.
-4. Obtener dictamen formal sobre el contrato mínimo [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md), H75–H84 y [F4-05](phase-4/F4-05-closure-review.md); cerrar F4 únicamente tras cerrar F3.
-5. No iniciar Fase 5. Solo planificación [F5-00](phase-5/F5-00-plan-and-local-validation.md); su primer incremento autorizado comenzará con pruebas manuales locales.
+The original acceptance wording in specification `22 requires a role-test matrix and proof one buyer cannot act on another buyer's resources. It does **not** demand a single exhaustive method × role × state Cartesian test suite. That broader suite remains an authorized **non-blocking improvement**, not an invented closing criterion.
 
-## Comandos de referencia
+### CI #154 and Spotless stabilization, historical
+
+[#154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946) completed `success` on `06490392e86866094ee9dddbff450f4e76e646ad` (old `dev`) after three separate format commits:
+- `612ed9e2cba51ff2a392e96f01958256270be16a` formatted `AuthenticationFlowIT.java`.
+- `460506a560470b4e96aba896046798db9f84f593` formatted `EventAuthorizationServiceTest.java`.
+- `06490392e86866094ee9dddbff450f4e76e646ad` formatted `EventAuthorizationService.java`.
+
+CI #154 ran **479 tests** (373 `ticketing-api`, 5 `common-events`, 1 `notification-service` Surefire = 379; API Failsafe = 100), zero failures/errors/skips; JaCoCo/Spotless and report uploads succeeded. Historical [run #43545520476](https://github.com/dab960405/tickeringsystem/actions/runs/43545520476) also validated HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923` with successful Maven/coverage/Spotless and 100 API integration tests.
+
+A later document-only HEAD `c25e0d323edf32e86b3590df0131d0fe87181b29` differed from the code SHA only in this progress file; its own CI was required before calling that newer HEAD verified. The Phase 2 closure approval remained an independent owner decision, not a consequence of CI.
+
+## 2026-11-14 closure dossier preparation
+
+The owner authorized **preparation and technical validation** for F3/F4, not unilateral architectural acceptance. [F3-01](phase-3/F3-01-closure-review.md), [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), the ERD up to V16 and [F4-05](phase-4/F4-05-closure-review.md) were assembled.
+
+The rollback regression was added in `4d381899`, SQL fixture repaired in `c18d9f2` and stock baseline assertion corrected in `9d11d833`. CI #313 failed on fixture SQL; #314 failed on an incorrect initial inventory expectation. [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) succeeded with 390 units, 171 integrations and `EventGuardConcurrencyIT` 10/10. [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752) succeeded with 390 units, 171 integrations, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, JaCoCo and Spotless.
+
+The [double-check policy](engineering-decision-verification.md) was applied to ADR-024 (Spring Framework, PostgreSQL and Spring Modulith) and ADR-022 (PostgreSQL, Java HMAC and IETF RFC 9110), and cross-referenced in CI #318. **None of these developer recommendations constitutes ADR acceptance or a phase closure.**
+
+## Technical debt and deferred scope
+
+1. **ADR-022 / H84-01:** Immutable provider reference and distinct HMAC-signed event for early refund reevaluation; no automatic financial reconciliation. Pending Tech Lead verdict in issue #6. Later same-job recovery regression was implemented; verify final SHA.
+2. **ADR-024 / AUD-05:** EventCancellationService's narrow transactional exception and additional cross-package accesses need explicit dispositions. Pending Tech Lead verdict in issue #5.
+3. **AUD-03, AUD-10, AUD-12 and BACK-01:** HTTP 201 Location semantics, HTTP correlation/MDC, additional operation-cycle requirements and case-insensitive concurrent ticket-name uniqueness. See [pending decisions](audit/PENDING-DECISIONS.md).
+4. **Known hardening:** Refresh tokens are not rotated on every refresh and webhooks have no timestamp-based replay expiry. These are documented risks of the SIMULATED portfolio, not claims of production payment security.
+5. **Phase 5 remains blocked:** Functional outbox publishing, Kafka, notification consumers and MongoDB persistence require later explicit authorization.
+
+## Local evidence, limitations and next actions
+
+- PostgreSQL/Redis integration tests use Docker/Testcontainers in GitHub Actions. The actual 2026-11-15 local [34-check smoke walkthrough](LOCAL_RUN.md) exists and must be distinguished from older claims that no local testing had occurred.
+- [flow.http](flow.http) is a manual sample, **not** run automatically in CI. The HMAC signature must be generated over the exact JSON bytes.
+- [Historical adversarial report](ADVERSARIAL_TESTING.md) contains reproducible red observations from an earlier SHA. Later production regressions were committed; the historical report was intentionally not overwritten.
+- Angular and Python are part of the **current** CI, in addition to Java. A passing workflow still does not establish a full production penetration test, accessibility audit or mathematical proof of concurrency.
+- Before closing F3/F4, review exact main HEAD and complete green CI, the current acceptance matrices, all relevant regression test XML, and the Tech Lead's **explicit verdict** on ADR-024 and ADR-022 in that order. The owner must then authorize each phase's formal closure separately.
+- **Do not implement Phase 5.** Its design may be reviewed and a readiness document prepared, but Kafka/outbox/Mongo functional implementation stays blocked.
+
+## Reference commands (safe local checkout)
 
 ```bash
-./mvnw test
-./mvnw clean verify -DskipITs
-./mvnw clean verify
-docker compose --profile infra up -d
-docker compose ps
+git status --short
+git fetch origin main
+git switch main
+git pull --ff-only origin main
+git rev-parse HEAD
+./mvnw -B clean verify
+(cd frontend && npm ci && npm test && npm run build && npm run format:check)
+python3 -m unittest discover -s frontend -p 'test_*.py' -v
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
 ```
 
-## Incremento de caché del catálogo público — commit 889a5c5
-
-Integrado en `dev` el commit `889a5c5521c6f47f0604002c2d0425e31f534031` mediante avance fast-forward desde el HEAD anterior de `dev` (`5e9616458230c0ec5da49194854ff26c7afb7cf0`).
-
-- Se añade caché Redis de metadatos de eventos publicados y de la primera página del catálogo público sin filtros, con TTL configurable de 60 segundos por defecto.
-- La disponibilidad/cantidad de inventario no se almacena en caché: los tipos de entrada se consultan nuevamente.
-- Se invalida la caché tras operaciones de escritura de eventos y tipos de entrada, respetando el commit transaccional.
-- Se incorpora `ResilientRedisCacheWriter` para que fallos de operaciones Redis de caché no interrumpan el flujo de negocio.
-- Se añade `EventCatalogCacheIT` con cobertura de TTL, lecturas cacheadas, invalidación tras commit y exclusión de consultas filtradas.
-- CI del commit original: run #43532844492 reportado como exitoso en la verificación previa. La integración en `dev` requiere su propia ejecución CI; no se considera validada hasta que finalice en verde.
-
-**Evolución posterior:** este incremento histórico fue completado por la proyección de reservas, los límites efectivos de reservas/órdenes y la invalidación post-commit ante cambios de venue. La evidencia integrada actual de H81 es CI #286 sobre `65c6abf13af7eb8c1195f41c0e25f9d9e5cd2277`. Fase 4 continúa abierta por otros requisitos.
-
-## Fase 2 — auditoría de cierre y correcciones de autorización (2026-11-13)
-
-**Estado: CERRADA FORMALMENTE el 2026-11-13**, tras autorización expresa del responsable del proyecto. Los criterios de aceptación de la especificación fueron contrastados con la matriz, el ADR-021, las pruebas y la evidencia de CI.
-
-### Alcance realizado en dev
-
-- Se añadió `docs/phase-2/authorization-matrix.md`, que clasifica las rutas funcionales por método HTTP, acceso, rol y reglas de propiedad.
-- Se añadió ADR-021: los recursos privados ajenos e inexistentes responden 404 en las mismas operaciones de propiedad; se conserva 403 para denegación por rol.
-- `EventAuthorizationService` ahora responde mediante `ResourceNotFoundException` cuando un ORGANIZER intenta gestionar un evento existente de otro organizador. ADMIN conserva acceso global; un evento inexistente sigue llegando al servicio de negocio y responde 404.
-- `AuthenticationFlowIT` amplía la cobertura con tokens reales:
-  - Dos organizadores: uno crea un borrador, el otro intenta modificarlo y recibe el mismo 404 que un ID inexistente; el propietario legítimo puede actualizarlo.
-  - Dos usuarios: el usuario A crea reserva y orden; el usuario B no puede consultar/cancelar la orden ni cancelar la reserva. El propietario A conserva acceso a la lectura de su orden.
-- README y registro de decisiones enlazan ADR-021 y la matriz, y dejan de declarar la Fase 2 cerrada anticipadamente.
-
-### Commits de los incrementos
-
-- `4ba7117c594e315e775247abe6ba6b0b0a6ddad3` — prueba de aislamiento entre organizadores con JWT reales.
-- `f72fbe1d86646d4c827442c83b1693cdce4375cc` — prueba unitaria de ocultación de propiedad.
-- `6890df100902b432fab06c5c251573a276782bbb` — implementación de ocultación de eventos ajenos.
-- `40007149a5a53415f8e7aedd646f6278c96057b6` — matriz inicial de autorización.
-- `b281bebf8df5c79e5b04a5b035133b445fae0385` — ADR-021.
-- `de05bc43ca7b512ebf677f442794a0d8ad5916f5` — registro ADR actualizado.
-- `3631e0407d1c92d43f5b23314b943a7a127fa9ec` — pruebas de aislamiento de órdenes y reservas con dos JWT reales.
-- `57246b3722f323c37a4f8f9e8e203bb5c8223877` — matriz actualizada con cobertura añadida.
-- `87d92f5a0f9c9c034c1b7aa910eb86d5289c81c0` — ADR-021 actualizado con la evidencia prevista.
-- `75f69668859be13c3a5f8a76b5ddb98e892a4377` — README y roadmap corregidos.
-
-### Verificación y fundamento del cierre
-
-- La especificación original, sección 22, define la aceptación de Fase 2 como «matriz de tests por rol; un usuario no puede tocar recursos ajenos». No exige una suite única que cubra exhaustivamente el producto cartesiano método × rol × estado.
-- La matriz clasifica las rutas funcionales por método y rol, y registra las restricciones de propiedad y respuestas esperadas.
-- `AuthenticationFlowIT` verifica aislamiento entre dos organizadores y entre dos usuarios mediante JWT reales.
-- CI #154, SHA `06490392e86866094ee9dddbff450f4e76e646ad`: 479 tests (379 Surefire y 100 Failsafe), 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo correctos.
-- CI #43545520476 validó el HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923`: workflow completado con éxito, `BUILD SUCCESS`, Spotless correcto, checks JaCoCo cumplidos y 100 tests Failsafe sin fallos.
-- La cobertura exhaustiva de todas las celdas método × rol × estado se conserva como mejora no bloqueante, no como criterio adicional inventado.
-
-### Dictamen
-
-Fase 2 queda cerrada formalmente con autorización expresa del responsable. La implementación, las pruebas de aislamiento con identidades reales, la documentación de permisos y la evidencia CI satisfacen los criterios de aceptación de la especificación. La matriz exhaustiva método × rol × estado queda como mejora no bloqueante. Este cierre no autoriza ni inicia Fase 5; Fase 4 continúa abierta y Fase 5 permanece bloqueada.
-
-
-## Fase 2 — resultado final de CI tras corrección Spotless (2026-11-14)
-
-**Evidencia añadida:** el workflow [CI run #154](https://github.com/dab960405/tickeringsystem/actions/runs/43543996946), asociado al commit \`06490392e86866094ee9dddbff450f4e76e646ad\` en \`dev\`, terminó con \`status=completed\` y \`conclusion=success\`.
-
-- El job \`Build and test\` terminó correctamente.
-- El paso \`Build, test and verify coverage\` terminó correctamente.
-- Los pasos de publicación de reportes de tests y cobertura terminaron correctamente.
-- El bloqueo anterior de Spotless quedó resuelto en los tres archivos Java identificados por el run fallido #153.
-- Commits correctivos publicados individualmente en \`dev\`:
-  - \`612ed9e2cba51ff2a392e96f01958256270be16a\` — formato de \`AuthenticationFlowIT.java\`.
-  - \`460506a560470b4e96aba896046798db9f84f593\` — formato de \`EventAuthorizationServiceTest.java\`.
-  - \`06490392e86866094ee9dddbff450f4e76e646ad\` — formato de \`EventAuthorizationService.java\`.
-
-**Conteos verificados desde el artefacto `test-reports` del run #154:**
-
-| Suite | Ejecutados | Fallidos | Errores | Omitidos |
-| --- | ---: | ---: | ---: | ---: |
-| Surefire — `ticketing-api` | 373 | 0 | 0 | 0 |
-| Surefire — `common-events` | 5 | 0 | 0 | 0 |
-| Surefire — `notification-service` | 1 | 0 | 0 | 0 |
-| **Surefire total** | **379** | **0** | **0** | **0** |
-| Failsafe — `ticketing-api` | 100 | 0 | 0 | 0 |
-| **Total general** | **479** | **0** | **0** | **0** |
-
-El artefacto `jacoco-reports` también fue publicado. El log de Maven confirma que los checks de cobertura JaCoCo se cumplieron en los módulos y que `spotless:check` finalizó correctamente. No se trasladan porcentajes históricos de cobertura al run #154.
-
-**Estado de referencias:** el run #154 probó el SHA de código `06490392e86866094ee9dddbff450f4e76e646ad`. El HEAD de `dev` observado antes de esta actualización documental era `c25e0d323edf32e86b3590df0131d0fe87181b29`, que solo añadía este resultado al propio `docs/PROGRESS.md`; la comparación entre ambos SHA mostró exactamente ese único archivo modificado. Los commits documentales posteriores también requieren comprobar su CI antes de afirmar que el HEAD final está validado.
-
-**Dictamen actualizado:** la validación automatizada completa de Maven \`clean verify\` pasó en el SHA indicado. Esto elimina el bloqueo de CI registrado para el cierre de Fase 2. La aprobación formal de cierre permanece reservada al responsable del proyecto; no implica iniciar Fase 5.
-
-## Double-check obligatorio de ingeniería — 2026-11-14
-
-Se documentó la [política de decisiones técnicas](engineering-decision-verification.md) y su aplicación a **ADR-024/Fase 3** (Spring Framework 6.2, PostgreSQL 17, Spring Modulith 1.4) y **ADR-022/Fase 4** (PostgreSQL 17, Oracle Java 21, IETF RFC 9110). Se cotejaron SHA, servicios, excepciones y tests ya verdes en CI #318. No se añadieron servicios, bibliotecas ni infraestructura. ADR-022 y ADR-024 continúan **propuestos hasta dictamen** de Tech Lead en #6 y #5, respectivamente.
-
-## Validación final previa al dictamen
-
-El commit `0e6f5d21ec1665cef19f5145cfcdf97a97097da1` pasó [CI #317](https://github.com/dab960405/tickeringsystem/actions/runs/43655953752): 390 pruebas unitarias, 171 de integración, `EventGuardConcurrencyIT` 10/10, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, Spotless, JaCoCo y `BUILD SUCCESS`. Los issues de dictamen #5 y #6 siguen abiertos; **no se interpreta CI verde como aceptación arquitectónica ni cierre formal**.
-
-## Solicitudes de dictamen técnico
-
-- **Fase 3:** [issue #5](https://github.com/dab960405/tickeringsystem/issues/5), resolución ADR-024 y revisión de F3-01. **Abierta**, no equivale a aprobación.
-- **Fase 4:** [issue #6](https://github.com/dab960405/tickeringsystem/issues/6), resolución ADR-022/H84-01 y revisión de F4-05. **Abierta**, dependiente del dictamen y cierre de F3.
-
-## Trabajo de cierre autorizado — 2026-11-14
-
-El responsable autorizó **ejecutar** la preparación y validación de cierres F3/F4; no se presume aceptada ninguna excepción arquitectónica por esa autorización. Se incorporan [F3-01](phase-3/F3-01-closure-review.md), [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), [ERD](erd.md) hasta V16 y las actualizaciones de [F4-05](phase-4/F4-05-closure-review.md). La prueba de rollback fue añadida en `4d381899`, corrigió el fixture en `c18d9f2` y la aserción de stock en `9d11d833`. CI #313/#314 fallaron respectivamente en SQL del fixture y expectativa de inventario; [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) terminó en `success`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless y JaCoCo. **Fases 3 y 4 abiertas hasta dictamen del Tech Lead y aprobación formal; F5 bloqueada.**
+Review uncommitted local changes before switching/pulling. Do not delete Docker volumes or issue destructive database commands. **Only main is maintained; historical dev references are not workflow instructions.**
