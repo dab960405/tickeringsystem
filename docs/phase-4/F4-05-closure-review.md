@@ -85,3 +85,12 @@ The proposed contract requires an **explicit independent verdict**, not unilater
 ## G. Prepared Tech Lead decision request — not sent
 
 > Please review the final main SHA and updated Phase 4 dossier after formal Phase 3 closure. Approve/reject ADR-022 for the SIMULATED provider with particular attention to early-refund NO_OP, a distinct signed event and technical PROJECT recovery. Confirm the H75–H84 evidence matrix, original Redis acceptance criteria, residual finding dispositions and whether Phase 4 can be formally closed. No approval or issue-state change is presumed.
+
+## F4 technical follow-up — 2026-11-22 (developer evidence; not an approval)
+
+The durable same-job APPLY/PROJECT recovery regression and distinct signed event behavior stay covered in `OperationWorkerIT` and `OrderPaymentFlowIT`, including previously corrected REV-DEV-01/02 and PostgreSQL/Redis scenarios. A later Angular session-context correction additionally prevents a delayed response from a prior account being displayed or triggering navigation under the next account. New headless Chrome direct/reload deep-route verification is included in the Angular CI workflow; its scope is browser SPA bootstrap and asset loading, not a paid-order E2E flow.
+
+Historic H75–H84 severities are not recreated. ADR-022/H84-01 remains **PROPOSED**, not accepted, and cannot be approved before the Phase 3 formal closure and independent Phase 4 review. AUD-05/ADR-024 has no blanket exception. GitHub [issue #6](https://github.com/dab960405/tickeringsystem/issues/6) remains open; no comments or phase-state changes were made. Use the final SHA/CI in the [engineering verification dossier](../audit/READINESS-VERIFICATION-2026-11-22.md).
+
+
+**Exact post-remediation code verification:** [CI #348](https://github.com/dab960405/tickeringsystem/actions/runs/44986963218), `main@e318c46f0623ee2cdebaf2dbe8241b8b7ddf78d7`, completed **SUCCESS**: 410 Java unit tests, 195 PostgreSQL/Redis Testcontainers integrations (including 13/13 ticket-type name races), Maven `clean verify`, Spotless and JaCoCo; Angular 19/19 with a production build, Prettier and **real Google Chrome** direct/deep-route independent reload and legacy bookmark with JS/CSS HTTP 200; Python frontend 11/11 and scripts 3/3. This is GitHub Actions evidence, **not** a fresh local Docker or full paid-order browser E2E run. Any later documentation commit requires separate same-SHA CI verification; neither test success nor this report grants Tech Lead acceptance.
