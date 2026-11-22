@@ -94,3 +94,7 @@ Historic H75–H84 severities are not recreated. ADR-022/H84-01 remains **PROPOS
 
 
 **Exact post-remediation code verification:** [CI #348](https://github.com/dab960405/tickeringsystem/actions/runs/44986963218), `main@e318c46f0623ee2cdebaf2dbe8241b8b7ddf78d7`, completed **SUCCESS**: 410 Java unit tests, 195 PostgreSQL/Redis Testcontainers integrations (including 13/13 ticket-type name races), Maven `clean verify`, Spotless and JaCoCo; Angular 19/19 with a production build, Prettier and **real Google Chrome** direct/deep-route independent reload and legacy bookmark with JS/CSS HTTP 200; Python frontend 11/11 and scripts 3/3. This is GitHub Actions evidence, **not** a fresh local Docker or full paid-order browser E2E run. Any later documentation commit requires separate same-SHA CI verification; neither test success nor this report grants Tech Lead acceptance.
+
+## F3 owner-decision dependency update — 2026-11-22
+
+The owner has authorized Phase 3 decisions for the bounded [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md) and [ADR-026](../adr/ADR-026-bounded-phase-3-cross-module-coordination.md), plus the documented AUD-03/AUD-10/AUD-12 dispositions in [F3-02](../phase-3/F3-02-owner-disposition-2026-11-22.md). These decisions **do not constitute the independent Phase 3 technical verdict**. Phase 4 retains its original H78/H84-01 business requirements, ADR-022 approval requirement, issue #6 and its separate acceptance and closure gates. F4 remains **OPEN**.

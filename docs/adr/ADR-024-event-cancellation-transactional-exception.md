@@ -1,10 +1,10 @@
-# ADR-024 — Proposed narrow transactional exception for event cancellation
+# ADR-024 — Narrow transactional exception for event cancellation
 
-- **Status:** PROPOSED for independent Tech Lead verdict; publication is **not** acceptance.
+- **Status:** APPROVED BY PROJECT OWNER on 2026-11-22 as a strictly bounded exception; independent Tech Lead conformity verdict **PENDING**.
 - **Date:** 2026-11-14
 - **Phase:** 3
 - **Related:** [ADR-016](ADR-016-global-lock-order.md), [F3-01](../phase-3/F3-01-closure-review.md).
-- **Scope:** Document/review an existing exception. This ADR does **not** independently authorize broad refactors, migrations or public API changes.
+- **Scope:** Owner approval covers only the existing event-cancellation coordinator and invariants below. It does **not** authorize broad refactors, migrations, new public APIs or other cross-module persistence exceptions.
 
 ## Context
 
@@ -52,11 +52,20 @@ Preserve these constraints when assessing any refactor:
 - Redis projection deletion is delayed **only with active transaction synchronization**; otherwise the helper executes immediately.
 - The rollback integration proves a specific failure scenario, **not all possible concurrent interleavings**.
 
-## References and pending decision
+## References and independent conformity check
 
 - [Spring Framework — REQUIRED propagation](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/tx-propagation.html).
 - [Spring Framework — declarative rollback](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
 - [PostgreSQL 17 — explicit locking and deadlocks](https://www.postgresql.org/docs/17/explicit-locking.html).
 - [Spring Modulith — module verification](https://docs.spring.io/spring-modulith/reference/verification.html).
 
-**Tech Lead issue:** [#5 — explicit ADR-024 verdict and Phase 3 closure](https://github.com/dab960405/tickeringsystem/issues/5). Its acceptance and the project owner's formal phase close remain **PENDING**. The exception is specific to Ticketing and is not a Spring/PostgreSQL vendor recommendation.
+**Tech Lead issue:** [#5 — explicit ADR-024 verdict and Phase 3 closure](https://github.com/dab960405/tickeringsystem/issues/5). The project owner has **approved this limited architectural exception**; the **independent Tech Lead review and formal Phase 3 closure remain pending**. The exception is specific to Ticketing and is not a Spring/PostgreSQL vendor recommendation.
+
+
+## Owner authorization and scope check — 2026-11-22
+
+The owner expressly authorized architectural and code decisions needed for Phase 3 closure. After reviewing current `main` sources and the repository's ADR-016, the selected option is the **narrow exception**, not a redesign into multiple physical transactions or an asynchronous saga. The base technical regression evidence is [CI #349](https://github.com/dab960405/tickeringsystem/actions/runs/44987202435), `main@9d843c6d0bd78f8bf1fd5d56231c8ed96ba66917`, with 195 integration tests passing.
+
+**Independent review is not waived or impersonated.** Broader Phase 3 coordination is separately bounded in [ADR-026](ADR-026-bounded-phase-3-cross-module-coordination.md). A new mutation path must re-evaluate ADR-016, the PostgreSQL FK lock order, rollback assertions and post-commit Redis behavior before changing this exception.
+
+Version-matched sources: [Spring 6.2 `PROPAGATION_REQUIRED`](https://docs.spring.io/spring-framework/reference/6.2/data-access/transaction/declarative/tx-propagation.html), [PostgreSQL 17 explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html), [Spring Modulith 1.4 module verification](https://docs.spring.io/spring-modulith/reference/1.4/verification.html).

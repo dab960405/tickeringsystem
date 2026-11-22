@@ -4,7 +4,7 @@
 
 **Mandatory decision verification:** [official-source double-check policy](engineering-decision-verification.md), including version-matched primary documentation, an independent second source when applicable, inspection of real code and SHA-specific test evidence. External references validate mechanisms, **not Tech Lead or architectural approval**.
 
-**Current branch:** `main` only. Former `dev` is deleted; ADR-005 below describes the historical branch strategy, **not a current instruction**. The owner explicitly authorized the English-only policy in [ADR-025](adr/ADR-025-english-only-project-policy.md); this supersedes the original language requirement, not business contracts. ADR-022/023/024 remain **PROPOSED**.
+**Current branch:** `main` only. Former `dev` is deleted; ADR-005 below describes the historical branch strategy, **not a current instruction**. The owner explicitly authorized the English-only policy in [ADR-025](adr/ADR-025-english-only-project-policy.md); this supersedes the original language requirement, not business contracts. ADR-022/023 remain **PROPOSED**. ADR-024 is **owner-approved** with independent Tech Lead conformity review pending; ADR-026 records bounded related Phase 3 exceptions.
 
 ---
 
@@ -164,9 +164,9 @@
 ## Decisions pending an explicit verdict
 
 - **H84-01 — SIMULATED provider evidence contract:** [ADR-022](adr/ADR-022-simulated-refund-evidence-contract.md) proposes immutable digest/HTTP 409 and a **new signed provider event** to reevaluate a previously early refund, without automatic financial reconciliation. Historical CI #302/#306 validated state classification and transitions; later main regressions correct same-job APPLY/PROJECT recovery. **PROPOSED, not accepted.**
-- **Event cancellation cross-module coordinator:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) proposes a narrow exception preserving E → T → R → O, rollback and after-commit Redis projection. Historical CI #315/#317 verified rollback and 390 API units/171 integrations. **Not approved**. AUD-05 found additional boundaries requiring independent dispositions.
+- **Event cancellation cross-module coordinator:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) approves a narrow owner-authorized exception preserving E → T → R → O, rollback and after-commit Redis projection. Historical CI #315/#317 verified rollback and 390 API units/171 integrations. **Approved by project owner on 2026-11-22** for this coordinator only; independent Tech Lead conformity review still pending. AUD-05's other Phase 3 boundaries are addressed by ADR-026, and Phase 4 boundaries remain separate.
 - **AWS region:** a region would be selected during the authorized AWS path and would require explicit owner confirmation before provisioning. **No cloud resources are authorized under Phases 0–4.**
-- **AUD-03, AUD-05, AUD-10, AUD-12 and BACK-01:** see the [separate pending decision register](audit/PENDING-DECISIONS.md).
+- **AUD-03, AUD-05, AUD-10, AUD-12 and BACK-01:** see the [superseding Phase 3 owner dispositions and current audit register](audit/PENDING-DECISIONS.md); Phase 4-specific H78/H84 remain open.
 
 ## ADR-021: Conceal foreign-owned resources under Phase 2 authorization
 
@@ -189,10 +189,10 @@
 - **Alternatives:** Direct publication (rejected), bounded `SKIP LOCKED` relay over V10 (proposed), a claim/lease with additive migration (conditional on evidence), CDC/2PC (outside scope).
 - **Detail:** [ADR-023](adr/ADR-023-phase-5-outbox-and-notification-delivery.md); [F5-01](phase-5/F5-01-technical-design.md) and [F5-02](phase-5/F5-02-test-and-acceptance-plan.md).
 
-## ADR-024: Limited event-cancellation transactional exception — PROPOSED
+## ADR-024: Limited event-cancellation transactional exception — OWNER APPROVED
 
 - **Date:** 2026-11-14; **Phase:** 3.
-- **Status:** Proposed for Tech Lead decision; **NOT an approval or formal phase closure**.
+- **Status:** Owner-approved on 2026-11-22 with strictly limited scope. The independent Tech Lead verdict and formal Phase 3 closure are **not** implied.
 - **Alternatives:** Refactor through module-owned application services or a narrow deliberate exception. The latter is recommended for current atomicity/lock order, subject to the broader AUD-05 assessment.
 - **Detail:** [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md); [F3-01](phase-3/F3-01-closure-review.md).
 
@@ -201,3 +201,12 @@
 - **Date:** 2026-11-21; **Scope:** current first-party project content.
 - **Status:** Owner-authorized language policy, **not** an override of ADR approval gates. Translate active content and current historical reports faithfully; preserve Git history and machine contracts. Historical Spanish routes are accepted as temporary redirect compatibility aliases, not canonical UI routes.
 - **Detail:** [ADR-025](adr/ADR-025-english-only-project-policy.md).
+
+
+## ADR-026: Bounded Phase 3 cross-module coordination — OWNER APPROVED
+
+- **Date:** 2026-11-22; **Phase:** 3.
+- **Status:** Owner-approved decision with pending independent Tech Lead conformity review; does not grant a blanket persistence exception.
+- **Decision:** Preserve existing E → T → R → O transaction semantics and narrowly allow `OrderExpirationProcessor` to coordinate reservation and order state, plus bounded unlocked expiration candidate joins. ADR-024 alone covers `EventCancellationService.cancel(UUID)`; remaining Phase 4 operational joins are not approved by this ADR.
+- **Technical basis:** Spring Framework 6.2 transaction propagation, PostgreSQL 17 explicit locks, Spring Modulith 1.4 modular boundaries and current Testcontainers evidence.
+- **Detail:** [ADR-026](adr/ADR-026-bounded-phase-3-cross-module-coordination.md); [Phase 3 owner disposition](phase-3/F3-02-owner-disposition-2026-11-22.md).
