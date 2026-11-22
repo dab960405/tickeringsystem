@@ -1,8 +1,8 @@
-# Ejecución local
+# Running Ticketing locally
 
-## Recorrido guiado para probar la API
+## Guided API smoke test
 
-En Linux/macOS con Bash y Python 3, desde la raíz del repositorio:
+On Linux/macOS with Bash and Python 3, from the repository root:
 
 ```bash
 bash scripts/local.sh init
@@ -11,35 +11,26 @@ bash scripts/local.sh infra
 bash scripts/local.sh run
 ```
 
-`init` crea `.env` con secretos aleatorios y permisos 600; conserva un archivo existente.
-`infra` inicia únicamente PostgreSQL y Redis, suficientes para el flujo actual de la API.
-`run` empaqueta sin pruebas e inicia la API en primer plano. Para la suite completa usa
-`bash scripts/local.sh test`, que ejecuta `./mvnw -B clean verify` con Testcontainers.
+- `init` creates `.env` with random secrets and mode 600; it leaves an existing file untouched.
+- `infra` starts **only PostgreSQL and Redis**, which are sufficient for the currently implemented Phases 0–4 API.
+- `run` packages the application without running tests and starts the API in the foreground.
+- `bash scripts/local.sh test` runs the complete `./mvnw -B clean verify` suite with Testcontainers.
 
-Con la API iniciada, abre otra terminal en el repositorio y ejecuta:
+With the API running, open a second terminal and execute:
 
 ```bash
 bash scripts/local.sh smoke
 ```
 
-La prueba crea un evento con fechas futuras y dos compradores. Comprueba permisos,
-reserva e inventario, creación idempotente de orden, firma HMAC, captura y reembolso
-duplicados, emisión e invalidación del ticket y revocación del refresh token. Utiliza el
-organizador y el recinto de los datos semilla del perfil `dev`; conserva los datos creados
-para poder inspeccionarlos. No imprime contraseñas, tokens ni firmas.
+The smoke script creates a synthetic future event and two buyer accounts. It checks authorization, stock/reservation transitions, idempotent order creation, HMAC signing, duplicate capture/refund processing, ticket issuance/invalidation and refresh-token revocation. It uses the development organizer and venue seeded under an **explicit `dev` Spring profile**; it preserves synthetic records for inspection and never prints credentials, tokens or signatures.
 
-Para usar otras credenciales o recinto locales, exporta `SMOKE_ORGANIZER_EMAIL`,
-`SMOKE_ORGANIZER_PASSWORD` y `SMOKE_VENUE_ID`. El destino HTTP se limita a localhost;
-`TICKETING_BASE_URL` permite seleccionar el puerto local.
+To select your own local fixtures, export `SMOKE_ORGANIZER_EMAIL`, `SMOKE_ORGANIZER_PASSWORD` and `SMOKE_VENUE_ID`. `TICKETING_BASE_URL` can select a **localhost-only** HTTP port. The smoke client rejects redirects so it cannot forward a bearer token to another origin.
 
-Detén la API con `Ctrl+C`. `bash scripts/local.sh stop` detiene PostgreSQL y Redis
-conservando los datos. El perfil `infra` completo descrito abajo sigue incluyendo Kafka
-y MongoDB para las fases que los utilizan.
+Stop the API with `Ctrl+C`. `bash scripts/local.sh stop` stops PostgreSQL and Redis **without deleting persistent data**. Full `infra` Compose includes Kafka/MongoDB definitions for later phases, but these are **not required** for current API validation.
 
-## Interfaz para recorrer la compra
+## Buyer interface
 
-La interfaz utiliza Angular 22 y requiere Node 24 LTS (24.15+) y npm. Con PostgreSQL,
-Redis y la API iniciados, instala sus dependencias desde la raíz del repositorio:
+The Angular 22 client requires Node 24 LTS (24.15 or later) and npm. After starting PostgreSQL, Redis and the API:
 
 ```bash
 cd frontend
@@ -48,61 +39,45 @@ cd ..
 bash scripts/local.sh ui
 ```
 
-Abre <http://localhost:5173>. La interfaz permite registrarse, iniciar sesión, buscar
-eventos, elegir tipo y cantidad de entradas, reservar, crear la orden y simular un
-pago aprobado o rechazado. En **Mis compras** puedes cancelar una orden pendiente o
-solicitar y confirmar un reembolso; **Mis entradas** muestra los tickets vigentes y
-permite copiar sus códigos o imprimirlos.
+Open <http://localhost:5173>. The UI supports registration, sign-in, event search, ticket-type/quantity selection, reservation, order creation and simulated successful/failed payments. **My orders** supports pending-order cancellation and simulated refund requests; **My tickets** displays currently valid tickets and their codes, with copy/print actions.
 
-Los pagos son ficticios. El simulador local firma los webhooks usando el mismo `.env`
-de la API; el secreto nunca llega al navegador. No introduzcas datos de tarjeta.
-La sesión se mantiene en memoria: después de recargar la página debes iniciar sesión
-otra vez, y tus órdenes y entradas siguen guardadas en el backend.
+**No real payments are made.** The local Python gateway signs simulated webhook payloads using the same `.env` secret as the API. The HMAC secret never enters the browser. Do not enter payment card data. Session tokens remain in memory; reloading the page requires signing in again, but purchases/tickets remain stored by the backend.
 
-`ui` compila Angular y Python 3 sirve los archivos resultantes y conecta la interfaz con
-la API. Si Node está fuera del `PATH`, configura `NODE_HOME` en `.env` con su carpeta
-de instalación; el script añade `NODE_HOME/bin` al `PATH` del proceso.
-Este servidor escucha solo en localhost y es una
-herramienta de desarrollo, no un servidor para desplegar en producción. Puedes cambiar
-`FRONTEND_PORT` y `TICKETING_API_PORT` mediante variables de entorno.
+`ui` builds Angular; Python serves the compiled assets and proxies API requests. If Node is outside `PATH`, set `NODE_HOME` in `.env`; the script adds `NODE_HOME/bin`. The server binds only to localhost and is **not suitable for production deployment**. `FRONTEND_PORT` and `TICKETING_API_PORT` select local ports. Stop with `Ctrl+C`.
 
-Detén la interfaz con `Ctrl+C`. Consulta [la guía del frontend](../frontend/README.md)
-para conocer su organización, pruebas y las fuentes oficiales que orientan la implementación.
+For architecture, test commands and official sources see the [frontend guide](../frontend/README.md).
 
-## Requisitos
+## Prerequisites
 
 - Java 21.
-- Para el frontend: Node 24 LTS (24.15+), npm y Python 3.10+.
-- Maven 3.9 o superior (se recomienda usar el Maven Wrapper incluido).
-- Docker Engine/Desktop con Docker Compose v2 y soporte para Testcontainers si se ejecutan pruebas de integración.
-- Puertos disponibles: 5432 (PostgreSQL), 6379 (Redis), 9092 (Kafka), 27017 (MongoDB) y 8080 (API), salvo que se cambien en `.env`.
+- Node 24 LTS (24.15+), npm, Python 3.10+ for the frontend.
+- Maven 3.9 or newer (prefer the checked-in Maven Wrapper).
+- Docker Engine/Desktop, Docker Compose v2 and a working Docker daemon for Testcontainers.
+- Free local ports: PostgreSQL 5432, Redis 6379, API 8080; Kafka 9092 and MongoDB 27017 are needed **only if their later-phase containers are deliberately started**, and all may be overridden in `.env`.
 
-## Preparar variables de entorno
+## Environment setup
 
-Desde la raíz del repositorio, copia el archivo de ejemplo:
+The **recommended** path is `bash scripts/local.sh init`, which safely creates random secrets and a private `.env`. To prepare the file manually, copy the example:
 
 ```bash
 cp .env.example .env
 ```
 
-En Windows PowerShell:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edita `.env` y reemplaza los valores de ejemplo, especialmente contraseñas y secretos. Genera un secreto JWT de al menos 32 bytes:
+Replace placeholder passwords and secrets. Generate a JWT secret of at least 32 random bytes:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Configura el resultado en `JWT_SECRET`. Genera otro valor independiente con `openssl rand -base64 32` para `PAYMENT_WEBHOOK_SECRET`.
-La API rechaza secretos HMAC de menos de 32 caracteres, valores de ejemplo conocidos y
-valores de un solo carácter repetido; esto no demuestra entropía, por lo que debes generarlo
-aleatoriamente. No subas `.env` al repositorio.
+Assign it to `JWT_SECRET`, and generate a **different independent** random value for `PAYMENT_WEBHOOK_SECRET`. The API rejects obviously weak HMAC secrets (fewer than 32 characters, known placeholders or repeated single characters), but length validation alone cannot establish entropy. Never commit `.env`.
 
-Docker Compose lee `.env` automáticamente para interpolar los valores del compose. La aplicación ejecutada directamente desde el host necesita que esas variables estén exportadas en el proceso que inicia Java.
+Docker Compose automatically reads `.env` for interpolation. Java launched directly on the host needs those variables in its process environment.
 
 Bash / Linux / macOS:
 
@@ -112,7 +87,7 @@ source ./.env
 set +a
 ```
 
-Windows PowerShell:
+PowerShell:
 
 ```powershell
 Get-Content .env | ForEach-Object {
@@ -122,128 +97,114 @@ Get-Content .env | ForEach-Object {
 }
 ```
 
-Vuelve a cargar las variables en cada terminal nueva. Para desarrollo local selecciona
-explícitamente `SPRING_PROFILES_ACTIVE=dev` (ya está en `.env.example`). Sin un perfil
-activo se cargan únicamente las migraciones de estructura, sin usuarios de demostración.
-Un despliegue debe seleccionar su perfil y usar una base sin datos de demostración; cambiar
-el perfil no elimina cuentas ya insertadas.
+Only source a **trusted, personally controlled** environment file. Reload variables in each new terminal. For local demo development choose `SPRING_PROFILES_ACTIVE=dev` **explicitly** (the example contains that setting). With no active profile, only structural migrations are loaded; demo users are not inserted. Production deployments require their own profile and clean environment. Switching a profile does **not** remove previously seeded accounts.
 
-## Levantar infraestructura
+## Starting infrastructure
 
-Desde la raíz del repositorio:
+To start only the required services, prefer:
+
+```bash
+bash scripts/local.sh infra
+```
+
+Alternatively, the following starts **all four** Compose infrastructure services, including Kafka and MongoDB scaffolding that is not needed by Phases 0–4:
 
 ```bash
 docker compose --profile infra up -d
 docker compose ps
 ```
 
-Los puertos publicados se enlazan a `127.0.0.1`; las aplicaciones del host acceden por
-localhost y Kafka conserva su listener interno `kafka:29092`. Los contenedores existentes
-deben recrearse para aplicar el cambio de enlace, conservando sus volúmenes.
+Host ports bind to `127.0.0.1`. Kafka retains its internal listener `kafka:29092`. Previously created containers must be recreated to apply host bind changes, while preserving named volumes. Do not run destructive volume removal.
 
-El perfil `infra` inicia PostgreSQL, Redis, Kafka y MongoDB. Espera a que los cuatro servicios muestren estado `healthy` antes de iniciar las aplicaciones. MongoDB y Kafka forman parte de la infraestructura del proyecto, aunque la API principal utiliza PostgreSQL y Redis para las funciones cubiertas en esta fase.
-
-Para consultar el estado de salud de un servicio:
+When starting the full profile, check that all four services report `healthy` before using them:
 
 ```bash
 docker compose ps
 docker compose logs --tail=100 postgres redis kafka mongodb
 ```
 
-## Ejecutar pruebas
+These infrastructure definitions are **not** a Kafka/MongoDB application implementation and do not authorize Phase 5.
 
-Los tres comandos tienen alcances distintos:
+## Executing tests
+
+Different commands validate different scopes:
 
 ```bash
-# Ejecuta las pruebas unitarias (*Test.java) mediante Surefire.
+# Surefire unit tests only (*Test.java):
 ./mvnw test
 
-# Ejecuta el ciclo hasta verify, incluidas las pruebas unitarias,
-# pero omite las pruebas de integración (*IT.java) de Failsafe.
+# Maven verify without Failsafe integration tests (*IT.java):
 ./mvnw clean verify -DskipITs
 
-# Ejecuta el ciclo completo: pruebas unitarias, integración,
-# JaCoCo y comprobación de formato Spotless.
-./mvnw clean verify
+# Full verification: unit + integration tests, JaCoCo and Spotless:
+./mvnw -B clean verify
 ```
 
-- `./mvnw test` no alcanza la fase `integration-test` de Failsafe.
-- `./mvnw clean verify -DskipITs` omite las pruebas de integración; no demuestra que los escenarios con Testcontainers funcionen.
-- `./mvnw clean verify` ejecuta las pruebas de integración. Requiere Docker disponible para los contenedores de Testcontainers.
-- El build aplica Spotless durante `verify` y comprueba el umbral de cobertura de líneas JaCoCo para paquetes `service` y `domain`.
+- `test` does not run the Failsafe integration-test lifecycle.
+- `clean verify -DskipITs` excludes integration tests and cannot demonstrate Testcontainers correctness.
+- `clean verify` runs integration tests against disposable Testcontainers PostgreSQL and Redis and enforces Spotless plus JaCoCo line coverage in `service`/`domain` packages.
 
-## Construir e iniciar ticketing-api
+The GitHub Actions workflow also runs Angular and Python tests. A **green run against the exact source SHA** is required before a claim of whole-repository CI success.
 
-Con las variables de entorno cargadas y la infraestructura disponible:
+## Packaging and starting the Java API
+
+With environment variables exported and PostgreSQL/Redis available:
 
 ```bash
 ./mvnw -pl ticketing-api -am package -DskipTests
 java -jar ticketing-api/target/ticketing-api-0.1.0-SNAPSHOT.jar
 ```
 
-El primer comando construye el módulo compartido requerido y empaqueta la API sin ejecutar las pruebas. El segundo inicia la API en el puerto definido por `TICKETING_API_PORT` (8080 por defecto). Mantén la terminal abierta para consultar los logs.
+The Maven command packages shared module dependencies but deliberately skips tests. Java listens on `TICKETING_API_PORT` (default 8080). Keep the terminal open to view diagnostics.
 
-## Comprobar la API
-
-En otra terminal:
+Check health from a separate terminal:
 
 ```bash
 curl -i http://localhost:8080/actuator/health
 ```
 
-La respuesta esperada cuando la aplicación y sus dependencias reportadas por Actuator están saludables es HTTP 200 con `"status":"UP"`. Si se cambia `TICKETING_API_PORT`, ajusta el puerto de la URL.
+When Actuator and its reported dependencies are healthy, expect HTTP 200 and `"status":"UP"`. Adjust the port for your configuration. API documentation is available at:
 
-La documentación OpenAPI está disponible en:
+- Swagger UI: <http://localhost:8080/swagger-ui.html>
+- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
 
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+## Relevant Phase 4 parameters
 
-## Parámetros relevantes de Fase 4
-
-| Variable | Valor predeterminado | Uso |
+| Variable | Default | Meaning |
 | --- | --- | --- |
-| `TICKET_TYPES_CACHE_TTL` | `5m` | TTL de la caché de metadatos del catálogo de tipos de entrada. Acepta unidades de duración de Spring, por ejemplo `30s` o `5m`. |
-| `LOGIN_MAX_ATTEMPTS` | `5` | Máximo de intentos de login por combinación de IP y email dentro de la ventana fija. |
-| `LOGIN_WINDOW_SECONDS` | `60` | Duración de la ventana del rate limiter de login, en segundos. |
+| `TICKET_TYPES_CACHE_TTL` | `5m` | Ticket-type metadata cache TTL; Spring duration formats such as `30s` or `5m` |
+| `LOGIN_MAX_ATTEMPTS` | `5` | Maximum login attempts per IP/email in a fixed window |
+| `LOGIN_WINDOW_SECONDS` | `60` | Login rate-limit window length in seconds |
 
-Los timeouts Redis de la API están configurados en `application.yml` a 500 ms para comandos. La prueba específica de indisponibilidad también verifica el timeout de comando de Lettuce y el timeout de conexión de 500 ms configurado en su contexto.
+API Redis command timeout is 500 ms in `application.yml`. Outage integration tests also exercise Lettuce command and connect timeouts configured specifically for the test context.
 
-## Firma HMAC del webhook en flow.http
+## Generating the exact webhook HMAC for flow.http
 
-La solicitud `POST /api/v1/payments/webhook` requiere que `X-Signature` contenga el HMAC-SHA256 hexadecimal del cuerpo raw exacto. La extensión REST Client de VS Code **no puede calcular esta firma**; debes generarla fuera del archivo HTTP y copiar el digest hexadecimal en la variable `@webhookSignature` de `docs/flow.http`.
+The `POST /api/v1/payments/webhook` endpoint requires `X-Signature` containing the lowercase hexadecimal HMAC-SHA256 of the **exact raw request body**. VS Code REST Client does **not** compute it; generate it separately and copy the digest into `@webhookSignature` in [flow.http](flow.http).
 
-Con `PAYMENT_WEBHOOK_SECRET` exportado desde `.env`, sustituye el UUID de ejemplo por el `id` devuelto al crear la orden, y copia también
-`totalAmount` y `currency` de esa respuesta. Una entrada General del seed cuesta 45.00 USD;
-el total real puede variar con el tipo y la cantidad. El contenido de `PAYLOAD` debe coincidir byte por byte con el cuerpo JSON de la solicitud HTTP (sin espacios adicionales ni salto de línea final):
+With `PAYMENT_WEBHOOK_SECRET` exported, substitute the real order `id`, `totalAmount` and `currency` from the API response. A single seeded General ticket costs USD 45.00, but the actual order total depends on type and quantity. `PAYLOAD` must match the outgoing JSON **byte for byte**, including property order, spaces and the absence of a trailing newline:
 
 ```bash
 PAYLOAD='{"orderId":"REPLACE_WITH_ORDER_UUID","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":REPLACE_WITH_ORDER_TOTAL_AMOUNT,"currency":"REPLACE_WITH_ORDER_CURRENCY"}'
 printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
 ```
 
-Copia únicamente el valor hexadecimal que aparece después de `(stdin)=` y úsalo como `@webhookSignature`. Si cambias cualquier carácter, espacio, orden de propiedades o salto de línea del cuerpo, vuelve a generar la firma sobre el cuerpo exacto que enviarás. La firma no es el secreto; no publiques `PAYMENT_WEBHOOK_SECRET`.
+Copy only the hexadecimal digest shown after `(stdin)=`. Re-sign after **any** raw-body change. The digest itself is not the secret; **never publish `PAYMENT_WEBHOOK_SECRET`**.
 
-## Alcance de verificación
+## Historical validation provenance
 
-El 15 de noviembre de 2026 se verificó en Linux Mint, con Java 21 y Docker 29, el
-arranque de PostgreSQL y Redis mediante Compose, las migraciones V1–V16 y el seed de
-desarrollo, y la API en el puerto 8080. `scripts/local-smoke.py` completó 34
-comprobaciones HTTP sobre el código productivo de `dev` en `76a0fbb`.
-El ciclo completo `clean verify` terminó con `BUILD SUCCESS`: 567 pruebas, cero fallos,
-errores u omisiones, controles de cobertura JaCoCo y formato Spotless correctos.
+On **2026-11-15**, a Linux Mint host with Java 21 and Docker 29 started PostgreSQL/Redis with Compose, applied Flyway V1–V16 and the development seed, and started the API on port 8080. `scripts/local-smoke.py` recorded **34 HTTP checks** against old `dev` commit `76a0fbb`. A separate full `clean verify` ended in `BUILD SUCCESS` with **567 tests**, no failures/errors/skips and valid JaCoCo/Spotless checks.
 
-Esta evidencia cubre el recorrido principal de compra y reembolso simulado. No acredita
-el perfil de infraestructura completo con Kafka/MongoDB, las funcionalidades de fases
-posteriores ni los escenarios adicionales de recuperación y expiración pendientes de
-reproducción. Los resultados de la suite completa deben consultarse en los reportes
-Surefire/Failsafe generados por `./mvnw clean verify`.
+This **historical** evidence covers the main buyer purchase/refund path on that source SHA. It is not evidence of current `main` browser verification, all infrastructure services, future-phase functionality, or adversarial recovery checks introduced afterward. Consult Surefire/Failsafe reports and GitHub CI for any later SHA.
 
-## Pruebas adversarias locales
+## Local adversarial checks
 
-Con API y frontend activos, ejecuta `bash scripts/local.sh adversarial`.
-Agrega `--with-integration` para reproducir fallos de recuperación y expiración,
-además de caída de Redis, en Testcontainers desechables. Se crean datos ficticios
-y reportes JSON/Markdown en `reports/adversarial/`; una salida 1 indica hallazgos.
-Consulta [resultados, límites y reproducciones](ADVERSARIAL_TESTING.md).
-Esta comprobación adicional reprodujo los escenarios de recuperación y expiración
-que quedaban pendientes en el alcance de verificación anterior.
+With the API and frontend running, run:
+
+```bash
+bash scripts/local.sh adversarial
+```
+
+Adding `--with-integration` uses disposable Testcontainers to exercise the recovery, expiration and Redis-outage cases in addition to the local HTTP probes. The harness uses synthetic fixtures and writes JSON/Markdown reports to `reports/adversarial/`. An exit status of **1** indicates a reported failure. Read [adversarial evidence and limitations](ADVERSARIAL_TESTING.md) and the [remediation dossier](audit/MAIN-REMEDIATION-2026-11-21.md).
+
+The older report documents defects discovered on an earlier SHA; subsequent fixes must be checked against their own regression tests and CI, not assumed from historical log files.

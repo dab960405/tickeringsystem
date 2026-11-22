@@ -1,138 +1,145 @@
-# Arquitectura
+# Architecture
 
-## Vista de módulos
+## System and module overview
 
-La aplicación de negocio es un **monolito modular** en `ticketing-api`: los dominios comparten proceso y transacciones PostgreSQL, pero separan responsabilidades por paquete. Los módulos Maven adicionales aíslan contratos de eventos y el futuro consumidor de notificaciones.
+Ticketing is a **modular monolith** implemented by `ticketing-api`: domain packages share one Java process and PostgreSQL transactions while owning separate business responsibilities. The remaining Maven modules isolate a shared event envelope and a **future, currently unimplemented** notification application.
 
 ```mermaid
 flowchart TB
-    client[Cliente / Swagger UI]
-    subgraph api["ticketing-api · Spring Boot"]
-      security[auth · JWT, roles y autorización]
-      catalog[venue · event · tickettype]
-      reservation[reservation · inventario y TTL]
-      order[order · órdenes, detalles y tickets]
-      payment[payment · pagos y webhook HMAC]
-      common[common · errores, entidades base y respuestas]
-      security --> catalog
-      security --> reservation
-      security --> order
-      security --> payment
+    client["Buyer Angular UI / OpenAPI clients"]
+    subgraph api["ticketing-api · Spring Boot 3.5 · Java 21"]
+      auth["auth · JWT, authorization, sessions"]
+      catalog["venue · event · tickettype"]
+      reservation["reservation · stock holds and TTL"]
+      order["order · idempotent orders, tickets, commercial units"]
+      payment["payment · signed provider evidence"]
+      operation["operation · RX/CLAIM/APPLY/PROJECT, lease/fencing"]
+      common["common · exceptions, rate limits, cache support"]
+      auth --> catalog
+      auth --> reservation
+      auth --> order
       reservation --> catalog
       order --> reservation
-      order --> payment
-      payment --> order
-      common -. soporte transversal .-> catalog
-      common -. soporte transversal .-> reservation
-      common -. soporte transversal .-> order
-      common -. soporte transversal .-> payment
+      payment --> operation
+      operation --> payment
+      operation --> order
+      common -. shared infrastructure .-> catalog
+      common -. shared infrastructure .-> operation
     end
-    postgres[(PostgreSQL · Flyway)]
-    redis[(Redis · refresh tokens, rate limits, caches y proyección de reservas)]
-    client --> security
+    postgres[("PostgreSQL 17 · Flyway V1–V16")]
+    redis[("Redis 7 · sessions, rate limits, metadata cache, reservation projection")]
+    client --> auth
     catalog --> postgres
-    catalog -. cache-aside de metadatos .-> redis
     reservation --> postgres
-    reservation -. proyección temporal .-> redis
     order --> postgres
     payment --> postgres
-    security --> redis
-    subgraph future["Fase 5 · integración asíncrona"]
-      outbox[(outbox_events)]
-      kafka{{Kafka KRaft}}
-      events[common-events]
-      notifier[notification-service]
-      mongo[(MongoDB)]
-      outbox -. publicador pendiente .-> kafka
-      events -. contrato compartido .-> kafka
-      kafka -. consumidor pendiente .-> notifier
-      notifier -. persistencia prevista .-> mongo
+    operation --> postgres
+    auth --> redis
+    catalog -. metadata cache-aside .-> redis
+    reservation -. temporary projection .-> redis
+
+    subgraph future["Phase 5 · PROPOSED / BLOCKED"]
+      outbox[("outbox_events table already exists")]
+      kafka{{"Kafka (not active)"}}
+      envelope["common-events"]
+      notifier["notification-service (scaffold only)"]
+      mongo[("MongoDB (not active)")]
+      outbox -. publisher not implemented .-> kafka
+      envelope -. proposed contract .-> kafka
+      kafka -. consumer not implemented .-> notifier
+      notifier -. persistence not implemented .-> mongo
     end
-    postgres -. tabla ya creada .-> outbox
+    postgres -. existing schema table .-> outbox
 ```
 
-### Responsabilidades
+### Responsibilities
 
-| Módulo / paquete | Responsabilidad |
+| Maven module or package | Responsibility |
 | --- | --- |
-| `common-events` | Records y envoltorio `EventEnvelope<T>`; contrato compartido sin dependencia de los servicios consumidores. |
-| `ticketing-api.auth` | Registro/login, emisión y validación JWT, refresh/logout, roles y límites de login con Redis. |
-| `ticketing-api.venue` | CRUD y persistencia de recintos. |
-| `ticketing-api.event` | Ciclo de vida de eventos, organizador, fechas y recinto. |
-| `ticketing-api.tickettype` | Tipos de entrada, ventana de venta y operaciones atómicas sobre inventario. |
-| `ticketing-api.reservation` | Crear/cancelar reservas, TTL, confirmación durante el pago y expiración por lotes. |
-| `ticketing-api.order` | Creación idempotente, unicidad de orden por reserva, snapshot de precio, estado de orden, cancelación y emisión/consulta de tickets. |
-| `ticketing-api.payment` | Recepción HMAC, evidencia persistente del proveedor, identidad de operación, idempotencia semántica y aplicación/recuperación de operaciones financieras. |
-| `notification-service` | Aplicación separada prevista para consumir eventos y gestionar notificaciones; integración Kafka pendiente de Fase 5. |
+| `common-events` | Shared immutable `EventEnvelope<T>` contract, without coupling the services together. |
+| `ticketing-api.auth` | Registration, login, access/refresh JWTs, logout, roles and Redis-backed login limits. |
+| `ticketing-api.venue` | Venue CRUD and persistence. |
+| `ticketing-api.event` | Event lifecycle, organizer ownership, schedule, venue and coordinated cancellation. |
+| `ticketing-api.tickettype` | Ticket-type catalog, sale windows, atomic inventory reserve/release. |
+| `ticketing-api.reservation` | Reservation creation/cancellation, TTL, payment confirmation and bounded expiration. |
+| `ticketing-api.order` | Idempotent order creation, one-order-per-reservation enforcement, immutable price snapshots, cancellation, commercial units and ticket issuance. |
+| `ticketing-api.payment` | HMAC webhook validation, provider evidence, operation identity, semantic application identity and append-only records. |
+| `ticketing-api.operation` | Durable job cycles, RX/CLAIM/APPLY/PROJECT coordination, leases, fencing and projection recovery. |
+| `ticketing-api.common` | Errors, domain base types, supporting infrastructure and HTTP conventions. |
+| `notification-service` | Spring Boot application scaffold only. Functional Kafka consumers and MongoDB notifications remain blocked until Phase 5 authorization. |
 
-## Flujo de negocio: reserva → orden → pago → tickets
+## Buyer flow: reservation → order → simulated payment → tickets
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor U as Usuario
+    actor U as Buyer
     participant API as ticketing-api
     participant DB as PostgreSQL
-    participant GW as Pasarela simulada
+    participant Sim as Simulated provider
 
-    U->>API: Crear reserva (tipo, cantidad)
-    API->>DB: UPDATE condicional de inventario
-    Note over API,DB: available_quantity >= quantity
-    DB-->>API: 1 fila actualizada o 0
-    alt Stock disponible
-        API->>DB: INSERT reservation ACTIVE + expires_at
-        DB-->>API: Reserva creada
-        API-->>U: Reserva temporal
-        U->>API: Crear orden + Idempotency-Key
-        API->>DB: Buscar (user_id, idempotency_key)
-        alt Clave nueva
-            API->>API: OrderService.create verifica orden previa por reservation_id
-            API->>DB: Validar reserva activa
-            API->>DB: INSERT order + order_item (precio snapshot)
-            Note over API,DB: V11 impone UNIQUE(reservation_id), incluso para órdenes CANCELLED
-            API->>DB: INSERT payment PENDING
-            API-->>U: Orden pendiente de pago
-            U->>GW: Completar pago (flujo simulado)
-            GW->>API: Webhook + X-Signature
-            API->>API: Verificar HMAC-SHA256 del body original
-            API->>DB: Bloquear/confirmar reserva y validar estado
-            alt Reserva confirmada
-                API->>DB: Marcar order PAID y payment SUCCEEDED
-                API->>DB: Emitir tickets por cada unidad
-                API-->>GW: Webhook procesado (204)
-            else Reserva vencida y recuperación no posible
-                API->>DB: Conservar evidencia SUCCEEDED
-                API->>DB: fulfillment UNFULFILLABLE + refund REQUIRED
-                Note over API,DB: No se emiten tickets; REFUNDED exige evidencia de reembolso
-                API-->>GW: Webhook procesado (204)
-            end
-        else Misma clave y misma reserva
-            API-->>U: Devolver orden existente
-        else Misma clave y reserva diferente
-            API-->>U: Conflicto (409)
-        else Ya existe una orden para la reserva
-            API-->>U: Conflicto (409); crear una reserva nueva para otra compra
+    U->>API: Reserve ticket type and quantity
+    API->>DB: Acquire event/inventory locks; conditional stock UPDATE
+    Note over API,DB: available_quantity >= requested quantity
+    alt Stock available
+      DB-->>API: One row changed
+      API->>DB: INSERT reservation ACTIVE with expires_at
+      API-->>U: Temporary reservation
+      U->>API: Create order with Idempotency-Key
+      API->>DB: Check user/key and lock reservation
+      alt New idempotency key and unbound reservation
+        API->>DB: INSERT order, immutable-price items, PENDING payment
+        Note over API,DB: UNIQUE reservation_id includes cancelled orders
+        API-->>U: Pending payment order
+        U->>Sim: Simulate capture
+        Sim->>API: Signed webhook payload + X-Signature
+        API->>API: HMAC over exact raw UTF-8 bytes
+        API->>DB: RX (evidence), CLAIM (lease/fencing)
+        API->>DB: APPLY eligible commercial effect and durable disposition
+        alt Reservation can be fulfilled
+          API->>DB: PAID / SUCCEEDED, confirm hold, issue ticket units
+        else Expired and not recoverable
+          API->>DB: Persist SUCCEEDED, UNFULFILLABLE, refund REQUIRED
+          Note over API,DB: Do not issue tickets or fabricate REFUNDED evidence
         end
-    else Stock insuficiente
-        API-->>U: Conflicto de inventario
+        API->>DB: PROJECT result without reapplying committed APPLY
+        API-->>Sim: Webhook accepted (204)
+      else Same key and reservation
+        API-->>U: Return the existing order
+      else Conflicting key or reservation already has an order
+        API-->>U: HTTP 409; create a fresh reservation for a new purchase
+      end
+    else Stock unavailable
+      DB-->>API: Zero rows changed
+      API-->>U: Inventory conflict
     end
 ```
 
-### Consistencia y concurrencia
+### Consistency and concurrency invariants
 
-1. **Reserva de inventario:** `TicketTypeRepository.reserveStock` ejecuta un único `UPDATE ticket_types` con predicado `available_quantity >= :quantity`. La base de datos serializa las escrituras concurrentes sobre la fila y el número de filas afectadas determina el resultado. No se hace primero un SELECT de stock para luego descontarlo.
-2. **Ventana de reserva:** la reserva guarda `expires_at` calculado con el TTL configurable. El job de expiración reclama lotes con `FOR UPDATE SKIP LOCKED`; dentro de la misma transacción cambia el estado y devuelve inventario solo si la transición condicional actualizó una fila.
-3. **Orden:** el precio unitario se copia a `order_items`; una modificación posterior del catálogo no cambia el importe de la orden ya creada. `(user_id, idempotency_key)` tiene una restricción única en PostgreSQL. Adicionalmente, `OrderService.create` rechaza una orden previa para la reserva y V11 impone el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`. La restricción incluye órdenes canceladas; una reserva con orden cancelada no se reutiliza y una nueva compra requiere otra reserva. Las colisiones de integridad correspondientes se traducen a HTTP `409 Conflict`.
-4. **Pago e idempotencia:** el webhook verifica HMAC-SHA256 sobre el cuerpo recibido y registra por separado la identidad del evento recibido, la operación del proveedor y la aplicación semántica (`provider_events`, `provider_operations`, `semantic_applications`). Una misma operación comercial se aplica una sola vez aunque llegue mediante eventos distintos o concurrentes. Si una captura tardía no puede recuperar la compra, se conserva `SUCCEEDED`, no se emiten tickets y la orden queda `UNFULFILLABLE` con reembolso `REQUIRED`; `REFUNDED` solo se confirma con evidencia válida de reembolso.
-5. **Outbox y notificaciones:** la tabla `outbox_events` ya existe en el esquema, pero la escritura/publicación de eventos, Kafka y el consumidor `notification-service` aún no forman parte del flujo activo. Se implementarán en la Fase 5.
+1. **Inventory:** `TicketTypeRepository.reserveStock` uses one conditional PostgreSQL `UPDATE ticket_types ... WHERE available_quantity >= :quantity`. PostgreSQL serializes concurrent row writes; the affected row count determines success. Redis is never the authority for available stock.
+2. **Reservation TTL:** the hold stores `expires_at`; the expiration worker discovers bounded batches using database time and then acquires and revalidates under E → T → R locks. `FOR UPDATE SKIP LOCKED` avoids waiting on already-claimed reservation rows; the conditional state transition releases stock at most once.
+3. **Orders:** the order captures an immutable unit-price snapshot in `order_items`. PostgreSQL enforces uniqueness of `(user_id, idempotency_key)` and the V11 non-partial index `ux_orders_reservation_id`. Cancelled orders still occupy the original reservation identity. Conflicts map to HTTP 409 under the documented API contract.
+4. **Payment identity:** webhook requests are authenticated by HMAC-SHA256 over the exact received payload. Separate persistent identities for `provider_events`, `provider_operations` and `semantic_applications` distinguish an event, a provider operation and a commercial effect. Evidence is append-only.
+5. **Durable recovery:** RX persists evidence, CLAIM uses a lease and fencing token, APPLY records the committed disposition together with the commercial effects, and PROJECT updates the technical projection. **A recovered job whose APPLY already committed must reuse its prior result and must not invoke the commercial callback again.** A *new, independently signed provider event* may be evaluated under the SIMULATED evidence contract; the latter remains proposed in ADR-022.
+6. **Late capture and refunds:** if a valid capture cannot fulfill a purchase, preserve financial evidence `SUCCEEDED` with `UNFULFILLABLE` and `REQUIRED` refund obligation, but issue no tickets. Only valid signed refund evidence can confirm `REFUNDED`. The provider is simulated: there is no actual monetary movement.
+7. **Global locks:** all participating workflows must respect accepted [ADR-016](adr/ADR-016-global-lock-order.md), including implicit foreign-key locks and Hibernate flush behavior. Revalidate state after locking; do not infer safety from pre-lock entity snapshots.
+8. **Outbox and notifications:** `outbox_events` is a schema placeholder only. No production business flow writes/publishes outbox messages; Kafka, the notification consumer and Mongo persistence belong to **blocked Phase 5**.
 
-## Persistencia
+## Persistence and cache policy
 
-El esquema y sus relaciones se documentan en [ERD](erd.md), derivado directamente de las migraciones Flyway. PostgreSQL es la fuente de verdad para catálogo, inventario, reservas, órdenes, tickets y pagos. Redis se utiliza para refresh tokens, rate limiting de login/reservas/órdenes, caché-aside de metadatos de tipos de entrada y eventos públicos, y la proyección temporal `ticketing:reservation:{id}`. La disponibilidad (`availableQuantity`) se consulta directamente en PostgreSQL en cada lectura y nunca se cachea. Las invalidaciones y la proyección de reservas se coordinan con el commit; los cambios de venue invalidan la caché de eventos mediante un evento de aplicación `AFTER_COMMIT`. Los fallos Redis de cache/proyección permiten continuar con PostgreSQL, mientras el refresh token store permanece fail-closed.
+The [ERD](erd.md) derives from Flyway V1–V16 (22 tables). PostgreSQL is authoritative for events, ticket types, inventory, reservations, orders, tickets, payments and durable operation state.
 
-## Límites conocidos
+Redis stores hashed refresh-token identifiers, authentication/rate-limit counters, public event/ticket-type **metadata** and the temporary `ticketing:reservation:{id}` projection. `availableQuantity` is always read from PostgreSQL rather than cached. Cache and projection invalidations are coordinated after commit; venue changes trigger an `AFTER_COMMIT` application event for event-cache invalidation. Catalog and reservation-projection Redis failures allow fallback to PostgreSQL; refresh/session operations fail closed when the necessary Redis state cannot be checked.
 
-- El proveedor de pago es simulado; no hay integración con un gateway externo real.
-- La publicación del outbox y el flujo Kafka → notificaciones están pendientes de Fase 5.
-- La cancelación coordinada de eventos está implementada y probada, pero `EventCancellationService` accede a repositorios/SQL de módulos vecinos. Se propone la excepción transaccional acotada [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md), pendiente de dictamen técnico; no se ha cambiado el contrato ni el código productivo.
-- Los tests `*IT` que necesitan PostgreSQL/Redis mediante Testcontainers deben ejecutarse en un entorno con Docker. La documentación no sustituye esa verificación.
+## Known architectural decisions and open questions
+
+- All monetary operations and refunds are simulated; there is no real external gateway.
+- ADR-022 (SIMULATED refund reference/semantic evidence) is **PROPOSED** and needs an explicit Tech Lead decision.
+- Coordinated event cancellation is tested, but `EventCancellationService` directly references persistence owned by other modules. [ADR-024](adr/ADR-024-event-cancellation-transactional-exception.md) proposes a **narrow** E → T → R → O transaction exception; it is **not approved** by publication.
+- AUD-05 identified **additional** cross-module queries/coordinators beyond the proposed ADR-024 exception. Their disposition is separately tracked in [pending decisions](audit/PENDING-DECISIONS.md); do not assume a blanket exception.
+- HTTP correlation ownership (AUD-10), optional additional operation cycles (AUD-12) and selected HTTP 201 Location contracts (AUD-03) remain subject to explicit design review.
+- Integration tests requiring real PostgreSQL/Redis use Testcontainers and must run with Docker. A passing CI suite tests covered scenarios, not every possible interleaving.
+- Phase 5 Kafka, outbox publishing, MongoDB notification persistence and consumers are not implemented or authorized. The existing scaffold is not evidence of delivery.
+
+**Working branch:** `main` only. Earlier `dev` references are historical; see [the remediation dossier](audit/MAIN-REMEDIATION-2026-11-21.md).
