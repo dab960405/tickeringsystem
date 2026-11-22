@@ -1,225 +1,143 @@
-# Pruebas adversarias locales — 15 de noviembre de 2026
+# Historical local adversarial testing — 2026-11-15
 
-Se ejecutaron intentos controlados contra la API y el frontend locales, además de
-inyección de fallos en PostgreSQL/Redis desechables. El resultado es **cuatro fallos
-reproducidos**, de consistencia o funcionalidad. No equivalen a cuatro accesos
-ilegítimos: los intentos de acceso ajeno, alteración de firmas y escalada de rol
-fueron rechazados.
+Controlled adversarial probes were executed against the local API and frontend, with additional fault injection using disposable PostgreSQL/Redis instances. This **historical run reproduced four consistency or functionality defects**. These were **not four unauthorized accesses**: unauthorized resource access, forged signatures and attempted privilege escalation were rejected.
 
-Base del backend: rama `dev`, commit
-`76a0fbb2380d009e13df75e1ab7e9a80f14b69e7`. El frontend Angular y las herramientas
-locales eran cambios de trabajo aún sin commit. Esta entrega agrega pruebas y
-documentación; no corrige la lógica productiva ni cambia contratos o migraciones.
+**Historical backend baseline:** former `dev` branch, commit `76a0fbb2380d009e13df75e1ab7e9a80f14b69e7`. The Angular frontend and local test tools were still uncommitted work at the time. This report records discovery and tests; **the original review did not correct production code, public contracts or migrations**. The project subsequently integrated fixes for these defects into `main`. Do not interpret older FAIL observations as present failures after the remediation commits; verify the latest matching CI and regressions.
 
-## Resultado y evidencia
+## Historical results and evidence
 
-| Grupo | Superados | Fallidos | Inconclusos | Evidencia local |
+| Group | Passed | Failed | Inconclusive | Historical local evidence |
 | --- | ---: | ---: | ---: | --- |
-| HTTP: 16 escenarios, 219 solicitudes | 15 | 1 | 0 | [Markdown](../reports/adversarial/run-20261115-02/http.md), [JSON con trazas](../reports/adversarial/run-20261115-02/http.json) |
-| Integración aislada: 14 pruebas | 12 | 2 | 0 | [Markdown](../reports/adversarial/run-20261115-01/integration.md), [JSON](../reports/adversarial/run-20261115-01/integration.json), [log Maven](../reports/adversarial/run-20261115-01/integration.log) |
-| Navegador real: 2 comprobaciones | 1 | 1 | 0 | [Observaciones del navegador y comprobación HTTP de assets](../reports/adversarial/run-20261115-02/browser.json) |
-| Pruebas del propio script | 2 | 0 | 0 | `python3 -m unittest discover -s scripts -p test_adversarial.py -v` |
+| HTTP: 16 scenarios, 219 requests | 15 | 1 | 0 | [Markdown](../reports/adversarial/run-20261115-02/http.md), [JSON traces](../reports/adversarial/run-20261115-02/http.json) |
+| Isolated integration: 14 tests | 12 | 2 | 0 | [Markdown](../reports/adversarial/run-20261115-01/integration.md), [JSON](../reports/adversarial/run-20261115-01/integration.json), [Maven log](../reports/adversarial/run-20261115-01/integration.log) |
+| Real browser: 2 checks | 1 | 1 | 0 | [Browser and asset observations](../reports/adversarial/run-20261115-02/browser.json) |
+| Harness self-tests | 2 | 0 | 0 | `python3 -m unittest discover -s scripts -p test_adversarial.py -v` |
 
-Los informes de `reports/adversarial/` están ignorados por Git y se generan en
-cada ejecución. Este documento conserva la descripción revisable en el repositorio.
-Las observaciones de navegador se tomaron con CUA; no están automatizadas por el
-script Python. El archivo `browser.json` registra esa procedencia explícitamente.
+Files generated under `reports/adversarial/` are ignored by Git and created afresh for each execution. The historical paths above refer to **local evidence**, which may not be present in a fresh checkout. This document preserves the findings within versioned project documentation. Browser observations were captured using a computer-use session, not by the Python harness; the historical `browser.json` identifies that provenance.
 
-La primera ejecución HTTP, en `run-20261115-01/http.json`, tenía una expectativa
-demasiado estricta: exigía 401 cuando faltaba `X-Signature`. Spring rechaza esa
-cabecera obligatoria ausente con 400, sin ejecutar el pago. Se corrigió **el test**,
-se conservó la evidencia inicial y se repitieron los 16 escenarios en
-`run-20261115-02`. Ese resultado inicial no cuenta como vulnerabilidad.
+The very first HTTP run at `run-20261115-01/http.json` incorrectly required HTTP 401 when `X-Signature` was absent. Spring rejected the missing mandatory header with HTTP 400 and did **not** apply payment. The **test expectation** was corrected and all 16 cases rerun as `run-20261115-02`. That first mismatch was **not** classified as a vulnerability.
 
-## Hallazgos confirmados
+## Defects reproduced in the historical run
 
-### REV-DEV-01 — Recuperar la proyección vuelve a evaluar un reembolso antiguo
+### REV-DEV-01 — Recovering PROJECT reevaluated an older refund
 
-**Criticidad: ALTA propuesta**, conservando la clasificación del análisis previo;
-pendiente de dictamen del Tech Lead.
+**Severity: HIGH proposed**, retaining the original audit's proposed classification pending the independent Tech Lead verdict.
 
-Reproducción en `OperationWorkerIT`, usando
-[esta prueba adicional](../scripts/adversarial-fixtures/recovery-projection.java.txt):
+Reproduction was performed in `OperationWorkerIT` using [this additional historical test fixture](../scripts/adversarial-fixtures/recovery-projection.java.txt):
 
-1. Crear una orden pendiente.
-2. Recibir evidencia de reembolso y completar APPLY: queda registrada como `NO_OP`
-   porque aún no existe una captura. Interrumpir el recorrido antes de PROJECT.
-3. Procesar una captura válida: pago `SUCCEEDED`, una entrada emitida.
-4. Recuperar el job original mediante `processJob`, sin recibir otro evento.
+1. Create a pending order.
+2. Receive refund evidence and complete APPLY: disposition is `NO_OP` because capture has not occurred. Interrupt before PROJECT.
+3. Process a valid capture: payment becomes `SUCCEEDED` and one ticket is issued.
+4. Recover the original job with `processJob` **without any new provider event**.
 
-**Esperado:** el pago permanece `SUCCEEDED`; recuperar PROJECT no crea un nuevo
-efecto comercial. **Observado:** el pago cambia a `REFUNDED` y falla esa aserción.
-La prueba se detiene en ese primer fallo; las comprobaciones posteriores de tickets,
-fencing y nuevo evento de reembolso del archivo no llegaron a ejecutarse.
+**Expected:** payment remains `SUCCEEDED`; recovering PROJECT must not cause another commercial effect. **Observed in the historical run:** payment became `REFUNDED`, failing that assertion. The test stopped at its first failure: later assertions for tickets, fencing and a newly signed refund event did not execute.
 
-Causa identificada: `PaymentOperationService.processJob` siempre llama a APPLY
-antes de PROJECT; `OperationJobService.claim` permite reclamar trabajos ya aplicados;
-`SemanticApplicationService.apply` evalúa el callback comercial antes de comprobar
-la identidad persistida. El mismo evento antiguo se interpreta sobre un estado
-comercial posterior. No se observó un movimiento de dinero real ni doble cargo.
+Root cause found: `PaymentOperationService.processJob` always invoked APPLY before PROJECT; `OperationJobService.claim` allowed a previously applied job to be claimed; `SemanticApplicationService.apply` invoked the commercial callback before checking persisted application identity. The **old event** was therefore reinterpreted against a later financial state. No actual money movement or duplicate charge occurred: the provider was simulated.
 
-La prueba corta deliberadamente la secuencia entre dos transacciones confirmadas;
-no mata una JVM. Reproduce el estado durable que debe soportar la recuperación.
-La corrección debe respetar ADR-018 y separar la recuperación de proyecciones de
-una nueva aplicación comercial. No necesita agregar infraestructura.
+The fixture deliberately interrupted between two already committed transactions, rather than terminating a JVM. This models a durable state the recovery mechanism must handle. ADR-018 requires **projection-only recovery after committed APPLY**, not business reevaluation. No new infrastructure is necessary.
 
-### REV-DEV-02 — La orden no expira si su reserva se canceló directamente
+**Later correction:** `main` added durable APPLY/PROJECT reuse and the persistent worker regression; see [main remediation](audit/MAIN-REMEDIATION-2026-11-21.md). Confirm the new CI rather than relabeling this historical failure.
 
-**Criticidad: MEDIA propuesta**, conservando la clasificación del análisis previo.
+### REV-DEV-02 — Pending order not expired after direct reservation cancellation
 
-Reproducción en `OrderPaymentFlowIT`, usando
-[esta prueba adicional](../scripts/adversarial-fixtures/cancelled-reservation.java.txt):
+**Severity: MEDIUM proposed**, retaining the historical proposal.
 
-1. Crear reserva y orden pendiente del mismo comprador.
-2. Cancelar directamente la reserva. Su stock se libera.
-3. Situar `expires_at` tres minutos en el pasado, únicamente en la base desechable.
-4. Ejecutar dos veces el servicio de expiración.
+Reproduction was performed in `OrderPaymentFlowIT` with [this historical fixture](../scripts/adversarial-fixtures/cancelled-reservation.java.txt):
 
-**Esperado:** cerrar la orden vencida, sin volver a liberar inventario.
-**Observado:** `PENDING_PAYMENT / PENDING / CANCELLED`, cero entradas y stock
-restaurado. No se realizó la transición esperada a `EXPIRED`.
+1. Create a reservation and a pending order belonging to the same buyer.
+2. Cancel the reservation directly, releasing its stock.
+3. Move `expires_at` three minutes into the past **only in the disposable test database**.
+4. Invoke the expiration service twice.
 
-La consulta `OrderRepository.findExpiredPendingOrderCandidates` solo selecciona
-reservas `ACTIVE` o `EXPIRED`. Además, `OrderExpirationProcessor` retorna para una
-reserva `CANCELLED / RELEASED`. Por tanto, repetir ese proceso no resuelve la orden.
-Las aserciones posteriores sobre captura tardía no se ejecutaron al fallar la de
-expiración; este informe no las presenta como verificadas.
+**Expected:** resolve the overdue order without releasing inventory twice. **Observed:** order `PENDING_PAYMENT`, payment `PENDING` and reservation `CANCELLED` remained; no tickets existed and stock was fully released. The expected `EXPIRED` order transition did not occur.
 
-La corrección debe definir y mantener un cierre coherente entre orden y reserva,
-con liberación de inventario exactamente una vez.
+`OrderRepository.findExpiredPendingOrderCandidates` selected only `ACTIVE` or `EXPIRED` reservations, and `OrderExpirationProcessor` returned early for `CANCELLED / RELEASED`. Repeated sweeps could not resolve the order. Later fixture assertions for late capture did **not** run because an earlier assertion failed; this report does not claim to have verified them.
 
-### ADV-03 — Una cantidad decimal se convierte silenciosamente en entero
+The remediation must define consistent order/reservation resolution with exact-once inventory release.
 
-**Criticidad propuesta: BAJA**, por validación de entrada. No se demostró compra
-gratuita, sobreventa ni cambio de precio.
+**Later correction:** the main branch includes a specific business-state fix and regression; consult [main remediation](audit/MAIN-REMEDIATION-2026-11-21.md) and successful matching CI.
 
-Enviar a `POST /api/v1/reservations`, con una sesión de comprador y un tipo válido:
+### ADV-03 — Fractional JSON quantity silently coerced to integer
+
+**Severity: LOW proposed** for input validation. This did **not** demonstrate free purchases, overselling or price manipulation.
+
+With an authenticated buyer and valid ticket type, POST:
 
 ```json
-{"ticketTypeId":"UUID_DEL_TIPO","quantity":1.5}
+{"ticketTypeId":"VALID_TICKET_TYPE_UUID","quantity":1.5}
 ```
 
-**Esperado:** 400 por cantidad no entera. **Observado:** 201 y `quantity: 1`.
-`ReservationRequest` recibe un `Integer` y valida `@Positive`; la conversión a
-entero ocurre antes de esa validación. El script canceló la reserva creada por
-esta prueba y comprobó stock 20, igual al inicial.
+**Expected:** HTTP 400 because quantity was not an integer. **Observed:** HTTP 201 with quantity 1. `ReservationRequest` bound the field to `Integer` and validated `@Positive`; Jackson had already coerced the fractional input to an integer **before** validation. The harness cancelled the created hold, restoring stock to its original 20 units.
 
-Sí se rechazaron cero, negativos, nulo, booleano, desbordamiento de entero y
-cantidad superior al máximo por orden. La corrección debe rechazar fracciones en
-la deserialización, además de conservar las restricciones existentes.
+The initial run already rejected zero, negatives, null, Boolean, int overflow and quantities over the per-order maximum. The correction must reject fractional JSON numbers during deserialization while preserving those other constraints.
 
-### ADV-04 — Abrir o recargar una ruta de evento deja Angular en blanco
+**Later correction:** main added strict coercion and a persistent HTTP regression; verify the relevant CI.
 
-**Criticidad propuesta: MEDIA**, por impedir acceso directo a una página de compra.
+### ADV-04 — Direct opening/reloading a nested event route displayed a blank Angular page
 
-1. Abrir `/` y navegar desde el catálogo a un evento: funciona.
-2. Copiar `/eventos/{id}` a una pestaña nueva o recargar esa página: pantalla vacía.
+**Severity: MEDIUM proposed** for loss of direct access to checkout.
 
-En el navegador se observó `<app-root>` vacío y el script resuelto como
-`/eventos/main-5YBPYVWV.js`. La comprobación HTTP confirmó 404 para esa ruta y 200
-para `/main-5YBPYVWV.js`.
+1. Open `/` and navigate from the catalog to an event: worked.
+2. Open historical `/eventos/{id}` in a new tab or reload the nested page: blank Angular root.
 
-El HTML contiene `<base href="/">`, pero el servidor local entrega CSP
-`base-uri 'none'`. Esa directiva impide usar el elemento base; la ruta del script
-relativo se resuelve desde `/eventos/`. El diagnóstico concuerda con la
-[documentación de MDN sobre base-uri](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/base-uri).
-La corrección debe compatibilizar el base de Angular con la política CSP y
-verificarse con navegación directa y recarga, conservando el resto de protecciones.
+The browser showed an empty `<app-root>` and a script requested under `/eventos/main-5YBPYVWV.js`. That URL returned 404; the equivalent root script `/main-5YBPYVWV.js` returned 200.
 
-## Protecciones que resistieron estos intentos
+The page specified `<base href="/">` but the local server sent CSP `base-uri 'none'`, which blocks using the HTML base element. Relative asset URLs were resolved below `/eventos/` instead of at site root. This matches [MDN CSP base-uri](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/base-uri). The fix must make SPA base and CSP compatible while retaining the other protections.
 
-- Acceder, cancelar o pagar órdenes de otro usuario, cancelar su reserva o crear
-  una orden con ella: cinco rechazos 404, sin emitir entradas ni cambiar la orden.
-- Solicitud anónima, JWT con rol alterado y refresh token usado como access token:
-  401. Registro con `role: ADMIN`: se creó `USER`; crear evento devolvió 403.
-- Precio y moneda enviados por el comprador: la orden conservó 45 USD del catálogo.
-- Firma ausente: 400. Firma falsa o cuerpo alterado conservando la firma: 401.
-  El control posterior con firma válida emitió una entrada.
-- Evidencia firmada con importe o moneda incorrectos: 422, sin emitir entradas.
-  Estos casos usan el secreto de prueba para simular un proveedor defectuoso;
-  no demuestran que un cliente anónimo pueda firmar evidencia.
-- Seis solicitudes simultáneas con la misma clave: una orden, 201/200. Reutilizar
-  la clave con otra reserva: 409.
-- Ocho capturas iguales, seis reembolsos iguales y ocho eventos con identidad
-  comercial compartida: efectos únicos. La identidad con datos contradictorios
-  devolvió 409.
-- Veinte reservas simultáneas sobre dos unidades: dos aceptadas, dieciocho 409,
-  stock final reservado cero y stock dos después de liberar ambas reservas.
-- Tres carreras HTTP entre captura y cancelación: resultados coherentes. En esta
-  ejecución ganó la cancelación en las tres: cero entradas, stock liberado y
-  `refundStatus: REQUIRED` al llegar la captura. No se afirma haber observado
-  ambos órdenes de ejecución en esas tres carreras.
-- Proxy local que descarta la respuesta después del commit: primer resultado
-  interno 201, cliente sin respuesta, reintento 200 con el mismo ID y una sola orden.
-- Reembolso anticipado, captura, repetición del mismo evento y fallo tardío:
-  la compra siguió pagada con una entrada. Esto no reproduce la interrupción
-  APPLY/PROJECT de REV-DEV-01, que necesita la prueba aislada.
-- Origen ajeno, falta de origen o sesión en el simulador: 403/401. El simulador
-  autorizado ignoró el importe enviado por el navegador y tomó el de la API.
-- Archivos privados, fuentes y traversal en el servidor local: 404; Host ajeno: 403.
-- Tres cadenas con sintaxis SQL en búsqueda se trataron como texto y devolvieron
-  cero resultados, sin ampliar acceso ni producir 500.
-- XSS en descripción: el payload `<img ... onerror=...>` se vio como texto literal;
-  cero elementos `img[onerror]`, título normal. Coincide con el uso de interpolación
-  en `checkout.html` y el [modelo de seguridad de Angular](https://angular.dev/best-practices/security).
-- Redis caído en contenedores aislados: fallback a PostgreSQL, recuperación,
-  sesiones que fallan de forma cerrada y token de acceso válido todavía utilizable.
-  Se ejercitó también caché desactualizada hasta su TTL y los timeouts de Lettuce.
-- Carreras de confirmación/cancelación/expiración y dos workers: cinco pruebas de
-  integración pasaron, incluyendo rollback si falla restaurar inventario.
+**Later correction:** main uses a same-origin CSP `base-uri 'self'`, adds a regression and migrates canonical routes to English (`/events/:id`) with legacy redirects preserved. The historical original `/eventos` route remains a reference, not the current canonical UI language.
 
-## Ejecutar de nuevo
+## Protections that withstood the historical probes
 
-Con API y frontend iniciados y `.env` configurado:
+- Foreign buyer order read/cancel/payment, reservation cancellation or order creation: five 404 rejections, no ticket issuance or mutation of a foreign order.
+- Anonymous request, JWT with altered role and refresh token passed as access token: HTTP 401. Attempted registration with `role: ADMIN` created a `USER`; creating an event returned 403.
+- Buyer-provided price/currency could not overwrite the order's USD 45 snapshot.
+- Missing signature: 400. Fake signature or modified body with unchanged signature: 401. A later valid signed control event issued one ticket.
+- Validly signed but inconsistent amount/currency: 422 and no tickets. These probes had access to a **synthetic provider secret** to emulate an inconsistent provider; they do not show that an anonymous browser can produce valid signatures.
+- Six concurrent order requests with the same idempotency key: one order and 201/200 replies. Same key with another reservation: 409.
+- Eight duplicate captures, six duplicate refunds and eight events sharing commercial identity: effects were unique. Contradictory identity data returned 409.
+- Twenty simultaneous reservations against two units: two succeeded and eighteen returned 409. Stock reached zero while held and returned to two after releasing both reservations.
+- Three HTTP races between capture and cancellation had coherent outcomes. Cancellation won in all three historical runs: zero tickets, stock released and `refundStatus: REQUIRED` after late capture. This did **not** observe both possible interleavings.
+- Local proxy dropped a response after commit: first internal result 201, client saw no response, retry returned 200 with the same order ID and only one order persisted.
+- Early refund → capture → same-event replay and late failure left the purchase paid with one ticket. This did **not** reproduce interrupted APPLY/PROJECT, which needed the separate isolated integration fixture.
+- Foreign origin, missing origin or unauthenticated simulator requests were rejected (403/401). The authorized simulator ignored the amount supplied by the browser and used the owned order's API response.
+- Private files, source code and traversal attempts against the local server returned 404; a foreign Host returned 403.
+- Three SQL-looking search strings were interpreted literally and returned zero results, without widened access or HTTP 500.
+- XSS payload `<img ... onerror=...>` in description rendered as literal text; no actual `img[onerror]` nodes were created. This matches the Angular interpolation and [Angular security](https://angular.dev/best-practices/security).
+- Disposable Redis outage tests exercised PostgreSQL fallback/recovery, fail-closed sessions, local access JWT validation, bounded stale cache TTL and Lettuce timeouts.
+- Five isolated integration checks covered confirmation/cancellation/expiration, two workers and rollback if inventory restoration failed.
+
+## Running the probes again
+
+With API, frontend and trusted `.env` configured:
 
 ```bash
 bash scripts/local.sh adversarial
 ```
 
-Para incluir las pruebas aisladas (Java 21, Docker y dependencias Maven disponibles):
+To include isolated Java integration cases with local Java 21, Docker and Maven dependencies:
 
 ```bash
 bash scripts/local.sh adversarial --with-integration
 ```
 
-También puede ejecutarse únicamente la parte aislada:
+Or run the isolated integration harness alone:
 
 ```bash
-python3 scripts/adversarial-integration.py --output reports/adversarial/integration-nueva
+python3 scripts/adversarial-integration.py --output reports/adversarial/integration-new
 ```
 
-`--api` y `--frontend` permiten otros puertos de loopback; no se aceptan destinos
-remotos, credenciales en URL ni redirecciones. `--output` selecciona una carpeta
-nueva: los informes existentes no se sobrescriben. Valores de salida: **0** todos
-los controles ejecutados pasan; **1** hallazgos; **2** ejecución incompleta.
-Actualmente la salida 1 es esperada por los fallos documentados.
+`--api`/`--frontend` accept other **loopback-only** ports; remote destinations, URL credentials and redirects are rejected. `--output` must select a fresh directory so existing reports are not overwritten.
 
-El script HTTP usa solo la biblioteca estándar de Python, crea un evento y cuentas
-ficticias por ejecución y conserva esas compras para inspección. Los eventos se
-reconocen por `Adversarial <runId>`. No borra datos existentes. Los tests aislados
-se insertan en una copia temporal del código y usan bases desechables; no se añaden
-tests rojos a la suite habitual ni se modifica su configuración de calidad.
+Exit statuses: **0** all executed checks passed; **1** at least one finding; **2** execution incomplete/inconclusive. **The old historical expectation of status 1 does not establish the result of the newly corrected main branch. Re-execute to determine today's status.**
 
-Los fixtures suponen el organizador y recinto del seed de desarrollo. Pueden
-configurarse con `SMOKE_ORGANIZER_EMAIL`, `SMOKE_ORGANIZER_PASSWORD` y
-`SMOKE_VENUE_ID`. `PAYMENT_WEBHOOK_SECRET` se carga de `.env`, no se imprime.
-La traza HTTP guarda método, ruta, estado y duración, nunca cuerpos de login,
-tokens, contraseñas o firmas.
+The HTTP harness uses only Python's standard library, creates synthetic events and buyer accounts and **retains test purchases** for inspection. Events use `Adversarial <runId>` for recognition. It does not delete existing data. Isolated Java fixtures run against a temporary source copy and disposable PostgreSQL/Redis; they are historical stress/reproduction aids, not replacements for the permanent CI regressions already integrated into the normal suites.
 
-## Límites de esta evidencia
+Optional seed customization: `SMOKE_ORGANIZER_EMAIL`, `SMOKE_ORGANIZER_PASSWORD` and `SMOKE_VENUE_ID`. `PAYMENT_WEBHOOK_SECRET` is read from the local environment and never printed. Traces contain HTTP method, route, status and duration, **not** login bodies, passwords, tokens or signatures.
 
-Son escenarios concretos y acotados, no una certificación ni una auditoría
-exhaustiva. No se probaron pagos reales, ataques de carga sostenida, Internet,
-Kafka/MongoDB, dependencias vulnerables, todas las superficies XSS/SQL ni todas las
-intercalaciones posibles. La suite Java completa de 567 pruebas no se volvió a
-ejecutar en esta entrega: se ejecutó el conjunto adversario indicado arriba.
+## Limitations of the historical evidence
 
-Al finalizar, la API respondió 200 a `/actuator/health` y el frontend 200 en `/`.
-El proceso del servidor frontend dejó de estar activo después de las comprobaciones
-de navegador y se volvió a iniciar; no hay evidencia para atribuir ese fin de proceso
-a una vulnerabilidad. La pantalla vacía de ADV-04 se observó antes, con el servidor
-respondiendo, y tiene evidencia independiente de resolución de assets.
+These are bounded scenarios, not a comprehensive security certification, production penetration test or formal proof. The historical run did not test real payments, sustained internet load, functional Kafka/Mongo workflows, every third-party dependency, all XSS/SQL surfaces or all possible concurrent interleavings. The complete Java suite of 567 tests was **not** rerun during this original adversarial delivery; only the listed targeted tests were executed. Later main CI runs are independent evidence.
 
-Para un portfolio, priorizar REV-DEV-01 por consistencia de pagos y ADV-04 por la
-demo visible; después resolver REV-DEV-02 y la validación de cantidades. Ninguno
-de estos hallazgos requiere añadir servicios o infraestructura nueva.
+After the old probes, the API returned HTTP 200 at `/actuator/health` and the frontend HTTP 200 at `/`. The frontend server process stopped after some browser checks and was restarted; no evidence attributes that process exit to a vulnerability. The blank nested-route page was observed while the server itself was responding, with independent incorrect-asset URL evidence.
+
+For the original 2026-11-15 state, REV-DEV-01 was the highest-integrity priority and ADV-04 the most visible demo blocker, followed by REV-DEV-02 and quantity input validation. Each was subsequently treated in main without introducing Phase 5 infrastructure. Formal Tech Lead phase approvals remain distinct from these technical fixes.

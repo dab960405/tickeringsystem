@@ -1,6 +1,6 @@
-# Modelo de datos (ERD)
+# Data model (ERD)
 
-Fuente de verdad: migraciones Flyway `V1__create_users.sql` a `V16__commercial_units_and_generations.sql` en `ticketing-api/src/main/resources/db/migration/`. Los siguientes diagramas reflejan las 22 tablas de las migraciones V1–V16, distribuidas en tres vistas; se omiten columnas de auditoría repetidas para mantener la lectura. El DDL Flyway es la fuente de verdad exhaustiva. No se cambian tablas ni migraciones.
+Source of truth: Flyway migrations `V1__create_users.sql` through `V16__commercial_units_and_generations.sql` under `ticketing-api/src/main/resources/db/migration/`. These three diagram views represent all 22 tables from V1–V16. Repeated audit fields are omitted for readability; Flyway DDL remains authoritative. No schema or migration is changed by this document.
 
 ```mermaid
 erDiagram
@@ -131,36 +131,36 @@ erDiagram
     ORDERS ||--o| PAYMENTS : paid_by
 ```
 
-## Integridad y reglas relevantes
+## Integrity and domain constraints
 
-- **Identidad:** `users.email` es único y debe almacenarse en minúsculas. Los roles permitidos son `USER`, `ORGANIZER` y `ADMIN`.
-- **Catálogo:** un evento pertenece a un organizador y a un recinto. Un tipo de entrada pertenece a un evento; `(event_id, name)` es único. `available_quantity` debe permanecer entre cero y `total_quantity`.
-- **Reserva:** cada reserva pertenece a un usuario y a un tipo de entrada. `quantity > 0`; los estados persistidos son `ACTIVE`, `CONFIRMED`, `EXPIRED` y `CANCELLED`. El índice parcial `ix_reservations_active_expires_at` acelera el barrido de reservas activas vencidas.
-- **Orden:** cada orden pertenece a un usuario y referencia exactamente una reserva. `UNIQUE(user_id, idempotency_key)` limita la idempotencia por usuario. V11 crea el índice único no parcial `ux_orders_reservation_id` sobre `orders(reservation_id)`: una reserva puede tener cero o una orden. La restricción incluye órdenes canceladas; una reserva cuya orden fue cancelada no puede reutilizarse y requiere crear una reserva nueva.
-- **Creación de orden:** `OrderService.create` comprueba si existe una orden para la reserva antes de insertar. PostgreSQL protege la misma regla ante solicitudes concurrentes mediante el índice único; los conflictos de integridad se traducen a HTTP `409 Conflict`.
-- **Detalle y tickets:** cada `order_item` conserva cantidad, precio unitario y moneda al momento de la compra. Cada ticket pertenece a un detalle y su código es único.
-- **Pago:** `UNIQUE(order_id)` impone como máximo un pago por orden; `provider_reference` también es única (PostgreSQL permite múltiples valores NULL en esta restricción).
-- **Outbox:** `aggregate_id` es deliberadamente polimórfico y no tiene FK a una tabla concreta. El índice parcial `ix_outbox_events_unpublished` cubre filas cuyo `published_at` aún es NULL. La tabla está creada; el publicador y el consumo Kafka corresponden a la Fase 5.
+- **Identity:** `users.email` is unique and must be stored in lowercase. Allowed roles are `USER`, `ORGANIZER`, and `ADMIN`.
+- **Catalog:** each event belongs to an organizer and venue; each ticket type belongs to an event. The database uniqueness constraint on `(event_id, name)` is **case-sensitive**; the service's case-insensitive duplicate check has a separately documented concurrent race risk (BACK-01), pending reproduction and a technical decision. `available_quantity` must remain between zero and `total_quantity`.
+- **Reservations:** each reservation belongs to one buyer and ticket type, with `quantity > 0`. Persisted states are `ACTIVE`, `CONFIRMED`, `EXPIRED`, and `CANCELLED`. The partial index `ix_reservations_active_expires_at` supports discovery of overdue active holds.
+- **Orders:** each order belongs to a buyer and references one reservation. `UNIQUE(user_id, idempotency_key)` limits idempotency by buyer. V11 creates a non-partial unique index `ux_orders_reservation_id` on `orders(reservation_id)`: a reservation can have at most one order, **including cancelled orders**. A cancelled order's reservation cannot be reused for a new purchase.
+- **Order creation:** `OrderService.create` checks for an existing order on the reservation before inserting; PostgreSQL enforces the same rule under concurrent requests through the unique index. Corresponding integrity conflicts map to HTTP `409 Conflict`.
+- **Order items and tickets:** each `order_item` snapshots the quantity, unit price and currency at purchase time. Each ticket belongs to an order item and has a unique code.
+- **Payments:** `UNIQUE(order_id)` limits each order to at most one payment. `provider_reference` is unique where present; PostgreSQL permits multiple SQL NULL values under a standard unique constraint.
+- **Outbox:** `aggregate_id` is deliberately polymorphic and has no FK to one concrete table. The partial index `ix_outbox_events_unpublished` covers rows where `published_at IS NULL`. The table is present; functional publishing and Kafka consumption belong to **blocked Phase 5**.
 
-## Migraciones
+## Flyway migrations
 
-| Versión | Tabla | Decisión estructural |
+| Version | Table | Structural purpose |
 | --- | --- | --- |
-| V1 | `users` | identidad, rol y correo único |
-| V2 | `venues` | recintos y capacidad positiva |
-| V3 | `events` | organizador, recinto, fechas y estado |
-| V4 | `ticket_types` | precio, ventana de venta e inventario |
-| V5 | `reservations` | reserva temporal con vencimiento e índice parcial |
-| V6 | `orders` | orden, estado e idempotencia por usuario |
-| V7 | `order_items` | snapshot de cantidad/precio por orden |
-| V8 | `tickets` | tickets emitidos y código único |
-| V9 | `payments` | pago 1:1 con orden y referencia única |
-| V10 | `outbox_events` | registro durable para futura publicación asíncrona |
-| V11 | `orders` | índice único no parcial `ux_orders_reservation_id`; máximo una orden por reserva, incluso cancelada |
+| V1 | `users` | User identity, role and unique email |
+| V2 | `venues` | Venues and positive capacity |
+| V3 | `events` | Organizer, venue, schedule and status |
+| V4 | `ticket_types` | Price, sale window and inventory |
+| V5 | `reservations` | Expiring holds and partial index |
+| V6 | `orders` | Orders, status and buyer-scoped idempotency |
+| V7 | `order_items` | Quantity/price snapshots per order |
+| V8 | `tickets` | Issued tickets and unique code |
+| V9 | `payments` | One-to-one order payment and unique reference |
+| V10 | `outbox_events` | Durable placeholder for future asynchronous publication |
+| V11 | `orders` | Non-partial `ux_orders_reservation_id`; at most one order per reservation, even if cancelled |
 
-## Generaciones de tickets y unidades comerciales (V16)
+## Ticket generations and commercial units (V16)
 
-Las tablas `ORDERS`, `ORDER_ITEMS` y `TICKETS` de esta segunda vista son las **mismas** entidades del diagrama inicial, no copias.
+The `ORDERS`, `ORDER_ITEMS`, and `TICKETS` nodes in this view are the **same tables** as those in the first view, not duplicated database tables.
 
 ```mermaid
 erDiagram
@@ -206,9 +206,9 @@ erDiagram
     COMMERCIAL_UNIT_GENERATIONS ||--o| TICKETS : issues
 ```
 
-V16 añade `UNIQUE(order_item_id, unit_number)` en unidades comerciales, `UNIQUE(order_id, generation_number)` en generaciones, índice parcial `ux_commercial_generations_one_active` para una generación activa por orden y `UNIQUE(commercial_unit_id, generation_id)` en tickets. Las FK de `commercial_units` y `commercial_unit_generations` son **compuestas** e incluyen `order_id`; la representación simplificada no sustituye esas restricciones. La migración realiza backfill para tickets existentes y aplica triggers de identidad append-only y transiciones finales a tickets/generaciones.
+V16 adds `UNIQUE(order_item_id, unit_number)` for commercial units, `UNIQUE(order_id, generation_number)` for generations, partial index `ux_commercial_generations_one_active` for one active generation per order and `UNIQUE(commercial_unit_id, generation_id)` for tickets. Foreign keys in `commercial_units` and `commercial_unit_generations` are **composite** and include `order_id`; this simplified diagram does not replace those constraints. V16 backfills existing tickets and adds immutable-identity/lifecycle transition triggers.
 
-## Identidades financieras y operaciones recuperables (V14/V15)
+## Financial identity and recoverable operations (V14/V15)
 
 ```mermaid
 erDiagram
@@ -295,21 +295,21 @@ erDiagram
     OPERATION_EXECUTIONS ||--o| OPERATION_DISPOSITIONS : records
 ```
 
-- **Tres identidades (V14):** `provider_operations` tiene `UNIQUE(provider_code, merchant_account_id, identity_namespace, provider_operation_id)`; `provider_events`, `UNIQUE(provider_code, merchant_account_id, provider_event_id)`; `semantic_applications`, `UNIQUE(provider_operation_id)` y `UNIQUE(application_scope, operation_kind, idempotency_key)`. Estas tablas tienen triggers append-only.
-- **Ciclos (V15):** `operation_cycles` tiene `UNIQUE(aggregate_type, aggregate_id, cycle_number)`; `aggregate_id` es **polimórfico y NO una FK** a `orders`. `operation_participations` tiene `UNIQUE(cycle_id,provider_event_id)`.
-- **Jobs y fencing:** `operation_jobs` tiene `UNIQUE(participation_id,generation)` e índice único parcial `ux_operation_jobs_effective` sobre `participation_id` cuando `effective=true`; `operation_executions`, `UNIQUE(job_id,fencing_token)` y lease. `operation_projections` tiene `UNIQUE(participation_id)` y versión; `operation_dispositions`, `UNIQUE(execution_id)`, tipos `APPLIED`, `NO_OP` y `FAILED` y trigger append-only.
-- **Outbox (V10):** `outbox_events.aggregate_id` no tiene FK por ser polimórfico. Sigue sin publicador; Kafka corresponde a Fase 5.
+- **Three identities (V14):** `provider_operations` enforces `UNIQUE(provider_code, merchant_account_id, identity_namespace, provider_operation_id)`; `provider_events` enforces `UNIQUE(provider_code, merchant_account_id, provider_event_id)`; `semantic_applications` enforces `UNIQUE(provider_operation_id)` and `UNIQUE(application_scope, operation_kind, idempotency_key)`. These evidence tables have append-only triggers.
+- **Cycles (V15):** `operation_cycles` has `UNIQUE(aggregate_type, aggregate_id, cycle_number)`. The aggregate ID is **polymorphic, not a foreign key** to `orders`. `operation_participations` has `UNIQUE(cycle_id, provider_event_id)`.
+- **Jobs and fencing:** `operation_jobs` has `UNIQUE(participation_id, generation)` and partial unique index `ux_operation_jobs_effective` on `participation_id` where `effective=true`. `operation_executions` has `UNIQUE(job_id, fencing_token)` and lease. `operation_projections` is unique by participation and has a version; `operation_dispositions` is unique by execution, with `APPLIED`, `NO_OP`, and `FAILED` dispositions and append-only trigger.
+- **Outbox (V10):** `outbox_events.aggregate_id` has no FK because it is polymorphic. No publisher exists; Kafka is Phase 5 work.
 
-## Evolución posterior a V11
+## Subsequent schema changes after V11
 
-| Versión | Tablas afectadas | Cambio real |
+| Version | Affected tables | Implemented change |
 | --- | --- | --- |
-| V12 | `reservations` | `inventory_disposition` con CHECK: `ACTIVE/HELD`, `CONFIRMED/CONSUMED`, `EXPIRED|CANCELLED/RELEASED`; backfill |
-| V13 | `orders`, `payments` | `fulfillment_status`, `refund_status` y `refund_provider_reference` única |
-| V14 | `provider_operations`, `provider_events`, `semantic_applications` | Identidades únicas, digests y triggers append-only |
-| V15 | `operation_cycles`, `operation_participations`, `operation_jobs`, `operation_executions`, `operation_dispositions`, `operation_projections` | Ciclos, jobs, leases, fencing, disposiciones y proyecciones |
-| V16 | `commercial_generations`, `commercial_units`, `commercial_unit_generations`; `tickets` | Unidades estables, generaciones, backfill, FK compuestas, transiciones y triggers |
+| V12 | `reservations` | `inventory_disposition` with CHECK: `ACTIVE/HELD`, `CONFIRMED/CONSUMED`, `EXPIRED|CANCELLED/RELEASED`; backfill |
+| V13 | `orders`, `payments` | `fulfillment_status`, `refund_status`, and unique `refund_provider_reference` |
+| V14 | `provider_operations`, `provider_events`, `semantic_applications` | Unique identities, digests and append-only triggers |
+| V15 | `operation_cycles`, `operation_participations`, `operation_jobs`, `operation_executions`, `operation_dispositions`, `operation_projections` | Cycles, jobs, leases, fencing, dispositions and projections |
+| V16 | `commercial_generations`, `commercial_units`, `commercial_unit_generations`; `tickets` | Stable units, generations, backfill, composite FKs, transitions and triggers |
 
-La migración V16 conserva relaciones por `order_id` y relaciones entre unidad/ticket/generación mediante FK compuestas; no equivale a una simple FK aislada desde `commercial_units.order_id`. Los diagramas no representan `created_at/updated_at` ni todos los campos de auditoría. Consultar las migraciones Flyway para la estructura exhaustiva y [ADR-016](adr/ADR-016-global-lock-order.md) para la auditoría de locks de claves foráneas.
+V16 preserves `order_id` relationships and commercial unit/ticket/generation membership with composite FKs, not a standalone FK on `commercial_units.order_id`. These diagrams omit some `created_at`/`updated_at` and other audit fields. Read Flyway migrations for exact DDL and [ADR-016](adr/ADR-016-global-lock-order.md) for the implicit foreign-key lock audit.
 
-**Referencias oficiales:** [PostgreSQL 17 — constraints](https://www.postgresql.org/docs/17/ddl-constraints.html) y [bloqueos de fila](https://www.postgresql.org/docs/17/explicit-locking.html).
+**Official sources:** [PostgreSQL 17 — constraints](https://www.postgresql.org/docs/17/ddl-constraints.html) and [row locks](https://www.postgresql.org/docs/17/explicit-locking.html).
