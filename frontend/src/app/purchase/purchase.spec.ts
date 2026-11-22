@@ -153,4 +153,71 @@ describe('Purchase workflow', () => {
     TestBed.tick();
     expect(purchase.reservation()).toBeNull();
   });
+
+  it('discards a late reservation response from a previous signed-in session', async () => {
+    const oldReservation = purchase.reserve('general', 1);
+    const request = backend.expectOne('/api/v1/reservations');
+    const auth = TestBed.inject(Auth);
+    auth.logout().subscribe();
+    backend.expectOne('/api/v1/auth/logout').flush(null);
+    auth.login('second@example.com', 'password').subscribe();
+    backend
+      .expectOne('/api/v1/auth/login')
+      .flush({ accessToken: 'second-access', refreshToken: 'second-refresh', expiresIn: 60 });
+    TestBed.tick();
+
+    request.flush({
+      id: 'first-account-reservation',
+      ticketTypeId: 'general',
+      quantity: 1,
+      status: 'ACTIVE',
+      expiresAt: '2030-01-01',
+    });
+    await oldReservation;
+
+    expect(purchase.reservation()).toBeNull();
+    expect(purchase.order()).toBeNull();
+  });
+
+  it('does not attach a late order response to the next account', async () => {
+    await reserve();
+    const oldOrder = purchase.createOrder();
+    const request = backend.expectOne('/api/v1/orders');
+    const auth = TestBed.inject(Auth);
+    auth.logout().subscribe();
+    backend.expectOne('/api/v1/auth/logout').flush(null);
+    auth.login('second@example.com', 'password').subscribe();
+    backend
+      .expectOne('/api/v1/auth/login')
+      .flush({ accessToken: 'second-access', refreshToken: 'second-refresh', expiresIn: 60 });
+    TestBed.tick();
+
+    request.flush(order);
+    await oldOrder;
+
+    expect(purchase.reservation()).toBeNull();
+    expect(purchase.order()).toBeNull();
+  });
+
+  it('never navigates the next account to tickets after an old payment response', async () => {
+    const oldPayment = purchase.pay(order.id, 'capture');
+    backend.expectOne('/demo/payment').flush({ simulated: true });
+    await Promise.resolve();
+    const status = backend.expectOne('/api/v1/orders/order-one');
+
+    const auth = TestBed.inject(Auth);
+    auth.logout().subscribe();
+    backend.expectOne('/api/v1/auth/logout').flush(null);
+    auth.login('second@example.com', 'password').subscribe();
+    backend
+      .expectOne('/api/v1/auth/login')
+      .flush({ accessToken: 'second-access', refreshToken: 'second-refresh', expiresIn: 60 });
+    TestBed.tick();
+
+    status.flush({ ...order, status: 'PAID', fulfillmentStatus: 'FULFILLED' });
+    await oldPayment;
+
+    expect(purchase.order()).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+  });
 });
