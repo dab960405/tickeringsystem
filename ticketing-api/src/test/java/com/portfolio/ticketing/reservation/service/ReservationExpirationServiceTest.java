@@ -84,6 +84,18 @@ class ReservationExpirationServiceTest {
   }
 
   @Test
+  void should_discoverExpiredHoldsByDatabaseTime_whenJvmClockIsBehind() {
+    Instant databaseTime = NOW.plusSeconds(600);
+    when(reservationRepository.databaseNow()).thenReturn(databaseTime);
+    when(reservationRepository.findExpiredCandidates(databaseTime, 100)).thenReturn(List.of());
+
+    expirationService.expireOverdue();
+
+    verify(reservationRepository).findExpiredCandidates(databaseTime, 100);
+    verifyNoInteractions(inventoryService, eventLockService);
+  }
+
+  @Test
   void should_useBoundedBatch_when_noReservationIsOverdue() {
     when(reservationRepository.findExpiredCandidates(NOW, 100)).thenReturn(List.of());
 
