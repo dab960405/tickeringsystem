@@ -45,7 +45,9 @@ public class TicketTypeService {
   @PreAuthorize("@eventAuthorizationService.canManage(#eventId, authentication)")
   @CacheEvict(cacheNames = TicketTypeCatalogCacheService.CACHE_NAME, allEntries = true)
   public TicketTypeResponse create(UUID eventId, TicketTypeRequest request) {
-    requireEditable(eventLockService.lockShared(eventId));
+    // Serialize draft-event name mutations on E before checking case-insensitive uniqueness.
+    // V4's case-sensitive key alone cannot enforce this contract across transactions.
+    requireEditable(eventLockService.lockExclusive(eventId));
     Event event = eventService.findEvent(eventId);
     requireUniqueName(eventId, request.name());
     TicketType ticketType =
@@ -70,7 +72,7 @@ public class TicketTypeService {
             .findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Ticket type " + id + " not found"));
     UUID eventId = ticketType.getEvent().getId();
-    requireEditable(eventLockService.lockShared(eventId));
+    requireEditable(eventLockService.lockExclusive(eventId));
     ticketType =
         ticketTypeRepository
             .findByIdForUpdate(id)

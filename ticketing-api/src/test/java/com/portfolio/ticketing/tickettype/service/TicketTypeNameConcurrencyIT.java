@@ -106,7 +106,8 @@ class TicketTypeNameConcurrencyIT extends AbstractIntegrationTest {
         }
 
         CompletableFuture<Void> creator =
-            CompletableFuture.runAsync(() -> asOrganizer(() -> service.create(eventId, request("VIP"))), executor);
+            CompletableFuture.runAsync(
+                () -> asOrganizer(() -> service.create(eventId, request("VIP"))), executor);
         await()
             .atMost(Duration.ofSeconds(8))
             .pollInterval(Duration.ofMillis(25))
@@ -126,7 +127,7 @@ class TicketTypeNameConcurrencyIT extends AbstractIntegrationTest {
   }
 
   @RepeatedTest(4)
-  void should_createOnlyOneCaseVariant_whenTwoOrganizersWriteConcurrently() throws Exception {
+  void should_createOnlyOneCaseVariant_whenTwoRequestsWriteConcurrently() throws Exception {
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       CountDownLatch start = new CountDownLatch(1);
       CompletableFuture<Boolean> first =

@@ -70,7 +70,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_createFullyAvailableTicketType_when_nameIsUnique() {
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventService.findEvent(EVENT_ID)).thenReturn(draftEvent());
     when(ticketTypeRepository.save(any(TicketType.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -82,7 +82,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_rejectCreate_when_nameAlreadyExists() {
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(eventService.findEvent(EVENT_ID)).thenReturn(draftEvent());
     when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(EVENT_ID, "VIP")).thenReturn(true);
 
@@ -92,7 +92,7 @@ class TicketTypeServiceTest {
 
   @Test
   void should_rejectCreate_when_eventIsCancelled() {
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
 
     assertThatThrownBy(() -> ticketTypeService.create(EVENT_ID, request("VIP", 100)))
         .isInstanceOf(BusinessRuleViolationException.class);
@@ -102,7 +102,7 @@ class TicketTypeServiceTest {
   void should_skipDuplicateCheck_when_nameIsUnchanged() {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID))
         .thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.saveAndFlush(ticketType)).thenReturn(ticketType);
@@ -117,7 +117,7 @@ class TicketTypeServiceTest {
   void should_rejectUpdate_when_renamedToExistingName() {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.DRAFT);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.DRAFT);
     when(ticketTypeRepository.findByIdForUpdate(TICKET_TYPE_ID))
         .thenReturn(Optional.of(ticketType));
     when(ticketTypeRepository.existsByEventIdAndNameIgnoreCase(any(), any())).thenReturn(true);
@@ -130,7 +130,7 @@ class TicketTypeServiceTest {
   void should_rejectUpdate_when_eventIsCancelled() {
     TicketType ticketType = existing(draftEvent());
     when(ticketTypeRepository.findById(TICKET_TYPE_ID)).thenReturn(Optional.of(ticketType));
-    when(eventLockService.lockShared(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
+    when(eventLockService.lockExclusive(EVENT_ID)).thenReturn(EventStatus.CANCELLED);
 
     assertThatThrownBy(() -> ticketTypeService.update(TICKET_TYPE_ID, request("VIP", 100)))
         .isInstanceOf(BusinessRuleViolationException.class);
