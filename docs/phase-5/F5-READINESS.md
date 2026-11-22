@@ -68,3 +68,7 @@ Do **NOT** create functional Kafka producers, topics, relay publishers, consumer
 ## Owner-authorized Phase 3 remediation update — 2026-11-22
 
 The owner has approved bounded Phase 3 architectural and risk dispositions recorded in [F3-02](../phase-3/F3-02-owner-disposition-2026-11-22.md), [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md) and [ADR-026](../adr/ADR-026-bounded-phase-3-cross-module-coordination.md). The new HTTP correlation filter and tests do not implement notification delivery. **Independent Tech Lead Phase 3 conformity and formal phase closure are still required**, followed by independent Phase 4 decisions (including ADR-022/H84-01) and formal closure before any separate Phase 5 authorization. The Phase 5 status remains **BLOCKED**. No Kafka, MongoDB or outbox delivery was added.
+
+## Superseding Phase 3 governance status — 2026-11-22
+
+F3 is now **CLOSED BY ONE-TIME OWNER-DELEGATED EXCEPTION** ([ADR-027](../adr/ADR-027-phase3-delegated-owner-closure.md); [F3-03](../phase-3/F3-03-delegated-owner-closure-2026-11-22.md)), **without** the historical independent Tech Lead verdict. The F3-specific review gate previously listed in this document is superseded **only for F3** by this recorded procedural variance. **F4 remains OPEN, independent review of F4 and ADR-022 is still required, and F5 remains BLOCKED / not authorized.** No permission for Kafka/Mongo/outbox/email, external payments or AWS is implied.

@@ -210,3 +210,10 @@
 - **Decision:** Preserve existing E → T → R → O transaction semantics and narrowly allow `OrderExpirationProcessor` to coordinate reservation and order state, plus bounded unlocked expiration candidate joins. ADR-024 alone covers `EventCancellationService.cancel(UUID)`; remaining Phase 4 operational joins are not approved by this ADR.
 - **Technical basis:** Spring Framework 6.2 transaction propagation, PostgreSQL 17 explicit locks, Spring Modulith 1.4 modular boundaries and current Testcontainers evidence.
 - **Detail:** [ADR-026](adr/ADR-026-bounded-phase-3-cross-module-coordination.md); [Phase 3 owner disposition](phase-3/F3-02-owner-disposition-2026-11-22.md).
+
+## ADR-027: One-time owner-delegated Phase 3 closure procedure
+
+- **Date:** 2026-11-22; **Phase:** 3.
+- **Status:** Accepted solely as a **one-time owner-delegated governance exception** for the F3 closeout.
+- **Decision:** The owner delegated the authority necessary to close Phase 3. The delegated closure explicitly substitutes **owner risk acceptance** for the previously required independent F3 Tech Lead sign-off; no such independent verdict was obtained or claimed. Preserve ADR-024/026 limits, documented acceptance evidence and original finding severities. F4 and F5 governance gates are not waived.
+- **Detail:** [ADR-027](adr/ADR-027-phase3-delegated-owner-closure.md), [F3-03](phase-3/F3-03-delegated-owner-closure-2026-11-22.md).

@@ -1,6 +1,6 @@
 # F3-01 — Phase 3 technical closure dossier
 
-- **Formal status:** OPEN pending independent Tech Lead verdict. Project-owner architectural and risk dispositions have now been explicitly authorized and recorded in F3-02; formal closure is **not** yet asserted.
+- **Formal status (superseding update, 2026-11-22):** **CLOSED BY DELEGATED PROJECT-OWNER EXCEPTION** under [ADR-027](../adr/ADR-027-phase3-delegated-owner-closure.md) and [F3-03](F3-03-delegated-owner-closure-2026-11-22.md). **No independent Tech Lead verdict was obtained.** Historical text below describing the originally mandatory gate is preserved for audit, not represented as fulfilled.
 - **Current work branch:** `main` only. Legacy references to `dev` are historical and must not be used for new work.
 - **Evidence baseline:** `main@236b31f46534f65c1249ff1f4cbd25586dc4938b`, [CI #322](https://github.com/dab960405/tickeringsystem/actions/runs/44974013851) SUCCESS, 407 Java unit tests and 179 integrations, Spotless/JaCoCo.
 - **Recovery and expiration fix:** `11dab6d00d8298024a2d10aee4857a0de11f236d`, [CI #324](https://github.com/dab960405/tickeringsystem/actions/runs/44981366848) SUCCESS, 407 unit and 181 integration tests. New `OperationWorkerIT` and `OrderPaymentFlowIT` regressions pass.
@@ -95,3 +95,7 @@ REV-DEV-01/02, audit logging, DTO/BCrypt validation and BACK-04 remain part of t
 
 
 **Validated code baseline:** [CI #352](https://github.com/dab960405/tickeringsystem/actions/runs/44988647465) **COMPLETED SUCCESS** on `main@ff18f1ef59f9d7b92aa607f7ddb04a199bbad1db`, with 410 ticketing-api unit tests and 6 other Java unit tests, 195 PostgreSQL/Redis Testcontainers integration tests, Maven clean verify / JaCoCo / Spotless, Angular 19/19 + Chrome production-route smoke, and 14 Python tests. The subsequent owner-decision documentation commit requires independent same-SHA CI verification; this source-level code evidence is not an independent architectural audit.
+
+## Formal Phase 3 closure — 2026-11-22 (supersedes historical pending status)
+
+The project owner delegated all authority necessary to close Phase 3. The delegate exercised a strictly **Phase-3-only procedural variance** in [ADR-027](../adr/ADR-027-phase3-delegated-owner-closure.md). Under [F3-03](F3-03-delegated-owner-closure-2026-11-22.md), Phase 3 is **CLOSED BY OWNER-DELEGATED EXCEPTION**, **not** by an independent Tech Lead acceptance. The missing independent opinion remains disclosed rather than invented. The new documentation commit must pass matching CI before GitHub issue #5 is finally closed. All earlier references to F3 being OPEN are an immutable chronology, superseded by this recorded decision. Phase 4 remains OPEN and Phase 5 BLOCKED.

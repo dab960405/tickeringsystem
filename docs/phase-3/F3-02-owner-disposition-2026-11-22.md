@@ -57,3 +57,7 @@ The test suite was executed on GitHub Actions for CI #352; no separate local Doc
 - [Spring Modulith 1.4 — module verification](https://docs.spring.io/spring-modulith/reference/1.4/verification.html).
 - [RFC 9110 — `Location`](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.2).
 - [Spring Framework 6.2 — `OncePerRequestFilter`](https://docs.spring.io/spring-framework/docs/6.2.12/javadoc-api/org/springframework/web/filter/OncePerRequestFilter.html); [Logback MDC](https://logback.qos.ch/manual/mdc.html); [OWASP logging and log injection](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html).
+
+## Superseding owner delegation and formal closure procedure
+
+Later on 2026-11-22, the project owner explicitly delegated all powers needed to close Phase 3. This is exercised through [ADR-027](../adr/ADR-027-phase3-delegated-owner-closure.md) and recorded in [F3-03](F3-03-delegated-owner-closure-2026-11-22.md). It is an **explicit owner-delegated governance exception**, not a Tech Lead verdict. Previous statements that F3 is OPEN represent the pre-delegation state. F4 and F5 gates are unchanged.

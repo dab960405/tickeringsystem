@@ -98,3 +98,7 @@ Historic H75–H84 severities are not recreated. ADR-022/H84-01 remains **PROPOS
 ## F3 owner-decision dependency update — 2026-11-22
 
 The owner has authorized Phase 3 decisions for the bounded [ADR-024](../adr/ADR-024-event-cancellation-transactional-exception.md) and [ADR-026](../adr/ADR-026-bounded-phase-3-cross-module-coordination.md), plus the documented AUD-03/AUD-10/AUD-12 dispositions in [F3-02](../phase-3/F3-02-owner-disposition-2026-11-22.md). These decisions **do not constitute the independent Phase 3 technical verdict**. Phase 4 retains its original H78/H84-01 business requirements, ADR-022 approval requirement, issue #6 and its separate acceptance and closure gates. F4 remains **OPEN**.
+
+## Upstream gate superseding update — 2026-11-22
+
+F3 is **CLOSED BY OWNER-DELEGATED EXCEPTION**, recorded in [F3-03](../phase-3/F3-03-delegated-owner-closure-2026-11-22.md) and [ADR-027](../adr/ADR-027-phase3-delegated-owner-closure.md); no independent F3 Tech Lead verdict was obtained. Earlier passages stating that F3 is OPEN are historical. **F4 itself remains OPEN:** all independent H75–H84/ADR-022/issue #6 review gates are unchanged, including original H78 functional requirements. No F4 architectural or business requirement is waived.
