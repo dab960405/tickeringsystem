@@ -1,58 +1,78 @@
-# ADR-016: Orden global de locks y protocolo T → R
+# ADR-016 — Global lock order and ticket-inventory-before-reservation protocol
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-13
-- **Fase:** 4
-- **Relación:** complementa ADR-010 y sustituye la estrategia de adquisición implícita de ADR-012; conserva `SKIP LOCKED`.
+- **Status:** ACCEPTED
+- **Date:** 2026-11-13
+- **Phase:** 4
+- **Relation:** Complements ADR-010 and supersedes ADR-012's earlier implied lock-acquisition strategy while retaining `SKIP LOCKED`.
 
-## Contexto
+## Context
 
-La confirmación, cancelación y expiración podían bloquear una reserva y después modificar su inventario (`R → T`), mientras otros flujos descuentan inventario antes de tocar la reserva (`T → R`). Entre varias instancias, esa inversión permite deadlocks y decisiones basadas en lecturas anteriores al bloqueo.
+Confirmation, cancellation and expiration could lock a reservation before modifying its inventory (`R → T`), whereas other paths decrement inventory before touching the reservation (`T → R`). Concurrent instances can deadlock when those paths overlap. Decisions based on data read **before** a lock can also become stale.
 
-## Decisión
+## Decision: global order
 
-El orden global canónico es:
+The canonical order is:
 
 `E → D → PE → J → XA → V → N → CR → C → DS → T → R → O → P → I → U → EN → IS → K`
 
-Los símbolos usados por este alcance se asignan así: `E` events, `PE` provider_events, `J` operation_jobs, `XA` operation_executions, `V` venues, `CR` operation_cycles, `C` operation_participations, `DS` operation_dispositions, `T` ticket_types, `R` reservations, `O` orders, `P` payments, `I` order_items, `U` commercial_units, `EN` tickets, `IS` semantic_applications y `K` operation_projections. `D` y `N` quedan reservados sin una tabla asociada en esta fase; no se les asigna un significado nuevo.
+| Symbol | Table / entity |
+| --- | --- |
+| E | events |
+| PE | provider_events |
+| J | operation_jobs |
+| XA | operation_executions |
+| V | venues |
+| CR | operation_cycles |
+| C | operation_participations |
+| DS | operation_dispositions |
+| T | ticket_types |
+| R | reservations |
+| O | orders |
+| P | payments |
+| I | order_items |
+| U | commercial_units |
+| EN | tickets |
+| IS | semantic_applications |
+| K | operation_projections |
 
-Una transacción solo puede adquirir locks de fila siguiendo una subsecuencia de ese orden. Las lecturas sin lock para descubrir identificadores no son adquisiciones, pero sus datos deben revalidarse después de bloquear. Los inserts de filas nuevas no sustituyen la revalidación de filas existentes.
+Symbols D and N remain reserved and **have no assigned table during this phase**. Do not invent meanings for them.
 
-### Locks implícitos por claves foráneas y flush
+A transaction may acquire row locks only along a **subsequence of the global order**; not every transaction must acquire all locks. Unlocked discovery queries are not lock acquisitions, but all data used for decisions must be rechecked **after** locks. New-row inserts do not replace verification of already-existing rows.
 
-El orden se aplica también a locks sobre filas padre que PostgreSQL adquiere implícitamente para validar claves foráneas. Que una operación no modifique directamente una tabla no autoriza a omitir su posición si un insert posterior puede adquirir un `KEY SHARE` sobre ella.
+## Implicit FK locks and Hibernate flush
 
-- La creación de una orden bloquea E → T → R antes de insertar O/P/I. T se toma porque `order_items.ticket_type_id` referencia `ticket_types`; sin ese lock previo, el flush podría mantener R y adquirir T después.
-- La reemisión de tickets establece primero las relaciones de la nueva generación con U y emite EN; la cancelación de EN de la generación anterior se difiere hasta después. Esto evita que un flush de entidades dirty materialice EN antes de los locks implícitos de FK sobre U.
-- Repetir un UPDATE sobre una fila J/XA ya bloqueada no constituye una nueva adquisición posterior; el orden se evalúa cuando el lock se obtiene por primera vez.
+PostgreSQL may implicitly acquire parent-row locks to verify foreign keys. A transaction cannot ignore these acquisitions just because its code does not explicitly update that table.
 
-La auditoría transversal y las pruebas de estas reglas se documentan en [F4-03](../phase-4/F4-03-lock-audit.md).
+- Creating an order first obtains E → T → R, then inserts O/P/I. The T lock matters because `order_items.ticket_type_id` references `ticket_types`; otherwise an ORM flush might hold R and then acquire T late.
+- Reissuing tickets first connects the next generation to U and emits new EN; cancellation of old-generation EN is deferred. This prevents Hibernate dirty flushing of EN before implicitly acquiring the U FK locks. The corrected production sequence supersedes an earlier narrative order in ADR-017.
+- Repeating an UPDATE on an already locked J/XA row does not constitute a new lock acquisition; the ordering is evaluated when the row lock is first taken.
 
-### Protocolo de inventario y reservas
+The detailed audit and executable evidence are recorded in [F4-03](../phase-4/F4-03-lock-audit.md).
 
-1. Descubrir candidatos sin lock, con lote máximo de 100 para expiración.
-2. Extraer, ordenar y deduplicar los UUID de `ticket_types`.
-3. Bloquear T en orden ascendente con `SELECT ... FOR UPDATE`.
-4. Bloquear R en orden ascendente; el descubrimiento de workers usa `FOR UPDATE SKIP LOCKED`.
-5. Revalidar propietario, estado, cantidad y relación `reservation.ticket_type_id`.
-6. Obtener `clock_timestamp()` de PostgreSQL después de los locks.
-7. Considerar válida una reserva solo si `expires_at > evaluation_time`; si `expires_at <= evaluation_time`, está expirada.
-8. Cambiar reserva e inventario en la misma transacción. Cualquier inconsistencia revierte todo.
+## Reservation and inventory protocol
 
-La creación de reservas bloquea/actualiza T antes de insertar R. La creación de órdenes también mantiene T antes de R para cubrir la FK de `order_items`. Cancelación, liberación, confirmación, recuperación y expiración siguen T → R. La expiración no calcula su hora de decisión antes de bloquear.
+1. Discover candidate identifiers **without locks**; expiration batch maximum 100.
+2. Collect, sort and deduplicate ticket-type UUIDs.
+3. Lock T in ascending order using `SELECT ... FOR UPDATE`.
+4. Lock R in ascending order; discovery/recovery workers use `FOR UPDATE SKIP LOCKED` as appropriate.
+5. Revalidate owner, status, quantity and `reservation.ticket_type_id`.
+6. Obtain PostgreSQL `clock_timestamp()` **after the locks**.
+7. A reservation is valid only if `expires_at > evaluation_time`; when `expires_at <= evaluation_time`, it is expired.
+8. Mutate reservation and inventory within the **same transaction**, rolling back on any inconsistency.
 
-### Inventario
+Creation reserves/decrements T before inserting R. Order creation maintains T before R to satisfy the order item FK. Cancellation, release, confirmation, recovery and expiration follow T → R. The expiration decision must not use a timestamp sampled before locks.
 
-Se conserva el `UPDATE` condicional de ADR-010 como última defensa de stock. El lock T coordina operaciones compuestas; no se reemplaza por sincronización Java. La restauración sigue condicionada a no superar `total_quantity` y solo ocurre con una transición válida de disposición de inventario.
+## Inventory safeguards
 
-### Workers
+The conditional stock UPDATE in ADR-010 remains the final lower-bound defense. A T lock coordinates multi-entity operations; it must not be replaced by Java `synchronized`. Stock restoration is bounded by `total_quantity` and only occurs on a valid inventory-disposition transition.
 
-TX-CLAIM y TX-APPLY bloquean J antes que XA. La aplicación de negocio posterior sigue T → R → O → P → I → U → EN → IS → K. TX-PROJECT no retrocede a entidades anteriores: proyecta desde evidencia ya persistida y bloquea K al final.
+## Worker transaction boundaries
 
-## Consecuencias
+TX-CLAIM and TX-APPLY lock J before XA. Business application then follows T → R → O → P → I → U → EN → IS → K. TX-PROJECT must not acquire earlier business locks again: it projects already-committed evidence and locks K last.
 
-- ADR-012 conserva el reparto con `SKIP LOCKED`, pero su consulta ya no es por sí sola el protocolo completo.
-- Los locks se mantienen en transacciones cortas y con timeouts configurados.
-- Las pruebas con PostgreSQL real deben cubrir carreras de confirmación/expiración/cancelación, dos workers y rollback.
-- Una prueba de ausencia de deadlock no demuestra por sí sola el orden; los repositorios hacen explícitas las adquisiciones y las pruebas verifican sus invariantes.
+## Consequences and validation
+
+- ADR-012's `SKIP LOCKED` remains the multi-worker scheduling mechanism, but its example query alone is no longer the full protocol.
+- Keep row locks inside bounded transactions with configured lock and statement timeouts.
+- Test confirmation/expiration/cancellation races, two-worker contention and rollback with real PostgreSQL.
+- Absence of a deadlock in finite tests does not mathematically prove order correctness; explicit repository locks, SQL/FK inspection and invariant tests are also required.

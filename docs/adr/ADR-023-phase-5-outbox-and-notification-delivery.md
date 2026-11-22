@@ -1,47 +1,54 @@
-# ADR-023 — Transactional Outbox y consumo idempotente local para Fase 5
+# ADR-023 — Proposed transactional outbox and local idempotent consumption for Phase 5
 
-- **Estado:** PROPUESTO — no aprobado.
-- **Fecha:** 2026-11-14.
-- **Fase:** 5 (planificación solamente).
-- **Base:** `dev` / `73eb12d307af696533ba182574d7f9f54ab2ec42`.
-- **Precondiciones:** cierre formal Fases 3 y 4, autorización de Fase 5.
+- **Status:** PROPOSED — NOT ACCEPTED and NOT IMPLEMENTED.
+- **Date:** 2026-11-14
+- **Phase:** 5 **DESIGN ONLY**, execution BLOCKED.
+- **Historical baseline:** `dev@73eb12d307af696533ba182574d7f9f54ab2ec42`.
+- **Preconditions:** Formal Phase 3 and 4 closures, independent Phase 5 design acceptance and separate owner authorization.
 
-## Contexto
+## Context
 
-La especificación fija Transactional Outbox, Kafka KRaft, MongoDB para notificaciones, ack manual, tres entregas, DLT, idempotencia y local primero. V10 ya creó la tabla `outbox_events`. El objetivo es demostrar garantías reales sin montar arquitectura bancaria/empresarial.
+The original specification asks for Transactional Outbox, Kafka KRaft, MongoDB notifications, manual acknowledgements, three delivery attempts, DLT, idempotency and local-first learning. Flyway V10 already created `outbox_events` as a **scaffold**. The aim is to demonstrate real delivery guarantees without enterprise or banking architecture.
 
-## Alternativas
+## Options
 
-1. **Publicación directa desde la transacción comercial**: descartada; el commit DB y el envío Kafka pueden divergir.
-2. **Outbox con publicador sencillo `FOR UPDATE SKIP LOCKED`**: recomendado provisionalmente para portafolio y broker local. Una fila/tx, send con ACK y timeout bajo el lock, marcar `published_at` y commit. Kafka puede recibir duplicados si PostgreSQL revierte después del ACK.
-3. **Outbox con claim/lease en V17 y envío fuera de transacción**: alternativa más escalable; añade columnas/estados, recuperación y fencing, exige nueva migración aprobada y auditoría de locks. No justificarla sin una limitación probada de opción 2.
-4. **CDC/Debezium o transacción distribuida 2PC**: fuera de alcance, sobredimensionado.
+1. **Direct Kafka publish inside the commercial transaction:** rejected; PostgreSQL commit and broker send can diverge.
+2. **Simple outbox relay using `FOR UPDATE SKIP LOCKED`:** provisionally recommended for a local portfolio broker. One row per bounded transaction; send with ACK and timeout while holding a row lock; mark `published_at` after ACK and commit. Kafka may receive duplicate data if PostgreSQL rolls back after ACK.
+3. **Outbox claim/lease with additive Flyway V17, publishing outside DB transaction:** more scalable; adds persistent states, recovery and fencing, requires approved migration and lock audit. Not justified without reproducing limitations of option 2.
+4. **CDC/Debezium or distributed two-phase commit:** out of scope/overengineered.
 
-## Recomendación propuesta
+## Proposed direction, not implementation permission
 
-Reutilizar V10 sin alteración. Writer dentro de TX comercial. Relay cada segundo con `SKIP LOCKED`, `NOT EXISTS` de evento previo pendiente para el mismo agregado, orden `created_at,id`, Kafka key `aggregateId`, envío JSON completo y confirmación dentro de timeout corto. Estado publicado solo tras ACK Kafka. `at-least-once` + consumidor Mongo idempotente con `eventId` único.
+Reuse V10 unchanged. In a **future authorized Phase 5**:
+- Write outbox evidence inside the same PostgreSQL transaction as the commercial transition.
+- Relay at approximately 1-second polling cadence using SKIP LOCKED, avoid publishing an event while an older event for the same aggregate remains pending, sort by `created_at,id`, use `aggregateId` as Kafka key, send complete JSON and mark published only after broker ACK.
+- Promise at-least-once delivery; Mongo consumer enforces UNIQUE `eventId`.
+- Use Spring Kafka `@KafkaListener` with auto-commit disabled, acknowledge **after** durable Mongo persistence, configure `DefaultErrorHandler` for **initial delivery plus two retries** (three total attempts) and dead-letter topic `<topic>.DLT`, ensuring DLT confirmation before committing offsets.
+- Keep notifications and payment simulation local. Internal read API uses an API key and must not expose that key to the browser.
 
-Spring Kafka `@KafkaListener` con `enable.auto.commit=false`, ack manual después de persistencia, `DefaultErrorHandler` (inicial + dos reintentos) y DLT `<topic>.DLT` confirmada antes de avanzar offset. No correos reales. Endpoint consulta interno con API key.
+**Cost:** Docker Compose local, no AWS or paid services.
 
-**Coste:** Docker Compose local sin AWS ni servicios de pago.
+## Risks requiring a design verdict
 
-## Riesgos aceptados para revisión
+- The simple relay holds a PostgreSQL transaction during Kafka send (bounded to ~2 seconds per message), potentially consuming connection pool resources when Kafka is unavailable. Bound concurrency and test it before approval.
+- Kafka/Mongo are not one transaction; duplicates are possible and must be harmless.
+- Insertion `clock_timestamp()` plus UUID tie-break makes SELECT deterministic, **not** automatically ordered by commit across concurrent producers. Prove real ordering or consider an approved V17 sequencing design.
+- DLT may require manual replay after long Mongo outages.
+- EventCancelled fanout to organizer/buyers needs precise eligibility rules, bounded work and recipient approval.
+- Define full evidence equality/digest for same eventId with contradictory payload, not merely matching type and recipient.
+- Resolve the phrase "three retries" versus **three total deliveries** in the original requirement and draft design before implementation.
 
-- Se mantiene una TX de PostgreSQL durante un envío Kafka, máximo 2s por mensaje; puede aumentar la ocupación del pool si el broker cae. Limitar concurrencia y demostrar comportamiento en IT.
-- Kafka/Mongo no son atómicos. Una entrega duplicada es posible y debe ser inocua.
-- Orden por agregado basado en `clock_timestamp()` al insertar y `id` para desempate es determinista para la consulta, pero no constituye secuencia transaccional global. Validar carreras reales; si falla el criterio, revisar si una V17 secuencial es necesaria.
-- DLT puede necesitar reprocesamiento manual tras indisponibilidad prolongada de Mongo.
-- Cada `EventCancelled` puede necesitar fan-out a compradores y organizador; obtener aceptación del criterio de destinatarios antes de implementar.
+## Consequences and gate
 
-## Consecuencias y validación
+This ADR changes **no service, migration or public API** during Phase 3/4 remediation. The proposed components and test matrix are in [F5-01](../phase-5/F5-01-technical-design.md) and [F5-02](../phase-5/F5-02-test-and-acceptance-plan.md).
 
-No modifica servicios, migraciones ni APIs durante el diseño. Las piezas y matriz están en [F5-01](../phase-5/F5-01-technical-design.md) y [F5-02](../phase-5/F5-02-test-and-acceptance-plan.md).
+**Approve separately before implementation:** outbox relay transaction strategy, recipient/fanout semantics, V1 event envelope, retry/DLT policy, read API security, cross-aggregate ordering criteria and correlation propagation. If testing invalidates short relay transactions or ordering, reopen the design.
 
-**Aprobar antes de implementar:** estrategia relay bajo TX, destinatarios y semántica de eventos, esquema V1, política de retries/DLT, seguridad de consulta. Reabrir si las pruebas demuestran que el diseño no cumple orden por agregado o el tiempo máximo.
+## Technical references
 
-## Referencias técnicas
+- [PostgreSQL 17 SELECT FOR UPDATE SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html).
+- [Spring Kafka 3.3 — KafkaTemplate](https://docs.spring.io/spring-kafka/reference/3.3/kafka/sending-messages.html), [manual acknowledgement](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html), [error handling and DLT](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html).
+- [Spring Data MongoDB — indexes](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html).
+- [Transactional Outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html) (design pattern, not an official standard).
 
-- [PostgreSQL 17 — SELECT FOR UPDATE SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html).
-- [Spring Kafka 3.3 — KafkaTemplate](https://docs.spring.io/spring-kafka/reference/3.3/kafka/sending-messages.html), [manual ACK](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html), [error handler y DLT](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html).
-- [Spring Data MongoDB — índices](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html).
-- [Patrón Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html); patrón de diseño, no un estándar oficial.
+**Phase 5 remains BLOCKED.** Do not implement writers, producers, consumers, retries or Mongo persistence under this ADR.

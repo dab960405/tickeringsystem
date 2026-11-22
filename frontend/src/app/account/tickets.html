@@ -32,8 +32,8 @@
           <details>
             <summary>Ticket details</summary>
             <p class="identifier">
-              Order: {{ ticket.orderId }}<br />Ticket type: {{ ticket.ticketTypeId
-              }}<br />Unit: {{ ticket.unitId }}
+              Order: {{ ticket.orderId }}<br />Ticket type: {{ ticket.ticketTypeId }}<br />Unit:
+              {{ ticket.unitId }}
             </p>
           </details>
         </article>
@@ -42,10 +42,7 @@
   } @else {
     <div class="empty">
       <h2>You have no valid tickets</h2>
-      <p>
-        Tickets appear here after a successful payment. Refunded tickets are no longer
-        valid.
-      </p>
+      <p>Tickets appear here after a successful payment. Refunded tickets are no longer valid.</p>
       <a class="button" routerLink="/events">View events</a>
     </div>
   }

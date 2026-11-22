@@ -1,53 +1,58 @@
-# ADR-022: Contrato mínimo de evidencia de reembolsos del proveedor simulado
+# ADR-022 — Minimum refund evidence contract for the simulated provider
 
-- **Estado:** Propuesto para dictamen del Tech Lead; no aprobado.
-- **Fecha:** 2026-11-14
-- **Fase:** 4; alcance H84-01.
-- **Relación:** complemento propuesto de ADR-019, sin modificar sus decisiones aprobadas.
-- **Naturaleza:** sistema de portafolio y simulación local. No hay ni habrá integración con un proveedor de pago real.
+- **Status:** PROPOSED for independent Tech Lead verdict — NOT ACCEPTED.
+- **Date:** 2026-11-14
+- **Phase:** 4, H84-01.
+- **Relation:** Proposed clarification of accepted ADR-019 without altering its approved guarantees.
+- **Nature:** Portfolio system and local financial simulation. **No real payment provider integration.**
 
-## Contexto y objetivo
+## Context and objective
 
-La especificación técnica del proyecto establece expresamente un pago simulado, claridad del código, simplicidad y pruebas reproducibles. El modelo existente ya persiste tres identidades, digests, evidencia append-only, disposiciones por efecto comercial y fencing. No se requiere introducir un conciliador financiero ni nuevas estructuras para demostrar su funcionamiento.
+The specification explicitly requires simulated payments, clear code, simple architecture and reproducible tests. The system already persists three identities, immutable digests, append-only evidence, dispositions derived from actual commercial effects and fencing. A new automatic financial reconciler or persistent subsystem is not required to demonstrate the current simulated flow.
 
-## Alternativas evaluadas
+## Alternatives
 
-| Tema | Opción conservadora | Opción ampliada | Recomendación |
+| Topic | Conservative option | Expanded option | Recommendation |
 | --- | --- | --- | --- |
-| Cambio de `providerReference` para la misma operación | Digest inmutable; HTTP 409 | Enriquecimiento `null → valor` con nueva persistencia y reglas de concurrencia | Conservar el digest inmutable para el simulador |
-| `REFUNDED` antes de captura | `NO_OP` y nuevo evento firmado posterior | Conciliación automática sin nuevo evento | Nuevo evento firmado, sin reconciliador automático |
+| Same operation changes `providerReference` | Immutable digest; HTTP 409 | Enrich `null → non-null` with extra persistence and concurrency rules | **Keep immutable digest** |
+| `REFUNDED` arrives before capture | Record NO_OP and require a later, newly signed event | Automatic reconciliation without new evidence | **New signed event, no reconciler** |
 
-## Contrato propuesto, pendiente de aceptación
+## Proposed contract (requires explicit acceptance)
 
-1. La identidad estable es `(provider_code, merchant_account_id, identity_namespace, providerOperationId)`; `providerEventId` identifica cada notificación. El digest semántico incluye orden, tipo, referencia, importe y moneda, pero no el estado.
-2. Si un reembolso se simula como una operación con varios estados (`PENDING`, `FAILED`, `REFUNDED`), la **primera notificación debe informar una referencia financiera no nula y estable**. Los siguientes eventos de esa operación conservan referencia, orden, tipo, importe y moneda; cambian únicamente estado y `providerEventId`.
-3. El contrato de entrada existente admite `PENDING` y `FAILED` con referencia nula. Esas evidencias se aceptan y quedan registradas, pero **no se pueden promocionar dentro de la misma operación** a una notificación con nueva referencia: el digest cambia y el conflicto responde HTTP 409. No se altera este comportamiento para el portafolio.
-4. Un `REFUNDED` recibido antes de la captura conserva evidencia y disposición `NO_OP`, sin afirmar un reembolso ejecutado. La captura posterior se procesa con sus validaciones normales; por sí sola no reconcilia el reembolso.
-5. Para demostrar conciliación manual del simulador, se genera **otra notificación HMAC válida** con nuevo `providerEventId`, la misma identidad de operación y el mismo digest semántico. Tras la captura, el negocio se revalida. Si cambia el estado financiero, la nueva disposición es `APPLIED`; los duplicados sin efecto producen `NO_OP`.
-6. Se mantienen restricciones UNIQUE, triggers append-only, HMAC, orden global ADR-016, timeout y fencing. No se mutan evidencias previas ni se automatiza un reenvío sin causa.
+1. Stable operation identity is `(provider_code, merchant_account_id, identity_namespace, providerOperationId)`. `providerEventId` uniquely identifies each signed notification. The semantic digest includes order, operation kind, provider reference, amount and currency **but not state**.
+2. When a refund is simulated as one operation progressing through states PENDING, FAILED and REFUNDED, the **first notification must include a non-null stable financial reference**. Later events preserve reference/order/kind/amount/currency; only state and `providerEventId` change.
+3. The current API permits some PENDING/FAILED evidence with null reference. Those events are accepted and stored, but **cannot later add a reference within the same operation**: digest changes and HTTP 409 is returned. The portfolio contract deliberately preserves that limitation.
+4. An early REFUNDED notification before capture produces immutable evidence and **NO_OP**, without implying a completed refund. The subsequent capture is processed normally; it does not itself reconcile the early refund.
+5. To demonstrate manual simulated reconciliation, submit a **different valid HMAC-signed event** with a new `providerEventId`, identical provider operation identity and compatible semantic digest. After capture, the current commercial state is revalidated. A real new state change yields APPLIED; duplicate/no-effect events yield NO_OP.
+6. Preserve UNIQUE constraints, append-only triggers, HMAC, ADR-016 global lock order, operation timeouts and fencing. Do not mutate earlier evidence or automate replay without an explicit cause.
 
-## Consecuencias
+**Critical technical distinction clarified by REV-DEV-01:** a retry of the **same already-applied job** after an APPLY/PROJECT interruption is not a new provider event and must **not reevaluate business**. A committed job disposition can be projected without invoking its commercial callback. The corrected implementation and its regression were validated on [CI #324](https://github.com/dab960405/tickeringsystem/actions/runs/44981366848). This does not approve ADR-022.
 
-- Sin cambios de API, tablas, migraciones V14/V15, dependencias, workers o mecanismos de locks. Solo especificación del comportamiento existente y una regresión de integración.
-- Una notificación inicial sin referencia no permite posteriormente vincular otra referencia al mismo `providerOperationId`. Es una limitación deliberada del simulador; se documenta, no se oculta.
-- La conciliación depende de una **nueva** notificación firmada tras la captura; no es una garantía de conciliación automática. El flujo se demuestra sin servicios financieros externos.
-- Si el alcance cambia hacia pagos reales, se reabre esta decisión con otro ADR antes de diseñar enriquecimiento o conciliación persistente.
+## Consequences
 
-## Validación y aprobación
+- No public API changes, new tables, V14/V15 edits, dependencies, jobs or lock protocols.
+- A null-reference initial event cannot later obtain a reference while keeping its providerOperationId; document this rather than conceal it.
+- Simulated reconciliation requires another independently signed notification **after capture**. It is **not** automatic financial reconciliation.
+- If scope changes toward a real payment provider, reopen this decision and approve a separate ADR before adding reference enrichment or persistent reconciliation.
 
-- Evidencia histórica: CI #302 (carreras `PENDING/REFUNDED` y clasificación); CI #306 (recuperación de transición y fencing).
-- Regresión adicional: `OrderPaymentFlowIT.should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture`, introducida en `8e2c8787a7fe5bb3c8c8d1571bf523295e413154`, ajustada a Spotless en `a8013f67bffe3a5826606469485335b61e13a93d`. [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382) `success`: 390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36 y `OperationWorkerIT` 12/12.
-- El Tech Lead debe dictaminar este **contrato mínimo**. Su publicación como `Propuesto` no aprueba H84-01 ni cierra la Fase 4.
+## Validation and approval
 
-## Double-check externo previo al dictamen
+- Historical CI #302 covered PENDING/REFUNDED races and dispositions; #306 covered state progression and fencing.
+- `OrderPaymentFlowIT.should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture`, introduced at `8e2c8787...` and formatted in `a8013f67...`, passed [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382), with 390 unit, 170 integration, `OrderPaymentFlowIT` 36/36 and `OperationWorkerIT` 12/12.
+- The separate **same-job** recovery regression added later in CI #324 passed alongside 181 total integration tests.
+- Tech Lead must explicitly ACCEPT/REJECT this **minimum SIMULATED contract** and the H84-01 disposition. Documentation or successful CI does **not** close Phase 4.
 
-La [matriz de verificación reproducible](../engineering-decision-verification.md) confronta el SHA `d92238a9f7d37dd0127db4029bb4fcb387886457` y CI #318 con PostgreSQL 17 (unicidad y `ON CONFLICT`), Java 21 (HMAC-SHA256 y comparación segura) e IETF RFC 9110 (§15.5.10, HTTP 409). Se comprobaron `PaymentEvidenceDigest`, `ProviderEventInboxService`, `PaymentWebhookService`, `OrderPaymentService` y `GlobalExceptionHandler`.
+## Two-source mechanism cross-check
 
-**Alcance de la conclusión:** las fuentes avalan el mecanismo de integridad, autenticidad y señalización de conflictos; **no definen el comportamiento de un proveedor de reembolso**, que es el contrato específico del simulador. Los eventos `PENDING`/`FAILED` con referencia nula siguen siendo válidos, pero un evento posterior de la **misma operación** con una referencia nueva genera 409 por el cambio del digest. Un `REFUNDED` anticipado solo se reevalúa con **otro** `providerEventId` firmado. No hay reconciliación automática ni protección temporal antirreplay, y no se afirma que existan.
+[Verification matrix](../engineering-decision-verification.md) compared PostgreSQL 17 uniqueness and ON CONFLICT, Java 21 HMAC-SHA256/constant-time comparison, and RFC 9110 §15.5.10 HTTP 409 against the code on historical `d92238a9...`/CI #318. This supports **mechanisms**, not the simulated business contract itself.
 
-## Referencias
+The digest includes providerReference but not status; PENDING/FAILED with null reference followed by the **same operation** with a new reference returns 409. REFUNDED cannot be reevaluated from an old applied job without a **new** signed provider event. There is no automatic reconciler or timestamp-based anti-replay guarantee.
 
-- Especificación técnica Ticketing, secciones 1, 2, 10, 15, 22 y 24 (fuente funcional del proyecto).
-- PostgreSQL 17: [restricciones de unicidad](https://www.postgresql.org/docs/17/ddl-constraints.html) y [INSERT ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html), mecanismos utilizados para identidades únicas.
-- Spring Framework: [rollback de transacciones declarativas](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
-- La elección de **qué hacer ante pagos simulados** es una decisión del proyecto, no una recomendación comercial de PostgreSQL o Spring.
+## References
+
+- Original Ticketing specification §§1,2,10,15,22,24 (functional source).
+- [PostgreSQL 17 — UNIQUE constraints](https://www.postgresql.org/docs/17/ddl-constraints.html) and [INSERT ON CONFLICT](https://www.postgresql.org/docs/17/sql-insert.html).
+- [Spring Framework — declarative rollback](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
+- [IETF RFC 9110 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.10).
+
+The decision of **how a simulated refund progresses** belongs to Ticketing governance, not to PostgreSQL or Spring vendors.

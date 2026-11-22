@@ -1,52 +1,62 @@
-# ADR-024 — Excepción transaccional limitada para cancelación de eventos
+# ADR-024 — Proposed narrow transactional exception for event cancellation
 
-- **Estado:** PROPUESTO para dictamen técnico del Tech Lead; no aprobado por publicación.
-- **Fecha:** 2026-11-14 · **Fase:** 3.
-- **Relaciones:** [ADR-016](ADR-016-global-lock-order.md) y [F3-01](../phase-3/F3-01-closure-review.md).
-- **Alcance:** documentar y auditar la excepción existente; no aprobar refactor, nuevas migraciones ni cambios de API.
+- **Status:** PROPOSED for independent Tech Lead verdict; publication is **not** acceptance.
+- **Date:** 2026-11-14
+- **Phase:** 3
+- **Related:** [ADR-016](ADR-016-global-lock-order.md), [F3-01](../phase-3/F3-01-closure-review.md).
+- **Scope:** Document/review an existing exception. This ADR does **not** independently authorize broad refactors, migrations or public API changes.
 
-## Contexto
+## Context
 
-`EventCancellationService` coordina en una misma transacción las tablas `events`, `ticket_types`, `reservations` y `orders`. Utiliza `EventRepository`, `TicketTypeInventoryService`, `ReservationRepository`, `OrderRepository`, `ReservationRedisProjectionService` y SQL con `JdbcTemplate` sobre tablas de otros módulos. **Esto infringe el límite modular por defecto** que pide colaborar mediante servicios o eventos, aunque cumple el orden de locks de ADR-016.
+`EventCancellationService` coordinates `events`, `ticket_types`, `reservations` and `orders` inside **one PostgreSQL transaction**. It calls `EventRepository`, `TicketTypeInventoryService`, `ReservationRepository`, `OrderRepository`, `ReservationRedisProjectionService` and cross-module `JdbcTemplate` SQL. These direct dependencies violate the default module-boundary rule of communicating through services/events, although the current code follows the required lock order from ADR-016.
 
-Su flujo toma `E FOR UPDATE → T (id ordenado) → R FOR UPDATE (id ordenado) → O FOR UPDATE (id ordenado)`; la cancelación de evento no constituye evidencia de fallo o reembolso del pago. Las proyecciones Redis se eliminan después del commit, no como fuente de verdad.
+The flow acquires E FOR UPDATE → sorted T → sorted R FOR UPDATE → sorted O FOR UPDATE. Cancelling an event is **not** financial evidence of payment failure or refund. Redis reservation projections are removed **after commit**, never as commercial authority.
 
-## Opciones y trade-offs
+## Options and trade-offs
 
-| Opción | A favor | En contra | Valoración |
+| Option | Benefit | Cost/risk | Assessment |
 | --- | --- | --- | --- |
-| Mantener acceso directo sin ADR | Cero cambios | Incumplimiento oculto | Rechazada |
-| **Aceptar excepción estrecha para el coordinador** | Mantiene transacción y locks; bajo riesgo y claro para portafolio | Acoplamiento explícito entre módulos | **Recomendada para aprobación** |
-| Refactor hacia interfaces de aplicación de otros módulos | Mejor aislamiento | Reabre locks, atomicidad y pruebas de carreras | Solo si Tech Lead rechaza excepción |
-| Saga/eventos asíncronos | Desacoplamiento | Cambia semántica, requiere compensaciones/infraestructura | Fuera de F3 |
+| Keep cross-module access silently | Zero changes | Hides architecture violation | Rejected |
+| **Accept a narrow exception for this coordinator** | Preserves one transaction, locks and successful regressions; simpler for portfolio | Explicit coupling across modules | **Recommended for approval** |
+| Refactor to other modules' application-service interfaces | Improves boundary isolation | May reopen atomicity, lock ordering and races | Only if required after Tech Lead review |
+| Saga/asynchronous compensations | Decoupling | Changes business semantics, distributed consistency and infrastructure | Outside Phase 3 |
 
-## Condiciones precisas de la excepción propuesta
+## Precise proposed conditions
 
-1. Solo `EventCancellationService.cancel(UUID eventId)` conserva la capacidad de coordinar directamente los repositorios/SQL de inventario, reservas y órdenes para cancelación **de evento**. No crea una excepción genérica para otros servicios.
-2. Garantizar una sola transacción PostgreSQL y adquisición `E → T → R → O`, incluida validación de FK implícitas; no introducir nuevas inversiones (ADR-016).
-3. Tras fallos de cualquier paso, ningún efecto parcial se confirma; la caché/proyección Redis no se elimina si hay rollback. Usar Spring `@Transactional` y callback post-commit existente.
-4. Cancelar solo reservas con inventario `HELD` y órdenes `PENDING_PAYMENT` elegibles; no devolver stock dos veces ni modificar un pago por inferencia financiera.
-5. Revalidar relaciones/estados tras los bloqueos, respetar llamadas repetidas y preservar pagos confirmados y sus reservas.
-6. Si se añaden nuevas entidades, FKs, side effects o nuevas rutas de cancelación, **reabrir ADR-024 y auditoría ADR-016**.
-7. Documentar la excepción como deuda técnica aceptada y acotada; no justificar su expansión por analogía.
+1. Only `EventCancellationService.cancel(UUID eventId)` may directly coordinate reservations/orders/inventory repositories/SQL **for event cancellation**. No general exception is implied for other callers or coordination paths.
+2. Preserve one PostgreSQL transaction and E → T → R → O lock acquisition including implicit FK validation. Do not introduce inversions (ADR-016).
+3. On any step failing, roll back the **entire** event/reservation/order/inventory transition; Redis must not delete projections on rollback. Keep Spring `@Transactional` and post-commit callback.
+4. Only terminalize eligible HELD reservations and PENDING_PAYMENT orders, without double stock release or invented payment/refund transitions.
+5. Recheck states/relationships **after locks**, maintain idempotent repeated cancellation and preserve confirmed purchases.
+6. Reopen ADR-024 and ADR-016 if new entities, foreign keys, side effects or cancellation entry points are introduced.
+7. Record the exception as bounded technical debt; do **not** apply it to unrelated module accesses by analogy.
 
-## Evidencia y verificación
+**AUD-05 broader review:** `OrderExpirationProcessor`, `ProviderEventInboxService`, `PaymentOperationService`, `OperationJobService` and repository discovery queries also use foreign persistence. They require **separate ownership and transaction-boundary disposition**. This proposal alone cannot approve them.
 
-- Código vigente: `ticketing-api/src/main/java/com/portfolio/ticketing/event/service/EventCancellationService.java`.
-- `EventGuardConcurrencyIT`: nueve pruebas existentes validadas en CI #312, que incluyen cancelación idempotente, carreras contra capturas/pago tardío y preservación de compras confirmadas.
-- Regresión adicional: `should_rollbackEventReservationAndOrder_when_stockRestorationFails`, prueba PostgreSQL con trigger de fallo de restitución, aserciones de rollback de evento/reserva/orden/inventario y de proyección Redis; añadida `4d381899`, fixture SQL corregido `c18d9f2` y aserción de stock corregida en `9d11d833`. CI #313 falló por sintaxis del fixture; CI #314 por una expectativa incorrecta del stock inicial. [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) `success` sobre `9d11d83344b88007e2b5d89de698bf62899817c0`: 390 unitarias, 171 integraciones, `EventGuardConcurrencyIT` 10/10, Spotless y JaCoCo correctos. No modifica código productivo.
-- El dictamen requiere evidencias por SHA/CI y aceptación expresa del Tech Lead; ningún resultado de CI equivale a aprobación automática.
+## Execution evidence
 
-## Double-check externo previo al dictamen
+- Source: `ticketing-api/src/main/java/com/portfolio/ticketing/event/service/EventCancellationService.java`.
+- `EventGuardConcurrencyIT` originally had nine tests on CI #312 covering idempotent cancellation, captures/late-payment races and protection of confirmed orders.
+- New `should_rollbackEventReservationAndOrder_when_stockRestorationFails` uses a PostgreSQL trigger to abort stock restoration and checks event/reservation/order/inventory rollback plus Redis projection integrity.
+- Historical progression: added at `4d381899`, SQL fixture corrected at `c18d9f2`, initial stock-baseline assertion corrected at `9d11d833`. CI #313 failed SQL syntax, #314 failed fixture expectation. [CI #315](https://github.com/dab960405/tickeringsystem/actions/runs/43654824223) SUCCESS on `9d11d83344b88007e2b5d89de698bf62899817c0`: 390 unit, 171 integration, EventGuardConcurrencyIT 10/10, Spotless and JaCoCo.
+- Current `main` CI #324 independently exercises EventGuardConcurrencyIT 10/10 within 407+181 tests.
+- Successful CI is technical evidence, **not independent architecture approval**.
 
-La [matriz de verificación reproducible](../engineering-decision-verification.md) contrasta el SHA `d92238a9f7d37dd0127db4029bb4fcb387886457`, el código real, CI #318 y documentación de **dos mantenedores independientes**: Spring Framework 6.2 para la transacción/proxy/rollback/afterCommit y PostgreSQL 17 para el protocolo de locks/deadlocks. Spring Modulith 1.4 confirma que los accesos entre módulos deberían pasar por APIs expuestas; **no avala de manera general esta excepción**.
+## Double-check and conditions
 
-**Condiciones que no deben omitirse al aceptar:** `@Transactional` requiere invocación desde fuera del proxy Spring; excepciones checked no provocan rollback por defecto; `deleteAfterCommit` difiere la proyección solo cuando hay sincronización activa. La regresión `EventGuardConcurrencyIT` demuestra rollback ante excepción de PostgreSQL, pero no constituye prueba exhaustiva de todas las intercalaciones. Si la excepción se acepta, registrar el acoplamiento como deuda delimitada y reabrirla al cambiar locks, FK o alcance.
+[Source-verification matrix](../engineering-decision-verification.md) compared historical source SHA `d92238a9...`/CI #318 with Spring Framework 6.2 (proxy-declared transactions, rollback and afterCommit), PostgreSQL 17 (locks/deadlocks) and Spring Modulith 1.4 (module-boundary verification). This validates the mechanisms, not a universal right to break module boundaries.
 
-## Referencias
+Preserve these constraints when assessing any refactor:
+- `@Transactional` requires calls through the Spring transactional proxy; self-invocation does not activate new advice.
+- Checked exceptions do not roll back by default unless configured.
+- Redis projection deletion is delayed **only with active transaction synchronization**; otherwise the helper executes immediately.
+- The rollback integration proves a specific failure scenario, **not all possible concurrent interleavings**.
 
-- [Spring Framework — transacciones y propagation REQUIRED](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/tx-propagation.html).
-- [Spring Framework — rollback declarativo](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
-- [PostgreSQL 17 — lock modes y prevención de deadlocks](https://www.postgresql.org/docs/17/explicit-locking.html).
+## References and pending decision
 
-**La decisión de permitir el acoplamiento es específica de Ticketing y no una regla prescrita por esos documentos oficiales.**
+- [Spring Framework — REQUIRED propagation](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/tx-propagation.html).
+- [Spring Framework — declarative rollback](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html).
+- [PostgreSQL 17 — explicit locking and deadlocks](https://www.postgresql.org/docs/17/explicit-locking.html).
+- [Spring Modulith — module verification](https://docs.spring.io/spring-modulith/reference/verification.html).
+
+**Tech Lead issue:** [#5 — explicit ADR-024 verdict and Phase 3 closure](https://github.com/dab960405/tickeringsystem/issues/5). Its acceptance and the project owner's formal phase close remain **PENDING**. The exception is specific to Ticketing and is not a Spring/PostgreSQL vendor recommendation.

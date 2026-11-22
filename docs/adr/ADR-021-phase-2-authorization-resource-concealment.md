@@ -1,44 +1,43 @@
-# ADR-021: Ocultación de recursos ajenos en autorización de Fase 2
+# ADR-021 — Concealing resources owned by other users in Phase 2 authorization
 
-- **Fecha:** 2026-11-13
-- **Estado:** Aceptado
-- **Fase:** 2
+- **Date:** 2026-11-13
+- **Status:** ACCEPTED
+- **Phase:** 2
 
-## Contexto
+## Context
 
-La API permite que ORGANIZER gestione eventos y tipos de entrada propios, mientras ADMIN puede gestionarlos globalmente. Las consultas y operaciones de órdenes y reservas están acotadas al usuario autenticado. La política anterior diferenciaba entre un recurso inexistente (404) y un recurso existente propiedad de otro organizador (403), lo que podía revelar la existencia de borradores y recursos privados.
+An ORGANIZER can manage their own events/ticket types while ADMIN can manage these resources globally. Reservation and order operations are scoped to the authenticated user. The earlier policy returned 404 for nonexistent resources but 403 for existing resources belonging to another organizer, potentially disclosing draft/private resource existence.
 
-La especificación de seguridad exige comprobar propiedad y evitar filtrar recursos que el usuario no está autorizado a consultar. El sujeto propietario debe derivarse del JWT validado, no de un identificador aportado por el cliente.
+The security specification requires ownership checks without leaking resources the requester cannot inspect. Resource ownership must derive from the validated JWT identity, **not** from an arbitrary client-provided user ID.
 
-## Alternativas consideradas
+## Alternatives considered
 
-1. **403 para todo recurso existente ajeno:** comunica explícitamente que el recurso existe, aunque el usuario no pueda gestionarlo.
-2. **404 para recurso ajeno e inexistente:** oculta la existencia del recurso y mantiene 403 para usuarios autenticados que carecen del rol funcional requerido.
-3. **Autorización únicamente en controladores:** centraliza menos lógica, pero deja expuestas llamadas internas al servicio y facilita omisiones en nuevos puntos de entrada.
+1. Return **403** for every existing foreign resource: reveals that the resource exists.
+2. Return **404** for foreign or nonexistent private resources: hides existence; preserve 403 for authenticated users lacking the required functional role.
+3. Enforce authorization only in controllers: easier to miss in internal service calls and new entry points.
 
-## Decisión
+## Decision
 
-Se adopta la ocultación mediante HTTP 404 para recursos privados existentes que pertenecen a otro usuario/organizador y para recursos inexistentes dentro de las mismas operaciones protegidas.
+Use HTTP **404** for both nonexistent private resources and existing resources belonging to another user/organizer on the same protected operation.
 
-- ORGANIZER solo puede gestionar eventos propios y tipos de entrada asociados a sus eventos.
-- ADMIN conserva acceso global a operaciones de gestión de eventos y tipos de entrada.
-- Un ORGANIZER que intenta gestionar un evento ajeno recibe el mismo 404 que para un ID inexistente.
-- Un usuario autenticado con rol no permitido continúa recibiendo 403 por la regla de rol. La ocultación de propiedad no sustituye el control de roles.
-- Las órdenes y reservas continúan consultándose mediante identificadores compuestos por ID de recurso y userId derivado del JWT; un recurso ajeno/inexistente responde 404.
-- La autorización de propiedad permanece en la capa de servicio mediante PreAuthorize y servicios de autorización reutilizables.
+- ORGANIZER may manage only own events and attached ticket types.
+- ADMIN retains global management access.
+- ORGANIZER attempting to manage another organizer's event receives the same 404 as a nonexistent ID.
+- A user lacking the permitted role still receives 403 by role enforcement. Ownership concealment never replaces role checks.
+- Reservation/order queries combine resource ID with the user ID derived from the JWT; foreign/missing records return 404.
+- Ownership authorization stays at service level through `PreAuthorize` and reusable authorization services.
 
-## Consecuencias
+## Consequences
 
-- La API no revela si un borrador o recurso privado existe cuando el solicitante no es su propietario.
-- Los clientes no pueden distinguir entre ID inexistente y recurso ajeno en las operaciones de propiedad.
-- Se conserva 403 para denegaciones por rol, evitando confundir el control de roles con el control de propiedad.
-- Las pruebas deben comprobar igualdad de estado HTTP entre recurso ajeno e inexistente y verificar que el propietario legítimo conserva acceso.
+- Existence of a private event/draft is not revealed to unauthorized requesters.
+- Clients cannot distinguish nonexistent IDs from foreign IDs on ownership-protected routes.
+- 403 remains a distinct role denial signal.
+- Tests verify identical HTTP status for foreign/nonexistent resources and successful access by the true owner.
 
-## Evidencia y límites
+## Evidence and limitations
 
-- EventAuthorizationService aplica la decisión para eventos; TicketTypeAuthorizationService delega la comprobación de propiedad del evento asociado.
-- OrderService consulta por findByIdAndUserId; ReservationService consulta por ID y userId.
-- AuthenticationFlowIT incluye escenarios con dos organizadores y dos usuarios que obtienen access tokens reales. Se verifica que un organizador ajeno no modifica un borrador, que el propietario sí puede actualizarlo y que otro usuario no puede consultar/cancelar una orden ni cancelar una reserva ajena.
-- Los escenarios añadidos requieren ejecución de CI para convertirse en evidencia de aceptación.
-- La matriz completa de rutas y roles está en authorization-matrix.md.
-- La prueba de integración y las pruebas de regresión deben quedar verdes en CI del HEAD final. No se considera que la Fase 2 esté cerrada hasta verificar esa evidencia.
+- `EventAuthorizationService` handles event ownership; `TicketTypeAuthorizationService` delegates through the parent event.
+- `OrderService` uses `findByIdAndUserId`; `ReservationService` reads by ID plus user ID.
+- `AuthenticationFlowIT` exercises actual JWTs for two organizers and two buyers. A foreign organizer cannot edit a draft, the owner can, and a foreign buyer cannot read/cancel an order or cancel another user's reservation.
+- Historical tests became acceptance evidence only after their matching CI completed; see the [Phase 2 authorization matrix](../phase-2/authorization-matrix.md).
+- The Phase 2 formal acceptance date (2026-11-13) is documented in the existing project progress record and must not be confused with later Phase 3/4 approvals.

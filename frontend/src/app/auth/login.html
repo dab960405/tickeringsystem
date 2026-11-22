@@ -59,11 +59,7 @@
     class="text-button"
     [routerLink]="registration() ? '/login' : '/register'"
     [queryParams]="{ returnUrl }"
-    >{{
-      registration() ? 'Already have an account? Sign in' : 'New to Ticketing? Register'
-    }}</a
+    >{{ registration() ? 'Already have an account? Sign in' : 'New to Ticketing? Register' }}</a
   >
-  <p class="hint">
-    Your session is stored in memory. Reloading requires signing in again.
-  </p>
+  <p class="hint">Your session is stored in memory. Reloading requires signing in again.</p>
 </section>
