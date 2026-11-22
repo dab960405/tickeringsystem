@@ -90,6 +90,21 @@ describe('Purchase workflow', () => {
     await first;
   });
 
+  it('does not mix event selection while a reservation is in flight', async () => {
+    const first = purchase.reserve('general', 1);
+    expect(purchase.select({ ...event, id: 'event-two' })).toBe(false);
+    backend.expectOne('/api/v1/reservations').flush({
+      id: 'reservation-for-event-one',
+      ticketTypeId: 'general',
+      quantity: 1,
+      status: 'ACTIVE',
+      expiresAt: '2030-01-01',
+    });
+    await first;
+    expect(purchase.event()?.id).toBe(event.id);
+    expect(purchase.reservation()?.id).toBe('reservation-for-event-one');
+  });
+
   it('keeps the pending reservation when another event is selected', async () => {
     await reserve();
     expect(purchase.select({ ...event, id: 'another' })).toBe(false);

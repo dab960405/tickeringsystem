@@ -109,6 +109,19 @@ class LocalServerTest(unittest.TestCase):
                 for path in ("/source.ts", "/missing.js", "/%2e%2e/dev_server.py", "/unknown"):
                     self.assertEqual(self.request("GET", path)[0], 404)
 
+    def test_deep_link_csp_allows_same_origin_base(self):
+        connection = HTTPConnection("127.0.0.1", self.server.server_port)
+        try:
+            connection.request("GET", "/eventos/abc-123")
+            response = connection.getresponse()
+            policy = response.getheader("Content-Security-Policy")
+            self.assertIn("base-uri 'self'", policy)
+            self.assertIn("default-src 'self'", policy)
+            self.assertIn("frame-ancestors 'none'", policy)
+            response.read()
+        finally:
+            connection.close()
+
     def test_missing_build_explains_how_to_start(self):
         with tempfile.TemporaryDirectory() as directory, patch("dev_server.WEB_ROOT", Path(directory)):
             self.assertEqual(self.request("GET", "/eventos")[0], 503)

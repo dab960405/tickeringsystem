@@ -37,3 +37,41 @@ jobs:
           name: jacoco-reports
           path: "**/target/site/jacoco/"
           if-no-files-found: ignore
+
+  frontend:
+    name: Angular client
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run Angular tests
+        working-directory: frontend
+        run: npm test
+      - name: Build Angular production bundle
+        working-directory: frontend
+        run: npm run build
+      - name: Check Angular formatting
+        working-directory: frontend
+        run: npm run format:check
+
+  python:
+    name: Python local tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Test local frontend gateway
+        run: python3 -m unittest discover -s frontend -p 'test_*.py' -v
+      - name: Test local automation scripts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v

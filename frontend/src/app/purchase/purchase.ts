@@ -36,7 +36,7 @@ export class Purchase {
   }
 
   select(event: EventDetail): boolean {
-    if (this.pending() && this.event()?.id !== event.id) return false;
+    if ((this.pending() || this.busy()) && this.event()?.id !== event.id) return false;
     if (this.event()?.id !== event.id) this.clearCheckout();
     this.selectedEvent.set(event);
     return true;

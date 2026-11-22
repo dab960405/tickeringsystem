@@ -18,11 +18,18 @@ class SmokeFailure(Exception):
     pass
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Prevent automatic credential forwarding to a redirected URL."""
+
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
 class Client:
     def __init__(self, base_url):
         self.base_url = base_url.rstrip("/")
         self.count = 0
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
     def request(self, method, path, expected=200, body=None, token=None, headers=None):
         headers = dict(headers or {})
