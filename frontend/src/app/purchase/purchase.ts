@@ -26,12 +26,15 @@ export class Purchase {
   );
 
   constructor() {
+    let activeSession = this.auth.sessionVersion();
     effect(() => {
-      if (!this.auth.signedIn()) {
-        this.activeReservation.set(null);
-        this.activeOrder.set(null);
-        this.key = null;
+      const session = this.auth.sessionVersion();
+      // Logout and another login may complete in one reactive turn. Track the session
+      // generation so a new authenticated account never inherits the previous checkout.
+      if (session !== activeSession || !this.auth.signedIn()) {
+        this.clearCheckout();
       }
+      activeSession = session;
     });
   }
 
