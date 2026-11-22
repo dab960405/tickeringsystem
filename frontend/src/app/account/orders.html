@@ -38,7 +38,9 @@
         </div>
         <details>
           <summary>Order identifiers</summary>
-          <p class="identifier">Order: {{ order.id }}<br />Reservation: {{ order.reservationId }}</p>
+          <p class="identifier">
+            Order: {{ order.id }}<br />Reservation: {{ order.reservationId }}
+          </p>
         </details>
         <app-order-actions [order]="order" (updated)="update($event)" />
       </article>

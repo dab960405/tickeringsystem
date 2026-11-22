@@ -62,8 +62,6 @@ export class Login {
 
   private destination() {
     const value = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/events';
-    return /^\/(events(?:\/[a-f0-9-]+)?|orders|tickets)(?:\?|$)/.test(value)
-      ? value
-      : '/events';
+    return /^\/(events(?:\/[a-f0-9-]+)?|orders|tickets)(?:\?|$)/.test(value) ? value : '/events';
   }
 }
