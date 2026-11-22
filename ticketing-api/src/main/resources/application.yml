@@ -41,6 +41,8 @@ spring:
 logging:
   level:
     org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF
+  pattern:
+    level: "%5p [correlationId:%X{correlationId:-}]"
 
 springdoc:
   swagger-ui:

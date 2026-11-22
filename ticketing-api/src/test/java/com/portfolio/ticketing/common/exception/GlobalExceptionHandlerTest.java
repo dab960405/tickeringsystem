@@ -2,11 +2,13 @@ package com.portfolio.ticketing.common.exception;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.portfolio.ticketing.auth.config.SecurityConfig;
 import com.portfolio.ticketing.auth.config.SecurityErrorHandler;
+import com.portfolio.ticketing.common.config.CorrelationIdFilter;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
@@ -22,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +39,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({
   GlobalExceptionHandlerTest.FailingController.class,
   SecurityConfig.class,
-  SecurityErrorHandler.class
+  SecurityErrorHandler.class,
+  CorrelationIdFilter.class
 })
 @WithMockUser
 class GlobalExceptionHandlerTest {
@@ -118,5 +122,22 @@ class GlobalExceptionHandlerTest {
                 .content("{\"name\":\"\"}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors.name").value("name is required"));
+  }
+
+  @Test
+  void should_echoSafeCorrelationId_when_controllerReturnsProblemDetails() throws Exception {
+    mockMvc
+        .perform(get("/test/fail/not-found").header("X-Correlation-Id", "request.2026-123"))
+        .andExpect(status().isNotFound())
+        .andExpect(header().string("X-Correlation-Id", "request.2026-123"));
+  }
+
+  @Test
+  @WithAnonymousUser
+  void should_includeCorrelationId_when_securityRejectsAnonymousRequest() throws Exception {
+    mockMvc
+        .perform(get("/test/fail/not-found").header("X-Correlation-Id", "unauthorized-42"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(header().string("X-Correlation-Id", "unauthorized-42"));
   }
 }
