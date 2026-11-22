@@ -44,10 +44,7 @@ class ReservationExpirationServiceTest {
   void setUp() {
     expirationService =
         new ReservationExpirationService(
-            reservationRepository,
-            inventoryService,
-            eventLockService,
-            redisProjectionService);
+            reservationRepository, inventoryService, eventLockService, redisProjectionService);
   }
 
   @Test

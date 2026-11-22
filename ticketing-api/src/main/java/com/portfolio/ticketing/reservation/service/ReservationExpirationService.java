@@ -45,7 +45,8 @@ public class ReservationExpirationService {
   @Transactional
   public void expireOverdue() {
     List<ReservationExpirationCandidate> candidates =
-        reservationRepository.findExpiredCandidates(reservationRepository.databaseNow(), BATCH_SIZE);
+        reservationRepository.findExpiredCandidates(
+            reservationRepository.databaseNow(), BATCH_SIZE);
     if (candidates.isEmpty()) {
       return;
     }
