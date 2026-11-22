@@ -42,3 +42,10 @@ De acuerdo con la especificación de portafolio, se propone documentar como cont
 ## Solicitud de dictamen
 
 Se solicita aceptación/rechazo expreso de: (a) excepción ADR-024 y cierre previo de Fase 3; (b) contrato SIMULATED ADR-022/H84-01; (c) ERD V16 y evidencia H75–H84; y (d) cierre formal de Fase 4. **Hasta ese dictamen: Fases 3 y 4 abiertas, Fase 5 bloqueada.**
+
+## Auditoría complementaria del 21 de noviembre de 2026
+
+El [expediente AUD-01–AUD-12](../audit/AUD-2026-11-21.md) registra correcciones,
+evidencias locales y decisiones pendientes sobre contratos, límites modulares,
+correlación y ciclos. Conserva la clasificación histórica H75–H84 y el estado de
+los ADR; no constituye un dictamen ni el cierre de esta fase.

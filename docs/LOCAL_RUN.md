@@ -97,7 +97,10 @@ Edita `.env` y reemplaza los valores de ejemplo, especialmente contraseñas y se
 openssl rand -base64 32
 ```
 
-Configura el resultado en `JWT_SECRET`. Define también un valor aleatorio para `PAYMENT_WEBHOOK_SECRET`; ambos secretos son independientes. No subas `.env` al repositorio.
+Configura el resultado en `JWT_SECRET`. Genera otro valor independiente con `openssl rand -base64 32` para `PAYMENT_WEBHOOK_SECRET`.
+La API rechaza secretos HMAC de menos de 32 caracteres, valores de ejemplo conocidos y
+valores de un solo carácter repetido; esto no demuestra entropía, por lo que debes generarlo
+aleatoriamente. No subas `.env` al repositorio.
 
 Docker Compose lee `.env` automáticamente para interpolar los valores del compose. La aplicación ejecutada directamente desde el host necesita que esas variables estén exportadas en el proceso que inicia Java.
 
@@ -119,7 +122,11 @@ Get-Content .env | ForEach-Object {
 }
 ```
 
-Vuelve a cargar las variables en cada terminal nueva. Spring Boot usa el perfil `dev` por defecto; `SPRING_PROFILES_ACTIVE` puede sobrescribirlo.
+Vuelve a cargar las variables en cada terminal nueva. Para desarrollo local selecciona
+explícitamente `SPRING_PROFILES_ACTIVE=dev` (ya está en `.env.example`). Sin un perfil
+activo se cargan únicamente las migraciones de estructura, sin usuarios de demostración.
+Un despliegue debe seleccionar su perfil y usar una base sin datos de demostración; cambiar
+el perfil no elimina cuentas ya insertadas.
 
 ## Levantar infraestructura
 
@@ -129,6 +136,10 @@ Desde la raíz del repositorio:
 docker compose --profile infra up -d
 docker compose ps
 ```
+
+Los puertos publicados se enlazan a `127.0.0.1`; las aplicaciones del host acceden por
+localhost y Kafka conserva su listener interno `kafka:29092`. Los contenedores existentes
+deben recrearse para aplicar el cambio de enlace, conservando sus volúmenes.
 
 El perfil `infra` inicia PostgreSQL, Redis, Kafka y MongoDB. Espera a que los cuatro servicios muestren estado `healthy` antes de iniciar las aplicaciones. MongoDB y Kafka forman parte de la infraestructura del proyecto, aunque la API principal utiliza PostgreSQL y Redis para las funciones cubiertas en esta fase.
 
@@ -201,10 +212,12 @@ Los timeouts Redis de la API están configurados en `application.yml` a 500 ms p
 
 La solicitud `POST /api/v1/payments/webhook` requiere que `X-Signature` contenga el HMAC-SHA256 hexadecimal del cuerpo raw exacto. La extensión REST Client de VS Code **no puede calcular esta firma**; debes generarla fuera del archivo HTTP y copiar el digest hexadecimal en la variable `@webhookSignature` de `docs/flow.http`.
 
-Con `PAYMENT_WEBHOOK_SECRET` exportado desde `.env`, sustituye el UUID de ejemplo por el `orderId` devuelto al crear la orden. El contenido de `PAYLOAD` debe coincidir byte por byte con el cuerpo JSON de la solicitud HTTP (sin espacios adicionales ni salto de línea final):
+Con `PAYMENT_WEBHOOK_SECRET` exportado desde `.env`, sustituye el UUID de ejemplo por el `id` devuelto al crear la orden, y copia también
+`totalAmount` y `currency` de esa respuesta. Una entrada General del seed cuesta 45.00 USD;
+el total real puede variar con el tipo y la cantidad. El contenido de `PAYLOAD` debe coincidir byte por byte con el cuerpo JSON de la solicitud HTTP (sin espacios adicionales ni salto de línea final):
 
 ```bash
-PAYLOAD='{"orderId":"REPLACE_WITH_ORDER_UUID","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":80.00,"currency":"USD"}'
+PAYLOAD='{"orderId":"REPLACE_WITH_ORDER_UUID","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":REPLACE_WITH_ORDER_TOTAL_AMOUNT,"currency":"REPLACE_WITH_ORDER_CURRENCY"}'
 printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
 ```
 

@@ -15,6 +15,8 @@
 @ticketTypeId = REPLACE_WITH_TICKET_TYPE_UUID
 @reservationId = REPLACE_WITH_RESERVATION_UUID
 @orderId = REPLACE_WITH_ORDER_UUID
+@orderAmount = REPLACE_WITH_ORDER_TOTAL_AMOUNT
+@orderCurrency = REPLACE_WITH_ORDER_CURRENCY
 @webhookSignature = REPLACE_WITH_HMAC_SHA256_HEX
 
 ### 1. Registro
@@ -63,7 +65,8 @@ Content-Type: application/json
 }
 
 ### 6. Webhook de pago
-# Copia el id de la orden en orderId.
+# Copia id, totalAmount y currency de la respuesta de orden en orderId, orderAmount y orderCurrency.
+# Una entrada General del seed cuesta 45.00 USD; usa siempre el importe real de tu orden.
 # X-Signature debe ser el HMAC-SHA256 hexadecimal del CUERPO RAW EXACTO enviado (bytes idénticos, sin reformatear).
 # El REST Client de VS Code no calcula esta firma. Define PAYLOAD con el JSON exacto del cuerpo y genera la firma:
 # printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
@@ -72,7 +75,7 @@ POST {{baseUrl}}/api/v1/payments/webhook
 X-Signature: {{webhookSignature}}
 Content-Type: application/json
 
-{"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":80.00,"currency":"USD"}
+{"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":{{orderAmount}},"currency":"{{orderCurrency}}"}
 
 ### 7. Refresh del token
 POST {{baseUrl}}/api/v1/auth/refresh

@@ -27,9 +27,7 @@ import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
 import com.portfolio.ticketing.venue.domain.Venue;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,8 +63,7 @@ class ReservationServiceTest {
             inventoryService,
             eventLockService,
             properties,
-            redisProjectionService,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            redisProjectionService);
   }
 
   @Test
@@ -82,6 +79,7 @@ class ReservationServiceTest {
     order.verify(inventoryService).findEventId(TICKET_TYPE_ID);
     order.verify(eventLockService).lockShared(EVENT_ID);
     order.verify(inventoryService).lockRequired(TICKET_TYPE_ID);
+    order.verify(reservationRepository).databaseNow();
     order.verify(inventoryService).reserve(TICKET_TYPE_ID, 2);
     order.verify(reservationRepository).save(any(Reservation.class));
   }
@@ -231,6 +229,7 @@ class ReservationServiceTest {
     lockOrder.verify(eventLockService).lockShared(EVENT_ID);
     lockOrder.verify(inventoryService).lockRequired(TICKET_TYPE_ID);
     lockOrder.verify(reservationRepository).findOwnedForUpdate(RESERVATION_ID, USER_ID);
+    lockOrder.verify(reservationRepository).databaseNow();
   }
 
   @Test
@@ -262,11 +261,40 @@ class ReservationServiceTest {
         .isInstanceOf(BusinessRuleViolationException.class);
   }
 
+  @Test
+  void should_acceptUnexpiredReservation_when_jvmClockIsAheadOfDatabase() {
+    Reservation reservation = new Reservation(USER_ID, ticketTypeMock(), 2, NOW.minusSeconds(300));
+    stubOrderLocks(reservation, EventStatus.PUBLISHED);
+    when(reservationRepository.databaseNow()).thenReturn(NOW.minusSeconds(600));
+
+    assertThat(reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isSameAs(reservation);
+  }
+
+  @Test
+  void should_rejectExpiredReservation_when_jvmClockIsBehindDatabase() {
+    stubOrderLocks(activeReservation(), EventStatus.PUBLISHED);
+    when(reservationRepository.databaseNow()).thenReturn(NOW.plusSeconds(900));
+
+    assertThatThrownBy(() -> reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isInstanceOf(BusinessRuleViolationException.class);
+  }
+
+  @Test
+  void should_rejectReservation_when_databaseTimeEqualsExpiry() {
+    stubOrderLocks(activeReservation(), EventStatus.PUBLISHED);
+    when(reservationRepository.databaseNow()).thenReturn(NOW.plusSeconds(600));
+
+    assertThatThrownBy(() -> reservationService.lockActiveForOrder(RESERVATION_ID, USER_ID))
+        .isInstanceOf(BusinessRuleViolationException.class);
+  }
+
   private void stubOrderLocks(Reservation reservation, EventStatus lockedEventStatus) {
     when(reservationRepository.findTicketTypeIdByIdAndUserId(RESERVATION_ID, USER_ID))
         .thenReturn(Optional.of(TICKET_TYPE_ID));
     when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
     when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
+    lenient().when(reservationRepository.databaseNow()).thenReturn(NOW);
     TicketType lockedTicketType = ticketTypeMock();
     when(inventoryService.lockRequired(TICKET_TYPE_ID)).thenReturn(lockedTicketType);
     when(reservationRepository.findOwnedForUpdate(RESERVATION_ID, USER_ID))
@@ -301,6 +329,7 @@ class ReservationServiceTest {
     staleSnapshot.publish();
     lenient().when(inventoryService.findEventId(TICKET_TYPE_ID)).thenReturn(EVENT_ID);
     lenient().when(eventLockService.lockShared(EVENT_ID)).thenReturn(lockedEventStatus);
+    lenient().when(reservationRepository.databaseNow()).thenReturn(NOW);
     TicketType ticketType = ticketTypeMock();
     lenient().when(ticketType.getEvent()).thenReturn(staleSnapshot);
     lenient().when(ticketType.isOnSale(NOW)).thenReturn(onSale);

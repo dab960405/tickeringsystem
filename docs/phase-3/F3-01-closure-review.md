@@ -41,3 +41,10 @@ La evidencia técnica es `./mvnw -B clean verify`: CI #317 ejecutó 390 unitaria
 ## D. Resultado del desarrollador
 
 **Cobertura técnica conforme para escenarios registrados; expediente candidato, no cierre formal.** No se alteraron servicios ni contratos; se solicita decisión del Tech Lead sobre una desviación arquitectónica explícita.
+
+## Auditoría complementaria del 21 de noviembre de 2026
+
+El [expediente AUD-01–AUD-12](../audit/AUD-2026-11-21.md) registra correcciones,
+evidencias locales y decisiones pendientes sobre contratos, límites modulares,
+correlación y ciclos. Conserva la clasificación histórica H75–H84 y el estado de
+los ADR; no constituye un dictamen ni el cierre de esta fase.

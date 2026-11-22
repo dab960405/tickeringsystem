@@ -42,7 +42,7 @@ Cada transacción configura `lock_timeout` y `statement_timeout` mediante `SET L
 
 ## Evidencia de pruebas
 
-`OperationWorkerIT` ejecuta 9 casos con PostgreSQL real:
+En la evidencia histórica de este documento, `OperationWorkerIT` ejecutaba 9 casos con PostgreSQL real:
 
 1. Dos workers compitiendo por el mismo job.
 2. Renovación de lease.
@@ -54,7 +54,15 @@ Cada transacción configura `lock_timeout` y `statement_timeout` mediante `SET L
 8. Nueva operación de ciclo sin repetir la aplicación semántica global.
 9. Webhook duplicado concurrente con una sola emisión.
 
-`OrderPaymentFlowIT` ejecuta 17 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes, concurrencia de identidad de operación y evidencia append-only.
+En esa misma evidencia histórica, `OrderPaymentFlowIT` ejecutaba 17 casos de extremo a extremo para compra, fallo, pagos tardíos, expiración concurrente de órdenes, reembolsos, identidades persistentes, concurrencia de identidad de operación y evidencia append-only.
+
+### Recuento posterior de referencia
+
+La auditoría del 21 de noviembre de 2026 reporta `OperationWorkerIT` **12/12** y
+`OrderPaymentFlowIT` **36/36** en [CI #320](https://github.com/dab960405/tickeringsystem/actions/runs/43670018463),
+SHA `76a0fbb2380d009e13df75e1ab7e9a80f14b69e7`. Los números 9 y 17 anteriores se
+conservan como evidencia histórica, no como inventario vigente. La nueva ejecución local
+se documenta por separado en [el expediente de auditoría](../audit/AUD-2026-11-21.md).
 
 ## Pendientes
 

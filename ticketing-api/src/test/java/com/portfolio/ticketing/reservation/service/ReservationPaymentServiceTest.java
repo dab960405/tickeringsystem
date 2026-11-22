@@ -18,9 +18,7 @@ import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,8 +54,7 @@ class ReservationPaymentServiceTest {
             inventoryService,
             eventLockService,
             properties,
-            redisProjectionService,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            redisProjectionService);
   }
 
   @Test

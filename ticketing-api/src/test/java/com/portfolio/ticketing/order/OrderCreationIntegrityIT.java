@@ -1,6 +1,7 @@
 package com.portfolio.ticketing.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -19,6 +20,7 @@ import com.portfolio.ticketing.venue.repository.VenueRepository;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +33,9 @@ import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +43,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -55,6 +61,38 @@ class OrderCreationIntegrityIT extends AbstractIntegrationTest {
   @Autowired private VenueRepository venueRepository;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private DataSource dataSource;
+  @MockitoSpyBean private Clock clock;
+
+  @ParameterizedTest
+  @CsvSource({"3600, 300, 201", "-3600, -300, 422"})
+  void should_useDatabaseExpiry_when_applicationClockDrifts(
+      long clockOffset, int expiryOffset, int expectedStatus) throws Exception {
+    OrderFixture fixture = createReservation();
+    jdbcTemplate.update(
+        "UPDATE reservations SET expires_at = clock_timestamp() + (? * interval '1 second') WHERE id = ?",
+        expiryOffset,
+        fixture.reservationId());
+    doReturn(Instant.now().plusSeconds(clockOffset)).when(clock).instant();
+
+    MvcResult result = createOrder(fixture, "clock-drift-" + UUID.randomUUID());
+
+    assertThat(result.getResponse().getStatus()).isEqualTo(expectedStatus);
+    assertThat(countOrders(fixture.reservationId())).isEqualTo(expectedStatus == 201 ? 1 : 0);
+    assertThat(countPayments(fixture.reservationId())).isEqualTo(expectedStatus == 201 ? 1 : 0);
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {-1800, 1800})
+  void should_startReservationTtlFromDatabase_when_applicationClockDrifts(long offset) {
+    doReturn(Instant.now().plusSeconds(offset)).when(clock).instant();
+    OrderFixture fixture = createReservation();
+    Double secondsRemaining =
+        jdbcTemplate.queryForObject(
+            "SELECT EXTRACT(EPOCH FROM (expires_at - clock_timestamp())) FROM reservations WHERE id = ?",
+            Double.class,
+            fixture.reservationId());
+    assertThat(secondsRemaining).isBetween(590.0, 600.0);
+  }
 
   @Test
   void should_return409_when_reservationAlreadyHasAnOrderWithAnotherKey() throws Exception {

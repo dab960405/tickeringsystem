@@ -74,8 +74,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(DataIntegrityViolationException.class)
   ProblemDetail handleDataIntegrity(DataIntegrityViolationException exception) {
-    // The database message may leak schema details, so it is logged but never returned.
-    log.warn("Data integrity violation: {}", exception.getMostSpecificCause().getMessage());
+    // SQL messages and stack traces can contain rejected values, including personal data.
+    log.warn(
+        "Data integrity violation [data-conflict]: {}",
+        exception.getMostSpecificCause().getClass().getSimpleName());
     return problem(
         HttpStatus.CONFLICT, "The request conflicts with existing data", "data-conflict");
   }

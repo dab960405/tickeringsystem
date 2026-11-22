@@ -2,7 +2,7 @@ spring:
   application:
     name: ticketing-api
   profiles:
-    default: dev
+    default: none
   threads:
     virtual:
       enabled: true

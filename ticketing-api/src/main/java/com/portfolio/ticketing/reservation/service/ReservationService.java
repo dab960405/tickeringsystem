@@ -14,7 +14,6 @@ import com.portfolio.ticketing.reservation.domain.ReservationStatus;
 import com.portfolio.ticketing.reservation.repository.ReservationRepository;
 import com.portfolio.ticketing.tickettype.domain.TicketType;
 import com.portfolio.ticketing.tickettype.service.TicketTypeInventoryService;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,21 +30,18 @@ public class ReservationService {
   private final EventLockService eventLockService;
   private final ReservationProperties properties;
   private final ReservationRedisProjectionService redisProjectionService;
-  private final Clock clock;
 
   public ReservationService(
       ReservationRepository reservationRepository,
       TicketTypeInventoryService inventoryService,
       EventLockService eventLockService,
       ReservationProperties properties,
-      ReservationRedisProjectionService redisProjectionService,
-      Clock clock) {
+      ReservationRedisProjectionService redisProjectionService) {
     this.reservationRepository = reservationRepository;
     this.inventoryService = inventoryService;
     this.eventLockService = eventLockService;
     this.properties = properties;
     this.redisProjectionService = redisProjectionService;
-    this.clock = clock;
   }
 
   @PreAuthorize("hasRole('USER')")
@@ -53,7 +49,7 @@ public class ReservationService {
     UUID eventId = inventoryService.findEventId(request.ticketTypeId());
     EventStatus lockedEventStatus = eventLockService.lockShared(eventId);
     TicketType ticketType = inventoryService.lockRequired(request.ticketTypeId());
-    Instant now = clock.instant();
+    Instant now = reservationRepository.databaseNow();
     validateSale(lockedEventStatus, ticketType, request.quantity(), now);
     inventoryService.reserve(ticketType.getId(), request.quantity());
     Reservation reservation =
@@ -104,7 +100,7 @@ public class ReservationService {
       throw new BusinessRuleViolationException("Orders require a published event");
     }
     if (reservation.getInventoryDisposition() != ReservationInventoryDisposition.HELD
-        || !reservation.isActiveAt(clock.instant())) {
+        || !reservation.isActiveAt(reservationRepository.databaseNow())) {
       throw new BusinessRuleViolationException("Reservation is not active or has expired");
     }
     return reservation;

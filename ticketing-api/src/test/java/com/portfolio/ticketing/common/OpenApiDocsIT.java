@@ -17,7 +17,7 @@ class OpenApiDocsIT extends AbstractIntegrationTest {
   @Autowired private TestRestTemplate restTemplate;
 
   @Test
-  void should_documentEveryPhaseOneEndpoint_when_openApiIsRequested() {
+  void should_documentCurrentEndpoints_when_openApiIsRequested() {
     ResponseEntity<JsonNode> response = restTemplate.getForEntity("/v3/api-docs", JsonNode.class);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -32,6 +32,11 @@ class OpenApiDocsIT extends AbstractIntegrationTest {
     assertOperations(paths, "/api/v1/ticket-types/{id}", "put");
     assertOperations(paths, "/api/v1/reservations", "post");
     assertOperations(paths, "/api/v1/reservations/{id}", "delete");
+    assertOperations(paths, "/api/v1/orders", "get", "post");
+    assertOperations(paths, "/api/v1/orders/{id}", "get");
+    assertOperations(paths, "/api/v1/orders/{id}/cancel", "post");
+    assertOperations(paths, "/api/v1/me/tickets", "get");
+    assertOperations(paths, "/api/v1/payments/webhook", "post");
     assertOperations(paths, "/api/v1/auth/register", "post");
     assertOperations(paths, "/api/v1/auth/login", "post");
     assertOperations(paths, "/api/v1/auth/refresh", "post");

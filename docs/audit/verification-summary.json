@@ -1,0 +1,959 @@
+{
+  "base_sha": "76a0fbb2380d009e13df75e1ab7e9a80f14b69e7",
+  "branch": "fix/audit-2026-11-21",
+  "revision": "Uncommitted working tree; no Git author identity is configured",
+  "command": "./mvnw -B clean verify",
+  "finished_at": "2026-11-21T20:44:27-05:00",
+  "result": "BUILD SUCCESS",
+  "totals": {
+    "unit": {
+      "tests": 407,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "integration": {
+      "tests": 179,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "suites": [
+    {
+      "module": "common-events",
+      "kind": "unit",
+      "name": "com.portfolio.events.EventEnvelopeTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "common-events/target/surefire-reports/TEST-com.portfolio.events.EventEnvelopeTest.xml",
+      "sha256": "d2fb522007ef0a0f188622b35403b48aa131ca3e585eb388ea0584af2efa93f5"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.auth.api.AuthControllerTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.auth.api.AuthControllerTest.xml",
+      "sha256": "d955375c1773708c8a012948784dc679d74317b4349f130bc1dd4287be68be50"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.auth.service.AuthServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.auth.service.AuthServiceTest.xml",
+      "sha256": "bf5d179377b0fb1599624dd5f0f1c635b0276b5031b8c37052fffdc46934a6dc"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.auth.service.JwtTokenServiceTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.auth.service.JwtTokenServiceTest.xml",
+      "sha256": "725986142c94c14a597de981c1f5423f063c3031195a4d1478c3e3f716bcd8c8"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.auth.service.LoginRateLimiterTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.auth.service.LoginRateLimiterTest.xml",
+      "sha256": "0b73084efc7ed1fcf2299eab36198b445d9746a24c8bab42797683a57f6f586b"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.auth.service.RefreshTokenStoreTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.auth.service.RefreshTokenStoreTest.xml",
+      "sha256": "19584bec07a04125e8e0c9fe6a5aabc23563c92a4ca5c6705dc54cc95c7452a6"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.api.PageResponseTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.api.PageResponseTest.xml",
+      "sha256": "a83763d01458a7496aee9129ec8646f29ee6de2740b877a516b7721b2f8869c5"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.config.RedisCacheConfigTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.config.RedisCacheConfigTest.xml",
+      "sha256": "cc77ee22f8f556a71b7869760ddd4a7ab1260eaffa71b1c93fa5b88444530080"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.domain.BaseEntityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.domain.BaseEntityTest.xml",
+      "sha256": "d2da344716f74ff54c7557376fc18f07f4356020483a7cfd18a766651ea7aad1"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.exception.DataIntegrityLoggingTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.exception.DataIntegrityLoggingTest.xml",
+      "sha256": "ed15699d1f1e3c51cae34dfd45143c317e84cfcf3c9f6447852bbe42286bb823"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.exception.GlobalExceptionHandlerTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.exception.GlobalExceptionHandlerTest.xml",
+      "sha256": "8e485e7b4dd7aa329e4283e26cb501eb9e20911fd8f7a089acd48b100863d1b0"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.common.ratelimit.RedisRateLimiterTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.common.ratelimit.RedisRateLimiterTest.xml",
+      "sha256": "0e34b695ebed7dd3a5f7e96613637a020042812360eeb99827ef998eaa2dc17b"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.event.api.EventControllerTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.event.api.EventControllerTest.xml",
+      "sha256": "eeb1979a043b3b045fe2cdced17b8abe37ed66262416e9193408c0e915dc9240"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.event.domain.EventTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.event.domain.EventTest.xml",
+      "sha256": "880a942a4582420fe457e093cceacf38901db832556eaadb67a0f1f348dc3331"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.event.service.EventAuthorizationServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.event.service.EventAuthorizationServiceTest.xml",
+      "sha256": "75755307656784353dda77396b97765bfae4b52de83ee65e450b5c0125c08676"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.event.service.EventServiceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.event.service.EventServiceTest.xml",
+      "sha256": "0927a2521aa806f60607e94004735eb682fe3df1c41e7d06358678f967d2f935"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.operation.config.OperationPropertiesTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.operation.config.OperationPropertiesTest.xml",
+      "sha256": "314dcfc49ff915905e1b9dc8e9589b7a62509ced49173380644b4c5bd82d87e2"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.operation.service.OperationRecoveryWorkerTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.operation.service.OperationRecoveryWorkerTest.xml",
+      "sha256": "f6aff85a6f4b84dce8d897dc9e3793344dd5131829974d5bfedbca097a9b682a"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.api.OrderControllerTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.api.OrderControllerTest.xml",
+      "sha256": "3ec43b69bd772f4f0baac6d866110639e53b1b3cb32fd4959dc6accd46ef7a99"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.api.TicketControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.api.TicketControllerTest.xml",
+      "sha256": "5e0342fe0d7063fc0244eaf9cadf9e129f28aa1e3b7858016cbce6c789fece3c"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.domain.CommercialGenerationTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.domain.CommercialGenerationTest.xml",
+      "sha256": "23d4f31f000cb7e8fd623374b309f1f091fda4bbc6d26af56603a7f98b345d1d"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.domain.OrderItemTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.domain.OrderItemTest.xml",
+      "sha256": "f221d9794beea9c75ace080f206927f54b57d37b967c99af07c24f6835be43be"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.domain.OrderStatusTest",
+      "tests": 50,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.domain.OrderStatusTest.xml",
+      "sha256": "b438f87ccd2944ed38ce094ecccf72f5304e0962dad498cbf6c82ca124e26519"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.domain.OrderTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.domain.OrderTest.xml",
+      "sha256": "47699f4b6045a2dddb2dc3d89ee0de4b5089b5d5cc6cd38f1f54622a9fd521ac"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.domain.TicketTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.domain.TicketTest.xml",
+      "sha256": "e3d49d9b5b17a3ae523f49811224ed70f2a8b4d19fc851c8c122814237473ae8"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.service.OrderCancellationServiceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.service.OrderCancellationServiceTest.xml",
+      "sha256": "730a531e10f464440cf66124819e7717d413d3e4f49fd809fbb7e2339d42c457"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.service.OrderPaymentServiceTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.service.OrderPaymentServiceTest.xml",
+      "sha256": "c3a1973ac89851c721c375d206e0164c2389c97d5cdeb7b7d92ccb7f5c1415fe"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.service.OrderServiceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.service.OrderServiceTest.xml",
+      "sha256": "a3d60f0c86938280d11b4292a8801deded61a299bd819a34915232921e35d6a7"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.order.service.TicketServiceTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.order.service.TicketServiceTest.xml",
+      "sha256": "892d5ed05e8fbec52b9e712f576c045f77cc991c3aa92833ea84e22ccf58b4e6"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.api.PaymentWebhookControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.api.PaymentWebhookControllerTest.xml",
+      "sha256": "4c07abec549576a10720809a492e09f20986148783164e056cee0b42c61dd62a"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.config.PaymentPropertiesTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.config.PaymentPropertiesTest.xml",
+      "sha256": "ad405bbdf1149e8cd2622ec5cc6d2741db6d8b570ff70c7fdfa6baac228fa104"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.domain.PaymentTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.domain.PaymentTest.xml",
+      "sha256": "e23522b72d77816cda967903b1b6d4ed1eb168893121dbab0d13543244bd6880"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.service.PaymentEvidenceDigestTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.service.PaymentEvidenceDigestTest.xml",
+      "sha256": "ab6b3cb34277b41916e3591a2af68e815a87f2a14769185b58151db5ef33ca1d"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.service.PaymentServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.service.PaymentServiceTest.xml",
+      "sha256": "efa27129e175e31e27a92fc7264470ca8ef0886027d58b6db1b9a64be03b6f54"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.payment.service.PaymentWebhookServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.payment.service.PaymentWebhookServiceTest.xml",
+      "sha256": "f78991ce21c4620ea57084f11ad79d20e91a4a9ef0ab2e9f2972b7a891561551"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.api.ReservationControllerTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.api.ReservationControllerTest.xml",
+      "sha256": "508aa8b2dde558cfdd6fdafccfbe5bdfbca091862150619908d279f61cef5437"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.domain.ReservationTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.domain.ReservationTest.xml",
+      "sha256": "6939e51da421e2b86f43d93549e3ade1b0ace93001c48354c8ffff31b10cc739"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.service.ReservationExpirationServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.service.ReservationExpirationServiceTest.xml",
+      "sha256": "d24cae3a09835c5bc3d92b7988db57ac831fd1497b625e76a3865b3f14c667ce"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.service.ReservationPaymentServiceTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.service.ReservationPaymentServiceTest.xml",
+      "sha256": "4540a4deb7d652ae8f7dc2c7b9e3ccc94bb288f1c746cc248a6c6fcac2c5edf7"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.service.ReservationRedisProjectionServiceTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.service.ReservationRedisProjectionServiceTest.xml",
+      "sha256": "88fbcad1d521c4c7a150b600876eaf7fcc6abee55eb24fee2d5d4ca94defd6e3"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.reservation.service.ReservationServiceTest",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.reservation.service.ReservationServiceTest.xml",
+      "sha256": "e348b7f246bfa090aee5f52f07f36d2a21be4f99ba66ee169a62653ab4be9b3b"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.api.TicketTypeControllerTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.api.TicketTypeControllerTest.xml",
+      "sha256": "7dab9d3d25c4369b75ffb151a711c14a4aa70f24965ed77e02b9198b8cbdc33a"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.domain.TicketTypeTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.domain.TicketTypeTest.xml",
+      "sha256": "0261894f4f7c657e2e401f7785af4d03a0ddcd6493c52321176d58d7fe29934f"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.service.TicketTypeAuthorizationServiceTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.service.TicketTypeAuthorizationServiceTest.xml",
+      "sha256": "cbab7e8b0682d16d3949c4c76bf7bab4789213813cf3978e330e70ef016a119d"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.service.TicketTypeInventoryServiceTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.service.TicketTypeInventoryServiceTest.xml",
+      "sha256": "aa572a4f3a5655cf18c33a6eb4b40a0b367e80e2f9e5eb6975ceeeb441320fb2"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.service.TicketTypeQueryServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.service.TicketTypeQueryServiceTest.xml",
+      "sha256": "3dcd7ba313e0a65675973c72a80e477f21547437d3b51c71925e6325083b090f"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.tickettype.service.TicketTypeServiceTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.tickettype.service.TicketTypeServiceTest.xml",
+      "sha256": "e16e134dffbfeafaddd11db04a1dcfd74630e84ea80720d7b57ffd7b2abb2e9d"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.user.domain.UserTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.user.domain.UserTest.xml",
+      "sha256": "9e6b899dffc6c3efb192fd1fb06b0d22b997ac78e35d95d5755c7898b576c24a"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.user.service.UserServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.user.service.UserServiceTest.xml",
+      "sha256": "58a6a1dc1c851c74ac729614c6600d14a6f89f08402c5c007cab9ad5db062cb0"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.venue.api.VenueControllerTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.venue.api.VenueControllerTest.xml",
+      "sha256": "a27b85cd1706ca86040926970a53e69c0ee69ff113a89584aa42a132c4a5d3b7"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.venue.domain.VenueTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.venue.domain.VenueTest.xml",
+      "sha256": "41d653a07a76d2dc2ec36f8e173777464314cfdfea3b906b152d4c19156f0f9b"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "unit",
+      "name": "com.portfolio.ticketing.venue.service.VenueServiceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/surefire-reports/TEST-com.portfolio.ticketing.venue.service.VenueServiceTest.xml",
+      "sha256": "6551c74a770e8d0037d005c80637e90eed1f535bd66f0b84e40cea020c7c1035"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.TicketingApiApplicationIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.TicketingApiApplicationIT.xml",
+      "sha256": "f6a06f4f40fe127c32c5663022438fa36b08b1d9779313ba0b2fa2d196351e4c"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.auth.AuthenticationFlowIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.auth.AuthenticationFlowIT.xml",
+      "sha256": "45991024d1f234726ffdb56aa596e3f7554a9c13049e04b9b4b0cdbdb2080a60"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.DevSeedMigrationIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.DevSeedMigrationIT.xml",
+      "sha256": "7c81d00f13685f5ba0386e7dbf0ab169d62cf6b4c7d2d3b1d0a470ab2b1c2b8e"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.FlywayMigrationIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.FlywayMigrationIT.xml",
+      "sha256": "1196e85ce4eff626221425857523eb8c4b3850b7675c0059ff4474dc334425d5"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.OpenApiDocsIT",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.OpenApiDocsIT.xml",
+      "sha256": "7f864d97d98330c9f064bb11c8c0d3530ae092239f32ff9d15e18983d3270dd1"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.config.DeploymentProfileIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.config.DeploymentProfileIT.xml",
+      "sha256": "d81fee306cf7e8df92d8fe6f8c723101ae9f3b07c733e55626c7a77afa4a6673"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.exception.DataIntegrityLoggingIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.exception.DataIntegrityLoggingIT.xml",
+      "sha256": "5af009f9af2167864e940c41df3e7888c478a9424d1859f5ebf391dd1cb9fd01"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.common.ratelimit.RedisRateLimiterIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.common.ratelimit.RedisRateLimiterIT.xml",
+      "sha256": "05158f027e8d35230691e33974ae7b2fcecc9d8aa89eee6d0385704d5857a357"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.event.repository.EventRepositoryIT",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.event.repository.EventRepositoryIT.xml",
+      "sha256": "e30e4b8ed9f53ab36c635fe93e6df9567342a0b14023673d2de5a6325a0ea060"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.event.service.EventCatalogCacheIT",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.event.service.EventCatalogCacheIT.xml",
+      "sha256": "776e4ba940da6d81f600cf3b3275295460cd539e7d251a4c9948fc66006a8500"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.operation.service.OperationWorkerIT",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.operation.service.OperationWorkerIT.xml",
+      "sha256": "51d44716bbb4f7a9a80caba3ee569551019dd21aea5e87a5630e90ea8e8e11d3"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.order.CommercialIssuanceIT",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.order.CommercialIssuanceIT.xml",
+      "sha256": "ca66c28dc9f9964f238fd94feee9d5a93e19658523c2d29e5096a7f5b19edaa0"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.order.EventGuardConcurrencyIT",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.order.EventGuardConcurrencyIT.xml",
+      "sha256": "1278233b638006c1b18ccd91b7ef10a087d5d682b26263c6e58a2d0ca4fdd96d"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.order.OrderCreationIntegrityIT",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.order.OrderCreationIntegrityIT.xml",
+      "sha256": "887917708418f0667c3c36ad5dbf3b98c1b9c53ca3245a71a5a26fd3d833fe9e"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.order.OrderPaymentFlowIT",
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.order.OrderPaymentFlowIT.xml",
+      "sha256": "03e39fb51408fdc655dceb3147b8ef82d31690e2c2af6fbe9efebf9b637652ea"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationConcurrencyIT",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationConcurrencyIT.xml",
+      "sha256": "b6f8da5a323556fd69834c30d5b0869078ac160e143b7cc2272814c8da58dc37"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationEventLockIT",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationEventLockIT.xml",
+      "sha256": "2df0d191474188c68f243e1f456caed890a94aa6c8d4ccdec925c7030074a0e5"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationExpirationIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationExpirationIT.xml",
+      "sha256": "b7949776876bc0cb986eb788614eb01bd76851023cac735bb351a771dbea8ba8"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationHttpConcurrencyIT",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationHttpConcurrencyIT.xml",
+      "sha256": "7c5fe64da8bbd164ae521783db69563afca09df045770a929e9fbb5a092a3752"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationLifecycleConcurrencyIT",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationLifecycleConcurrencyIT.xml",
+      "sha256": "79d97d0bd2bc05052092be767d86326e4283ab0502e2ce5c98434ce1468c0be4"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.ReservationRedisProjectionIT",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.ReservationRedisProjectionIT.xml",
+      "sha256": "e943f058d675cea3e1a92b7f4f6e76a373a3bbe0fd9a45647fd7f4809197dbc7"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.reservation.repository.ReservationRepositoryIT",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.reservation.repository.ReservationRepositoryIT.xml",
+      "sha256": "e6a241c7b972232779ade731a5ad240cf9edd68465eec9f043762c7e85a19fec"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.support.RedisOutageIT",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.support.RedisOutageIT.xml",
+      "sha256": "7d1c3fbed5128cf0ad4487608643cc1b0c89586eac32a78e96d74159ad9fcef1"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.tickettype.repository.TicketTypeRepositoryIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.tickettype.repository.TicketTypeRepositoryIT.xml",
+      "sha256": "d5a7b7aebae0f93265555a2a1189706ae82865adbe3042b259f4c5763e096f3e"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.tickettype.service.TicketTypeCatalogCacheIT",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.tickettype.service.TicketTypeCatalogCacheIT.xml",
+      "sha256": "0367210b983aadfb1f6958bddbae7e4f9b93b3a589c24200f54fdcfa8aa71ffd"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.user.repository.UserRepositoryIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.user.repository.UserRepositoryIT.xml",
+      "sha256": "980fcb22c18dfc237cdd335f4ebd2e50dadf55c4be4c7d639df65663f2f5b6bc"
+    },
+    {
+      "module": "ticketing-api",
+      "kind": "integration",
+      "name": "com.portfolio.ticketing.venue.repository.VenueRepositoryIT",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "ticketing-api/target/failsafe-reports/TEST-com.portfolio.ticketing.venue.repository.VenueRepositoryIT.xml",
+      "sha256": "af72ff8c4d81ced698c63604fb22328a5fa784c66a700ac224f24e5997ecc5d7"
+    },
+    {
+      "module": "notification-service",
+      "kind": "unit",
+      "name": "com.portfolio.notification.NotificationServiceApplicationTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report": "notification-service/target/surefire-reports/TEST-com.portfolio.notification.NotificationServiceApplicationTest.xml",
+      "sha256": "703117596092002bf8704bc43c38591e5354ec47114bb70e3dc7c9ffe406659e"
+    }
+  ],
+  "implementation_files": [
+    {
+      "path": "docker-compose.yml",
+      "sha256": "870b546a2dc42da742fa5bfc6a14a0cc97224e6eaec5b6827810df7ccc1698e0"
+    },
+    {
+      "path": "ticketing-api/src/main/java/com/portfolio/ticketing/common/exception/GlobalExceptionHandler.java",
+      "sha256": "884de038dc9f6085123886548e7251396ad3bce72e9d1286b493e9239b9df984"
+    },
+    {
+      "path": "ticketing-api/src/main/java/com/portfolio/ticketing/payment/config/PaymentProperties.java",
+      "sha256": "10d70ee06a90b87161fab76eb9b128d9e03a08d0f09b9c7e3a5dc427fa102e95"
+    },
+    {
+      "path": "ticketing-api/src/main/java/com/portfolio/ticketing/reservation/service/ReservationService.java",
+      "sha256": "fae3f3dfe05ecfe679d53b1ac2e75b935142337358a0db98e6be9b8bda0c732b"
+    },
+    {
+      "path": "ticketing-api/src/main/resources/application.yml",
+      "sha256": "d805e25df82b2590453a9bc625dc7945537157b23d26f0850a83a4363c05fbe1"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/common/OpenApiDocsIT.java",
+      "sha256": "eff0057cf731efc88ad62a3d81b329df09aec29e819db1d6c6ddfcda65a61028"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/common/config/DeploymentProfileIT.java",
+      "sha256": "7c845204122d58856d7d0384940966891258d133904872418a5843c69bd0d372"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/common/exception/DataIntegrityLoggingIT.java",
+      "sha256": "b39475b4e8436ecda6bb618f58d02545b99c1b65612609deda5ee26eedae2cfd"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/common/exception/DataIntegrityLoggingTest.java",
+      "sha256": "21892225ce7b9707a172560f959a356efaa17ec04cf2898c5c83a1e5ccc37608"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/order/OrderCreationIntegrityIT.java",
+      "sha256": "49e1d813402456d2330667f20f0d4854b60bbe88d739bd2269416887492b5f28"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/payment/config/PaymentPropertiesTest.java",
+      "sha256": "2056c8dd222bb15fa2f8f2d2a8b9c7c3d984d0e0328556b22919e65407316136"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/reservation/service/ReservationPaymentServiceTest.java",
+      "sha256": "4eaf3b755eb2e71e23bce67a1907f84e99dbc43da6656f5149299d4bed4bd1db"
+    },
+    {
+      "path": "ticketing-api/src/test/java/com/portfolio/ticketing/reservation/service/ReservationServiceTest.java",
+      "sha256": "9f4c44b33f23e5bda5946bc92b1b3da953915a3628a416caeb94a9242aac531a"
+    }
+  ],
+  "build_log_sha256": "22e1462a8bc61341f250444232e24a2eb40a57eb43d0b14a54bf5661dadee1e0"
+}
