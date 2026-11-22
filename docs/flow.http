@@ -1,9 +1,9 @@
-# Este flujo no se ejecuta en CI
-# Requiere la extensión REST Client de VS Code.
-# Precondición: configura un evento PUBLICADO y un tipo de entrada cuya ventana de venta esté abierta,
-# con inventario disponible. Sustituye eventId y ticketTypeId por sus UUID reales.
-# Ejecuta las solicitudes en orden. Copia accessToken y refreshToken de la respuesta de login.
-# Mantén el access token para las operaciones protegidas; ejecuta logout al final.
+# This workflow is a manual example and is not executed in CI.
+# Requires the VS Code REST Client extension.
+# Prerequisite: configure a PUBLISHED event with a ticket type whose sale window is open
+# and whose inventory is available. Replace eventId and ticketTypeId with real UUIDs.
+# Send the requests in order. Copy accessToken and refreshToken from the login response.
+# Keep the access token for protected requests and perform logout last.
 
 @baseUrl = http://localhost:8080
 @email = smoke.user@example.com
@@ -19,7 +19,7 @@
 @orderCurrency = REPLACE_WITH_ORDER_CURRENCY
 @webhookSignature = REPLACE_WITH_HMAC_SHA256_HEX
 
-### 1. Registro
+### 1. Register
 POST {{baseUrl}}/api/v1/auth/register
 Content-Type: application/json
 
@@ -29,8 +29,8 @@ Content-Type: application/json
   "fullName": "{{fullName}}"
 }
 
-### 2. Login
-# Copia accessToken y refreshToken de la respuesta y actualiza las variables al inicio del archivo.
+### 2. Sign in
+# Copy accessToken and refreshToken from the response and update the variables above.
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: application/json
 
@@ -39,11 +39,11 @@ Content-Type: application/json
   "password": "{{password}}"
 }
 
-### 3. Consultar catálogo público del evento
-# Usa un evento publicado. La respuesta incluye ticketTypes y sus IDs.
+### 3. Read the public event catalog
+# Use a published event. The response includes ticketTypes and their IDs.
 GET {{baseUrl}}/api/v1/events/{{eventId}}
 
-### 4. Crear una reserva
+### 4. Create a reservation
 POST {{baseUrl}}/api/v1/reservations
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
@@ -53,8 +53,8 @@ Content-Type: application/json
   "quantity": 1
 }
 
-### 5. Crear una orden con clave de idempotencia
-# Copia el id de la respuesta de reserva en reservationId.
+### 5. Create an idempotent order
+# Copy the reservation ID from the previous response into reservationId.
 POST {{baseUrl}}/api/v1/orders
 Authorization: Bearer {{accessToken}}
 Idempotency-Key: smoke-order-0001
@@ -64,20 +64,21 @@ Content-Type: application/json
   "reservationId": "{{reservationId}}"
 }
 
-### 6. Webhook de pago
-# Copia id, totalAmount y currency de la respuesta de orden en orderId, orderAmount y orderCurrency.
-# Una entrada General del seed cuesta 45.00 USD; usa siempre el importe real de tu orden.
-# X-Signature debe ser el HMAC-SHA256 hexadecimal del CUERPO RAW EXACTO enviado (bytes idénticos, sin reformatear).
-# El REST Client de VS Code no calcula esta firma. Define PAYLOAD con el JSON exacto del cuerpo y genera la firma:
+### 6. Simulated payment webhook
+# Copy id, totalAmount and currency from the order response into orderId, orderAmount and orderCurrency.
+# A seeded General ticket costs USD 45.00; always use your actual order's total amount.
+# X-Signature must be the lowercase hexadecimal HMAC-SHA256 of the EXACT RAW REQUEST BODY
+# (identical bytes, no reformatting). VS Code REST Client does not compute that HMAC.
+# Put the exact JSON request body into PAYLOAD and generate the signature with:
 # printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET"
-# Copia el digest hexadecimal como @webhookSignature; si cambia el cuerpo raw, vuelve a firmarlo.
+# Copy the hex digest into @webhookSignature. If the raw body changes, sign it again.
 POST {{baseUrl}}/api/v1/payments/webhook
 X-Signature: {{webhookSignature}}
 Content-Type: application/json
 
 {"orderId":"{{orderId}}","status":"SUCCEEDED","providerReference":"smoke-provider-0001","providerEventId":"8f0d3f3d-8a0c-4f1d-a42a-b0f0a55f1001","providerOperationId":"smoke-operation-0001","operationKind":"PAYMENT_CAPTURE","amount":{{orderAmount}},"currency":"{{orderCurrency}}"}
 
-### 7. Refresh del token
+### 7. Refresh access
 POST {{baseUrl}}/api/v1/auth/refresh
 Content-Type: application/json
 
@@ -85,8 +86,8 @@ Content-Type: application/json
   "refreshToken": "{{refreshToken}}"
 }
 
-### 8. Logout (último paso)
-# Revoca el refresh token; no ejecutes esta solicitud antes de las operaciones protegidas.
+### 8. Logout (last step)
+# Revoke the refresh token. Do not send this request before the protected operations.
 POST {{baseUrl}}/api/v1/auth/logout
 Content-Type: application/json
 

@@ -1,79 +1,81 @@
-# Matriz de autorización — Fase 2
+# Phase 2 authorization matrix
 
-**Estado:** Fase 2 cerrada formalmente el 2026-11-13, con autorización expresa del responsable del proyecto. La ejecución CI #154 validó los escenarios de aislamiento sobre el SHA `06490392e86866094ee9dddbff450f4e76e646ad`; el run #43545520476 validó el HEAD previo al registro de cierre, `7146517ef80f3fe350a57d00e272f66b59ffc923`.  
-**Fuente de verdad:** SecurityConfig, @PreAuthorize de los servicios y pruebas HTTP/IT asociadas.  
-**Objetivo:** describir las reglas efectivas; no sustituye la ejecución de las pruebas.
+**Historical status:** Phase 2 was formally closed on 2026-11-13 with explicit project-owner authorization. CI run #154 validated isolation scenarios against SHA `06490392e86866094ee9dddbff450f4e76e646ad`; run [#43545520476](https://github.com/dab960405/tickeringsystem/actions/runs/43545520476) validated the pre-closure HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923`.
 
-## Convenciones
+**Sources of truth:** `SecurityConfig`, service-level `@PreAuthorize` declarations and associated HTTP/integration tests. This matrix describes the effective design; it does not replace test execution against the current SHA.
 
-- **Público:** no requiere JWT en el filtro HTTP. Las validaciones funcionales adicionales siguen aplicando.
-- **ADMIN, ORGANIZER, USER:** authorities Spring ROLE_ADMIN, ROLE_ORGANIZER y ROLE_USER.
-- **Propietario:** el sub del JWT debe coincidir con el propietario persistido del recurso.
-- **404 oculto:** un recurso ajeno y uno inexistente producen el mismo 404, para no revelar su existencia.
-- **401:** no hay autenticación válida.
-- **403:** hay autenticación válida, pero falta el rol requerido. Las reglas de propiedad con ocultación pueden traducir un recurso ajeno a 404.
+## Conventions
 
-## Rutas y permisos
+- **Public:** the HTTP filter does not require JWT; additional business validation still applies.
+- **ADMIN, ORGANIZER, USER:** Spring Security authorities `ROLE_ADMIN`, `ROLE_ORGANIZER` and `ROLE_USER`.
+- **Owner:** the JWT `sub` must match the persisted owner of the resource.
+- **Concealed 404:** both foreign-owned and nonexistent private resources produce HTTP 404, preventing existence disclosure.
+- **401:** authentication is missing or invalid.
+- **403:** authentication is valid but lacks a required role; ownership-concealment rules may return 404 for foreign resources.
 
-| Método | Ruta | Acceso | Restricción adicional / resultado esperado |
+## Routes and permissions
+
+| Method | Route | Access | Additional restriction or expected result |
 | --- | --- | --- | --- |
-| POST | /api/v1/auth/register | Público | Registro; el rol asignado por el servidor no lo elige el cliente |
-| POST | /api/v1/auth/login | Público | Credenciales válidas; rate limit puede responder 429 |
-| POST | /api/v1/auth/refresh | Público | Requiere refresh token activo; inválido/revocado 401; Redis no disponible 503 |
-| POST | /api/v1/auth/logout | Público en filtro HTTP | Revoca el refresh token presentado; no requiere access JWT |
-| POST | /api/v1/payments/webhook | Público en filtro HTTP | La firma HMAC se valida en la capa de pagos; firma inválida 401 |
-| GET | /api/v1/events | Público | Solo catálogo publicado |
-| GET | /api/v1/events/{id} | Público | Solo evento publicado; inexistente/no publicado 404 |
-| POST | /api/v1/events | ORGANIZER, ADMIN | El servidor asigna el organizerId desde el JWT |
-| PUT | /api/v1/events/{id} | ORGANIZER, ADMIN | ORGANIZER solo propietario; ajeno/inexistente 404. ADMIN puede gestionar cualquier evento existente |
-| POST | /api/v1/events/{id}/publish | ORGANIZER, ADMIN | ORGANIZER solo propietario; ajeno/inexistente 404 |
-| POST | /api/v1/events/{id}/cancel | ORGANIZER, ADMIN | ORGANIZER solo propietario; ajeno/inexistente 404 |
-| POST | /api/v1/events/{eventId}/ticket-types | ORGANIZER, ADMIN | ORGANIZER debe ser propietario del evento; ajeno/inexistente 404 |
-| PUT | /api/v1/ticket-types/{id} | ORGANIZER, ADMIN | ORGANIZER debe ser propietario del evento asociado; ajeno/inexistente 404 |
-| GET | /api/v1/venues | Público | Lectura pública |
-| GET | /api/v1/venues/{id} | Público | Lectura pública; inexistente 404 |
+| POST | /api/v1/auth/register | Public | Registration; the server determines the user's role |
+| POST | /api/v1/auth/login | Public | Valid credentials; rate limiting may return 429 |
+| POST | /api/v1/auth/refresh | Public | Requires an active refresh token; invalid/revoked token 401; unavailable Redis 503 |
+| POST | /api/v1/auth/logout | Public at HTTP filter | Revokes the submitted refresh token; an access JWT is not required |
+| POST | /api/v1/payments/webhook | Public at HTTP filter | HMAC signature is validated in the payment layer; invalid signature 401 |
+| GET | /api/v1/events | Public | Published catalog only |
+| GET | /api/v1/events/{id} | Public | Published events only; nonexistent/unpublished 404 |
+| POST | /api/v1/events | ORGANIZER, ADMIN | Server assigns organizerId from JWT |
+| PUT | /api/v1/events/{id} | ORGANIZER, ADMIN | ORGANIZER must own the event; foreign/nonexistent 404; ADMIN may manage any existing event |
+| POST | /api/v1/events/{id}/publish | ORGANIZER, ADMIN | ORGANIZER must own the event; foreign/nonexistent 404 |
+| POST | /api/v1/events/{id}/cancel | ORGANIZER, ADMIN | ORGANIZER must own the event; foreign/nonexistent 404 |
+| POST | /api/v1/events/{eventId}/ticket-types | ORGANIZER, ADMIN | ORGANIZER must own the event; foreign/nonexistent 404 |
+| PUT | /api/v1/ticket-types/{id} | ORGANIZER, ADMIN | ORGANIZER must own the associated event; foreign/nonexistent 404 |
+| GET | /api/v1/venues | Public | Public read |
+| GET | /api/v1/venues/{id} | Public | Public read; nonexistent 404 |
 | POST | /api/v1/venues | ADMIN | USER/ORGANIZER 403 |
 | PUT | /api/v1/venues/{id} | ADMIN | USER/ORGANIZER 403 |
 | DELETE | /api/v1/venues/{id} | ADMIN | USER/ORGANIZER 403 |
-| POST | /api/v1/reservations | USER | La reserva se crea para el sub del JWT |
-| DELETE | /api/v1/reservations/{id} | USER | Solo reserva del sub; ajena/inexistente 404 |
-| POST | /api/v1/orders | USER | Orden y reserva quedan ligadas al sub del JWT |
-| GET | /api/v1/orders | USER | Lista exclusivamente las órdenes del sub |
-| GET | /api/v1/orders/{id} | USER | Consulta por ID y propietario; ajena/inexistente 404 |
-| POST | /api/v1/orders/{id}/cancel | USER | Cancelación se ejecuta con ID y propietario del JWT |
-| GET | /api/v1/me/tickets | USER | Devuelve exclusivamente tickets del usuario autenticado |
+| POST | /api/v1/reservations | USER | Reservation created for JWT `sub` |
+| DELETE | /api/v1/reservations/{id} | USER | Only the owner's reservation; foreign/nonexistent 404 |
+| POST | /api/v1/orders | USER | Order and reservation are bound to JWT `sub` |
+| GET | /api/v1/orders | USER | Lists only orders belonging to JWT `sub` |
+| GET | /api/v1/orders/{id} | USER | Read by ID and owner; foreign/nonexistent 404 |
+| POST | /api/v1/orders/{id}/cancel | USER | Cancellation is performed for the authenticated owner |
+| GET | /api/v1/me/tickets | USER | Only the authenticated user's tickets |
 
-## Rutas de infraestructura
+## Infrastructure endpoints
 
-| Ruta | Acceso | Nota |
+| Route | Access | Notes |
 | --- | --- | --- |
-| /error | Público | Manejo de errores del framework |
-| /swagger-ui.html, /swagger-ui/**, /v3/api-docs/** | Público | Documentación OpenAPI |
-| /actuator/health | Público | Health check |
-| /actuator/prometheus | Público | Métricas; restringir en infraestructura antes de exposición pública |
+| /error | Public | Framework error handling |
+| /swagger-ui.html, /swagger-ui/**, /v3/api-docs/** | Public | OpenAPI documentation |
+| /actuator/health | Public | Health check |
+| /actuator/prometheus | Public route if exposed | Metrics endpoint requires actual registry and actuator exposure before it exists; restrict access before any public deployment |
 
-Las rutas no enumeradas quedan sujetas a .anyRequest().authenticated(); deben añadirse aquí al incorporarse endpoints nuevos.
+All unlisted routes are subject to `anyRequest().authenticated()`. Update this matrix when new endpoints are introduced.
 
-## Evidencia existente y brechas de prueba
+## Existing evidence and test gaps
 
-| Área | Evidencia identificada | Estado de evidencia |
+| Area | Identified evidence | Scope |
 | --- | --- | --- |
-| Login, emisión, refresh y logout | AuthenticationFlowIT con tokens reales | Existe |
-| Crear evento con token ORGANIZER real | AuthenticationFlowIT | Existe |
-| Rol requerido para venues | VenueControllerTest | Pruebas HTTP con usuarios simulados |
-| Rol requerido para eventos y tipos | EventControllerTest, TicketTypeControllerTest | Pruebas HTTP con usuarios simulados |
-| USER requerido para órdenes/reservas/tickets | OrderControllerTest, ReservationControllerTest, TicketControllerTest | Pruebas HTTP con usuarios simulados |
-| Aislamiento entre dos organizadores con JWT reales | `AuthenticationFlowIT.should_hideForeignOrganizerEventAsNotFound_usingTwoRealAccessTokens` | Ejecutado en CI #154: incluido en Failsafe; 0 fallos y 0 errores en la suite |
-| Aislamiento entre dos usuarios reales para órdenes y reservas | `AuthenticationFlowIT.should_isolateReservationsAndOrdersBetweenTwoRealUserTokens`: GET/cancelación de orden y cancelación de reserva ajena; el propietario conserva lectura | Ejecutado en CI #154: incluido en Failsafe; 0 fallos y 0 errores en la suite |
-| Matriz exhaustiva método × rol × estado de recurso | No existe una suite única que cubra todas las celdas | Pendiente de completar según endpoints existentes |
+| Login, JWT issuance, refresh and logout | `AuthenticationFlowIT` with real tokens | Exists |
+| Event creation with real ORGANIZER JWT | `AuthenticationFlowIT` | Exists |
+| Venue role restrictions | `VenueControllerTest` | HTTP tests with simulated authentication |
+| Event and ticket-type role restrictions | `EventControllerTest`, `TicketTypeControllerTest` | HTTP tests with simulated authentication |
+| USER authorization on orders/reservations/tickets | `OrderControllerTest`, `ReservationControllerTest`, `TicketControllerTest` | HTTP tests with simulated authentication |
+| Isolation between two organizers using real JWTs | `AuthenticationFlowIT.should_hideForeignOrganizerEventAsNotFound_usingTwoRealAccessTokens` | Included in successful historical CI #154 Failsafe run |
+| Order/reservation isolation across two real buyers | `AuthenticationFlowIT.should_isolateReservationsAndOrdersBetweenTwoRealUserTokens` | Exercises foreign order GET/cancel and reservation cancellation; owner still has read access |
+| Complete method × role × resource-state matrix | No single exhaustive suite | Potential incremental improvement; not a proof of an existing bypass |
 
-## Criterio de aceptación para Fase 2
+## Historical Phase 2 acceptance criteria
 
-1. Cada ruta funcional queda clasificada por método y rol.
-2. Las operaciones de propietario derivan la identidad del JWT, nunca de un ID de usuario suministrado por el cliente.
-3. Los recursos privados ajenos no pueden consultarse ni modificarse; se aplica el 404 de ocultación documentado.
-4. Las pruebas de integración usan dos identidades autenticadas reales para acreditar aislamiento.
-5. `./mvnw -B clean verify` termina correctamente en CI para el SHA de código validado: run #154 probó `06490392e86866094ee9dddbff450f4e76e646ad`; el run #43545520476 validó el HEAD `7146517ef80f3fe350a57d00e272f66b59ffc923`, incluidos los commits documentales previos.
-6. La evidencia de pruebas y cobertura se registra en docs/PROGRESS.md.
+1. Every functional route has a method and role classification.
+2. Owner-scoped mutations derive the user ID from JWT, never a client-supplied arbitrary owner ID.
+3. Private foreign-owned resources cannot be read or changed; the documented concealed 404 applies.
+4. Integration tests use two real authenticated identities to prove resource isolation.
+5. `./mvnw -B clean verify` succeeded in CI for the tested source SHA. Historical run #154 validated `06490392e86866094ee9dddbff450f4e76e646ad`; run #43545520476 validated `7146517ef80f3fe350a57d00e272f66b59ffc923`.
+6. Results and coverage are recorded in `docs/PROGRESS.md`.
 
-La brecha de una suite exhaustiva método × rol × estado queda registrada como mejora no bloqueante: la especificación de Fase 2 exige una matriz de tests por rol y que un usuario no pueda operar sobre recursos ajenos, pero no exige cubrir cada combinación en una suite única. La CI #154 ejecutó 479 tests (379 Surefire y 100 Failsafe), con 0 fallos, 0 errores y 0 omitidos; Spotless y JaCoCo finalizaron correctamente. El run #43545520476 confirmó `BUILD SUCCESS`, Spotless, JaCoCo y 100 tests Failsafe sin fallos en el HEAD previo al registro de cierre. **Fase 2: cerrada formalmente.**
+The missing single comprehensive method × role × state matrix was historically documented as a nonblocking improvement. The original Phase 2 specification required role-based test coverage and denial of foreign-resource operations, not every possible combination within a single suite. CI #154 ran 479 tests (379 Surefire, 100 Failsafe) with zero failures/errors/skips. Run #43545520476 confirmed `BUILD SUCCESS`, Spotless, JaCoCo and 100 successful Failsafe tests for the pre-closure HEAD.
+
+**Historical formal determination: Phase 2 CLOSED.** This English translation preserves the original accepted status; it is not a new independent approval or claim about the current Phase 3/4 SHA.

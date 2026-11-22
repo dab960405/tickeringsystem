@@ -49,7 +49,7 @@ class Client:
             status, data = response.status, response.read()
         if status != expected:
             # Never print response bodies: authentication responses contain tokens.
-            raise SmokeFailure(f"{method} {path}: HTTP {status}; esperado {expected}")
+            raise SmokeFailure(f"{method} {path}: HTTP {status}; expected {expected}")
         self.count += 1
         return json.loads(data) if data else None
 
@@ -69,13 +69,13 @@ def main():
     parsed = urllib.parse.urlparse(base_url)
     check(
         parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"},
-        "La prueba usa datos demo y requiere una URL HTTP local.",
+        "The smoke test uses demo data and requires a local HTTP URL.",
     )
     secret = os.environ.get("PAYMENT_WEBHOOK_SECRET")
-    check(bool(secret), "Exporta PAYMENT_WEBHOOK_SECRET desde el .env de la API.")
+    check(bool(secret), "Export PAYMENT_WEBHOOK_SECRET from the API .env file.")
     client = Client(base_url)
-    check(client.request("GET", "/actuator/health")["status"] == "UP", "API no saludable")
-    check("paths" in client.request("GET", "/v3/api-docs"), "OpenAPI no disponible")
+    check(client.request("GET", "/actuator/health")["status"] == "UP", "API is not healthy")
+    check("paths" in client.request("GET", "/v3/api-docs"), "OpenAPI is not available")
     client.request("GET", "/api/v1/me/tickets", expected=401)
 
     run_id = uuid.uuid4().hex
@@ -91,7 +91,7 @@ def main():
     event_body = {
         "venueId": os.environ.get("SMOKE_VENUE_ID", "10000000-0000-0000-0000-000000000001"),
         "title": "Local smoke " + run_id,
-        "description": "Datos de prueba local; conservar para inspeccionar resultados.",
+        "description": "Synthetic local test data; retained to inspect results.",
         "category": "MUSIC",
         "startsAt": at(timedelta(days=2)),
         "endsAt": at(timedelta(days=2, hours=2)),
@@ -105,7 +105,7 @@ def main():
          "maxPerOrder": 4}, organizer,
     )
     client.request("POST", event_path + "/publish", token=organizer)
-    check(client.request("GET", event_path)["status"] == "PUBLISHED", "Evento no publicado")
+    check(client.request("GET", event_path)["status"] == "PUBLISHED", "Event was not published")
 
     def new_buyer(label):
         email = f"smoke-{label}-{run_id}@example.com"
@@ -127,12 +127,12 @@ def main():
         types = client.request("GET", event_path)["ticketTypes"]
         return next(item["availableQuantity"] for item in types if item["id"] == ticket_type["id"])
 
-    check(stock() == 9, "La reserva no descontó exactamente una entrada")
+    check(stock() == 9, "Reservation did not reserve exactly one ticket")
     headers = {"Idempotency-Key": "smoke-" + run_id}
     body = {"reservationId": reservation["id"]}
     order = client.request("POST", "/api/v1/orders", 201, body, token, headers)
     replay = client.request("POST", "/api/v1/orders", 200, body, token, headers)
-    check(replay["id"] == order["id"], "La orden duplicada cambió de identidad")
+    check(replay["id"] == order["id"], "Duplicate order changed its identity")
     order_path = "/api/v1/orders/" + order["id"]
     client.request("GET", order_path, 404, token=stranger)
 
@@ -153,28 +153,28 @@ def main():
     client.request("POST", "/api/v1/payments/webhook", 401, raw,
                    headers={"X-Signature": "0" * 64})
     check(client.request("GET", order_path, token=token)["status"] == "PENDING_PAYMENT",
-          "El webhook inválido alteró la orden")
+          "Invalid webhook changed the order")
     for _ in range(2):
         client.request("POST", "/api/v1/payments/webhook", 204, raw, headers=signature)
     paid = client.request("GET", order_path, token=token)
     check(paid["status"] == "PAID" and paid["fulfillmentStatus"] == "FULFILLED",
-          "El pago no completó la emisión")
+          "Payment did not complete ticket issuance")
     tickets = client.request("GET", "/api/v1/me/tickets", token=token)
     check(len(tickets) == 1 and tickets[0]["orderId"] == order["id"],
-          "El pago duplicado debe emitir exactamente un ticket")
-    check(stock() == 9, "El pago duplicado alteró el inventario")
+          "Duplicate payment must issue exactly one ticket")
+    check(stock() == 9, "Duplicate payment changed inventory")
 
     requested = client.request("POST", order_path + "/cancel", token=token)
     check(requested["refundStatus"] == "REQUESTED" and requested["status"] == "PAID",
-          "Solicitar reembolso no debe confirmar un movimiento financiero")
+          "Requesting a refund must not confirm a financial transaction")
     raw, signature = webhook("REFUNDED", "PAYMENT_REFUND")
     for _ in range(2):
         client.request("POST", "/api/v1/payments/webhook", 204, raw, headers=signature)
     refunded = client.request("GET", order_path, token=token)
     check(refunded["status"] == "REFUNDED" and refunded["refundStatus"] == "CONFIRMED",
-          "Reembolso no confirmado")
+          "Refund was not confirmed")
     check(client.request("GET", "/api/v1/me/tickets", token=token) == [],
-          "El ticket reembolsado sigue siendo válido")
+          "Refunded ticket remains valid")
 
     refreshed = client.request("POST", "/api/v1/auth/refresh",
                                body={"refreshToken": buyer["refreshToken"]})

@@ -1,60 +1,50 @@
-# Verificación local de la migración Angular
+# Historical local Angular verification
 
-Fecha: 15 de noviembre de 2026. Checkout `dev`, API Java local, PostgreSQL y Redis.
-Angular 22.2.6, CLI 22.2.7, Node 24.22.3. Todos los pagos descritos son simulados.
+**Execution date:** 2026-11-15. **Historical checkout:** `dev` (the branch was subsequently integrated into `main` and deleted). Tested with the local Java API, PostgreSQL and Redis; Angular 22.2.6, CLI 22.2.7 and Node 24.22.3. All described payments were **simulated**.
 
-## Comprobaciones automatizadas
+**Evidence scope:** this record captures the local tests and walkthrough performed on that date. It is not a claim of fresh browser testing on the current `main` SHA or approval of Phases 3/4. Later adversarial testing identified an Angular deep-link issue and a checkout selection race; subsequent fixes must be validated against their own commits and CI.
 
-| Comando | Resultado |
+## Automated verification performed
+
+| Command | Historical result |
 | --- | --- |
-| `npm ci --no-fund` | Instalación limpia reproducible; auditoría npm sin vulnerabilidades reportadas en esa ejecución |
-| `npm test` | 14 pruebas aprobadas, 4 archivos, sin fallos |
-| `npm run build` | Compilación de producción correcta, sin advertencias de presupuesto |
-| `npm run format:check` | Formato correcto |
-| `python3 -m unittest discover -s frontend -p 'test_*.py' -v` (raíz) | 10 pruebas aprobadas |
-| `git diff --check` | Correcto |
+| `npm ci --no-fund` | Reproducible clean installation; npm audit reported no vulnerabilities during **that particular execution** |
+| `npm test` | 14 tests passed across 4 files |
+| `npm run build` | Production build passed without size-budget warnings |
+| `npm run format:check` | Formatting passed |
+| `python3 -m unittest discover -s frontend -p 'test_*.py' -v` (repository root) | 10 tests passed |
+| `git diff --check` | Passed |
 
-El bundle inicial es de aproximadamente 309 kB, con 86 kB de transferencia estimada
-por Angular CLI. Las pantallas se dividen en chunks de carga diferida. Es una medida
-del build, no una medición de rendimiento de producción.
+The initial bundle was approximately 309 kB, with 86 kB estimated transfer size reported by Angular CLI. Pages were split into lazy-loaded chunks. These are **build estimates**, not production performance measurements.
 
-## Recorrido de navegador contra la API real
+## Local browser walkthrough against the API
 
-- Registro de un comprador ficticio e inicio de sesión con retorno al evento.
-- Compra de dos entradas General por USD 90: reserva, navegación a Mis compras,
-  retorno conservando la reserva, orden, pago aprobado y dos tickets visibles.
-- Recarga y acceso a una ruta privada: redirección al login; al entrar se recupera
-  la compra guardada en el backend.
-- Solicitud y confirmación de reembolso: orden reembolsada y entradas vigentes vacías.
-- Liberación de una reserva previa a la orden, con nueva consulta de disponibilidad.
-- Cancelación de una orden pendiente y pago rechazado en otra: ambas canceladas.
-- Segunda compra aprobada de una entrada por USD 45 y copia de su código.
-- Cierre de sesión y nuevo acceso: la entrada válida permanece disponible.
-- Búsqueda vacía y con resultados; el filtro aparece en la URL.
-- Vista adaptable a 320, 768, 1024 y 1440 píxeles sin desbordamiento horizontal en las
-  pantallas revisadas. Enlace de salto por teclado enfoca el contenido y conserva la URL.
+- Registered a synthetic buyer and signed in, returning to the chosen event.
+- Purchased two General tickets for USD 90: created a reservation and an order, navigated to the orders screen while retaining checkout state, simulated a successful payment and saw two tickets.
+- Reloaded and opened a private page: navigated to sign-in and recovered the persisted purchase from the backend afterward.
+- Requested and confirmed a simulated refund: the order became refunded and the list of valid tickets became empty.
+- Released a reservation before order creation, then checked updated availability.
+- Cancelled a pending order and simulated a failed payment on another order; both orders became cancelled.
+- Completed a second purchase for a single USD 45 ticket and copied its code.
+- Signed out and signed back in; the valid ticket remained available.
+- Checked an empty search, a populated search and the URL filter.
+- Inspected responsive layouts at widths of 320, 768, 1024 and 1440 pixels without observed horizontal overflow in the reviewed pages. The keyboard skip link focused the content without losing the URL.
 
-Órdenes de demostración conservadas para inspección:
+Synthetic demo orders retained for historical inspection:
 
-| Orden | Resultado |
+| Order ID | Observed result |
 | --- | --- |
-| `8605c6ab-c5e7-45f5-a6ca-954ecfbf283a` | USD 90, pagada y posteriormente reembolsada |
-| `1d86843b-1495-4e51-82a9-802b1c11cffc` | Cancelación antes del pago |
-| `23bad2e6-7914-4d8d-9974-e4ef7cb538b0` | Pago rechazado; orden cancelada |
-| `758cfe71-aefd-4df5-88d5-643c80706bb9` | USD 45, pagada y ticket vigente |
+| `8605c6ab-c5e7-45f5-a6ca-954ecfbf283a` | USD 90, paid and subsequently refunded |
+| `1d86843b-1495-4e51-82a9-802b1c11cffc` | Cancelled before payment |
+| `23bad2e6-7914-4d8d-9974-e4ef7cb538b0` | Payment rejected; order cancelled |
+| `758cfe71-aefd-4df5-88d5-643c80706bb9` | USD 45, paid with a valid ticket |
 
-## Hallazgo corregido durante la prueba
+## Defect corrected during the walkthrough
 
-Al confirmar un pago, la navegación destruía `OrderActions` antes de que terminara su
-promesa; el componente intentaba emitir `updated` después y Angular avisaba `NG0953`.
-La prueba de regresión reprodujo el fallo. La corrección comprueba `DestroyRef.destroyed`
-antes de emitir. La prueba pasó y la compra posterior no produjo nuevos avisos ni
-errores en consola. También se comprobó que el enlace de salto no recarga la SPA.
+After a payment was confirmed, navigation could destroy `OrderActions` while its asynchronous promise was still pending. The component tried to emit `updated` after destruction, and Angular logged `NG0953`. A regression test reproduced the behavior; the fix checks `DestroyRef.destroyed` before emitting. The regression passed, and the later purchase produced no additional warnings or console errors. The skip link was also checked to ensure it did not reload the SPA.
 
-## Límites de esta evidencia
+## Limitations and later changes
 
-No se modificó Java ni se volvió a ejecutar su suite completa en esta migración.
-La caducidad real de diez minutos y el diálogo del sistema de impresión no se
-recorrieron manualmente. La renovación del token se verificó con pruebas HTTP
-controladas, sin esperar su caducidad real. Estas comprobaciones locales no equivalen
-a una auditoría de accesibilidad ni a pruebas de carga o despliegue público.
+The Java implementation was not changed, and the complete Java suite was not rerun as part of this historical frontend migration. The actual ten-minute reservation expiration and the operating system print dialog were not exercised manually. Token renewal was tested with controlled HTTP responses rather than waiting for actual expiry. These checks do **not** establish complete accessibility, load-testing or public deployment readiness.
+
+The subsequent adversarial report reproduced broken nested-route asset loading and an event/checkout selection race on the baseline. Fixes were implemented later; see [the main-branch remediation dossier](../docs/audit/MAIN-REMEDIATION-2026-11-21.md) and matching CI runs. This historical verification record is preserved without retroactively attributing the fixes to the original session.

@@ -29,9 +29,9 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     if (output / "integration.json").exists():
-        parser.error("La evidencia ya existe; utiliza otra carpeta.")
+        parser.error("Evidence already exists; select a different output directory.")
     if os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock").startswith(("tcp:", "ssh:")):
-        parser.error("Esta prueba requiere un Docker local, no un host remoto.")
+        parser.error("This test requires a local Docker daemon, not a remote host.")
     work = Path(tempfile.mkdtemp(prefix="ticketing-adversarial-"))
     try:
         for name in ("pom.xml", "mvnw", ".mvn", "common-events", "ticketing-api"):
@@ -62,7 +62,7 @@ def main():
         prefixes = ("SPRING_", "POSTGRES_", "REDIS_", "TICKETING_", "PAYMENT_", "JWT_", "MONGO", "NOTIFICATION_")
         environment = {key: value for key, value in os.environ.items() if not key.startswith(prefixes)}
         environment["TESTCONTAINERS_REUSE_ENABLE"] = "false"
-        print("Integración aislada: PostgreSQL/Redis temporales; log en " + str(output / "integration.log"), flush=True)
+        print("Isolated integration: temporary PostgreSQL/Redis containers; log: " + str(output / "integration.log"), flush=True)
         with (output / "integration.log").open("w") as log:
             try:
                 completed = subprocess.run(command, cwd=work, env=environment, stdout=log,
@@ -87,8 +87,8 @@ def main():
         if not results:
             report["error"] = "No test results; inspect integration.log. Do not interpret this as a pass."
         (output / "integration.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-        lines = ["# Integración adversaria aislada", "", f"Salida de Maven: `{exit_code}`.", "",
-                 "| Prueba | Resultado |", "| --- | --- |"]
+        lines = ["# Isolated adversarial integration tests", "", f"Maven exit code: `{exit_code}`.", "",
+                 "| Test | Result |", "| --- | --- |"]
         lines += [f"| `{item['test']}` | {item['status']} |" for item in results]
         for item in results:
             if item["detail"]:

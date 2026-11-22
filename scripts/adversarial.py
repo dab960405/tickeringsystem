@@ -44,9 +44,9 @@ def local_url(value):
     if (parsed.scheme != "http" or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
             or parsed.username or parsed.password or parsed.path not in ("", "/")
             or parsed.query or parsed.fragment):
-        raise ValueError("Solo se admiten URLs HTTP locales, sin credenciales, rutas ni parámetros.")
+        raise ValueError("Only local HTTP URLs without credentials, paths or query parameters are supported.")
     if parsed.port is not None and not 1 <= parsed.port <= 65535:
-        raise ValueError("Puerto inválido")
+        raise ValueError("Invalid port")
     return value.rstrip("/")
 
 
@@ -68,7 +68,7 @@ class Client:
 
     def request(self, method, path, body=None, token=None, headers=None):
         if not path.startswith("/") or path.startswith("//"):
-            raise ValueError("Se requiere una ruta relativa local.")
+            raise ValueError("A local relative path is required.")
         headers = dict(headers or {})
         if token:
             headers["Authorization"] = "Bearer " + token
@@ -100,7 +100,7 @@ class Client:
     def require(self, method, path, expected=200, **kwargs):
         response = self.request(method, path, **kwargs)
         if response.status != expected:
-            raise Precondition(f"{method} {path}: HTTP {response.status}; preparación esperaba {expected}")
+            raise Precondition(f"{method} {path}: HTTP {response.status}; setup expected {expected}")
         return response.data
 
 
@@ -120,9 +120,9 @@ class Audit:
 
     def setup(self):
         if not self.secret:
-            raise Precondition("Exporta PAYMENT_WEBHOOK_SECRET del .env local.")
+            raise Precondition("Export PAYMENT_WEBHOOK_SECRET from the local .env file.")
         if self.api.require("GET", "/actuator/health").get("status") != "UP":
-            raise Precondition("La API no está saludable")
+            raise Precondition("The API is not healthy")
         self.organizer = self.api.require("POST", "/api/v1/auth/login", body={
             "email": os.environ.get("SMOKE_ORGANIZER_EMAIL", "organizer@ticketing.dev"),
             "password": os.environ.get("SMOKE_ORGANIZER_PASSWORD", "Password123"),
@@ -201,7 +201,7 @@ class Audit:
         except Precondition as error:
             result.update(status="INCONCLUSIVE", reason=str(error))
         except (OSError, ValueError, KeyError, TypeError) as error:
-            result.update(status="INCONCLUSIVE", reason="Error de ejecución: " + type(error).__name__)
+            result.update(status="INCONCLUSIVE", reason="Execution error: " + type(error).__name__)
         result.update(observed=self.observed, requests=list(self.trace[start:]))
         self.results.append(result)
         self.save()
@@ -214,16 +214,16 @@ class Audit:
                   "httpRequests": len(self.trace), "fixturePolicy": "Only fresh generated accounts/event; retained for inspection"}
         self.output.mkdir(parents=True, exist_ok=True)
         (self.output / "http.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-        lines = ["# Pruebas adversarias HTTP", "", f"Run: `{self.run_id}`. API: `{self.api.url}`.", "",
-                 "PASS = control/invariante satisfecho; FAIL = incumplimiento observado; INCONCLUSIVE = no comprobado.", "",
-                 "No se guardan tokens, contraseñas, cuerpos HTTP ni firmas. Los datos ficticios se conservan.", "",
-                 "| Caso | Resultado | Prueba |", "| --- | --- | --- |"]
+        lines = ["# Adversarial HTTP tests", "", f"Run: `{self.run_id}`. API: `{self.api.url}`.", "",
+                 "PASS = invariant satisfied; FAIL = observed violation; INCONCLUSIVE = not verified.", "",
+                 "Tokens, passwords, HTTP bodies and signatures are never stored. Synthetic fixture data is retained.", "",
+                 "| Case | Result | Test |", "| --- | --- | --- |"]
         lines += [f"| {case['id']} | {case['status']} | {case['title']} |" for case in self.results]
         for case in self.results:
-            lines += ["", "## " + case["id"] + " — " + case["title"], "", "Esperado: " + case["expected"],
+            lines += ["", "## " + case["id"] + " — " + case["title"], "", "Expected: " + case["expected"],
                       "", case.get("finding", case.get("reason", "Invariantes comprobados.")), "", "```json",
                       json.dumps(case["observed"], ensure_ascii=False, indent=2), "```"]
-        lines += ["", "Las trazas de método/ruta/estado HTTP están en `http.json`. No es una auditoría exhaustiva."]
+        lines += ["", "Method/path/HTTP-status traces are in `http.json`. This is not an exhaustive security audit."]
         (self.output / "http.md").write_text("\n".join(lines) + "\n")
 
     def access(self):
@@ -240,9 +240,9 @@ class Audit:
                 body={"orderId": order["id"], "action": "capture"}),
         ]
         self.observed = {"statuses": [r.status for r in attempts], "order": self.snapshot(order, owner)}
-        expect(all(r.status in (403, 404) for r in attempts), "Alguna operación ajena no fue rechazada con 403/404")
+        expect(all(r.status in (403, 404) for r in attempts), "A foreign user's operation was not rejected with 403/404")
         expect(self.observed["order"]["status"] == "PENDING_PAYMENT" and self.observed["order"]["validTickets"] == 0,
-               "Cambió la orden de otro comprador")
+               "Another buyer's order was modified")
 
     def auth(self):
         buyer = self.buyer("role", {"role": "ADMIN", "enabled": True})
@@ -256,7 +256,7 @@ class Audit:
                     self.api.request("POST", "/api/v1/events", token=buyer["accessToken"], body=self.event_body)]
         self.observed = {"registeredRole": buyer["role"], "statuses": [r.status for r in attempts]}
         expect(buyer["role"] == "USER" and self.observed["statuses"] == [401, 401, 401, 403],
-               "Falló la separación de roles o la validación de tokens")
+               "Role separation or token validation failed")
 
     def quantity(self):
         buyer = self.buyer("quantity")
@@ -270,7 +270,7 @@ class Audit:
                 self.api.require("DELETE", "/api/v1/reservations/" + response.data["id"], 204, token=buyer["accessToken"])
             attempts.append(record)
         self.observed = {"attempts": attempts, "stockAfterCleanup": self.stock("quantity")}
-        expect(all(r["httpStatus"] in (400, 409, 422) for r in attempts), "La API aceptó una cantidad inválida; revisar coerción numérica")
+        expect(all(r["httpStatus"] in (400, 409, 422) for r in attempts), "The API accepted an invalid quantity; investigate numeric coercion")
 
     def price(self):
         buyer = self.buyer("price")
@@ -284,7 +284,7 @@ class Audit:
             return
         expect(response.status == 201, "Respuesta inesperada ante campos adicionales")
         self.observed["order"] = self.snapshot(response.data, buyer)
-        expect(response.data["totalAmount"] == 45 and response.data["currency"] == "USD", "El cliente alteró el precio o moneda")
+        expect(response.data["totalAmount"] == 45 and response.data["currency"] == "USD", "The client changed the price or currency")
 
     def signature(self):
         buyer = self.buyer("signature")
@@ -298,10 +298,10 @@ class Audit:
         self.observed = {"statuses": [r.status for r in attempts], "afterInvalidSignatures": state}
         expect(attempts[0].status in (400, 401) and all(r.status == 401 for r in attempts[1:])
                and state["status"] == "PENDING_PAYMENT" and state["validTickets"] == 0,
-               "Una firma inválida no fue bloqueada sin efectos")
-        expect(self.webhook(payload).status == 204, "La firma de control válida no fue aceptada")
+               "An invalid signature was not rejected without side effects")
+        expect(self.webhook(payload).status == 204, "The valid control signature was rejected")
         self.observed["afterValidSignature"] = self.snapshot(order, buyer)
-        expect(self.observed["afterValidSignature"]["validTickets"] == 1, "El control positivo no emitió una entrada")
+        expect(self.observed["afterValidSignature"]["validTickets"] == 1, "The positive control did not issue a ticket")
 
     def financial_evidence(self):
         buyer = self.buyer("evidence")
@@ -311,7 +311,7 @@ class Audit:
             statuses.append(self.webhook({**self.evidence(order), **change}).status)
         self.observed = {"trustedProviderSimulation": True, "statuses": statuses, "order": self.snapshot(order, buyer)}
         expect(all(s in (400, 409, 422) for s in statuses) and self.observed["order"]["validTickets"] == 0
-               and self.observed["order"]["status"] == "PENDING_PAYMENT", "Se aceptó evidencia financiera contradictoria")
+               and self.observed["order"]["status"] == "PENDING_PAYMENT", "Contradictory financial evidence was accepted")
 
     def duplicate_orders(self):
         buyer = self.buyer("duplicate")
@@ -331,7 +331,7 @@ class Audit:
         self.observed = {"statuses": [r.status for r in responses], "uniqueOrderIds": ids,
                          "conflictingPayloadStatus": conflict.status, "totalOrders": listing["totalElements"]}
         expect(all(r.status in (200, 201) for r in responses) and len(ids) == 1 and listing["totalElements"] == 1
-               and conflict.status == 409, "El reintento concurrente o la clave con otro payload rompió la idempotencia")
+               and conflict.status == 409, "Concurrent retries or a different payload broke idempotency")
 
     def duplicate_payments(self, semantic=False):
         buyer = self.buyer("semantic" if semantic else "replay")
@@ -343,11 +343,11 @@ class Audit:
         state = self.snapshot(order, buyer)
         self.observed = {"captureStatuses": statuses, "afterCapture": state}
         expect(all(s == 204 for s in statuses) and state["status"] == "PAID" and state["validTickets"] == 1,
-               "Las capturas duplicadas no convergieron a una sola entrada")
+               "Duplicate captures did not converge to a single issued ticket")
         if semantic:
             conflict = self.webhook({**evidence, "providerEventId": str(uuid.uuid4()), "amount": 1})
             self.observed["contradictoryOperationStatus"] = conflict.status
-            expect(conflict.status == 409, "La misma operación aceptó datos contradictorios")
+            expect(conflict.status == 409, "The same operation accepted contradictory data")
             return
         self.api.require("POST", "/api/v1/orders/" + order["id"] + "/cancel", token=buyer["accessToken"])
         refund = self.evidence(order, "REFUNDED")
@@ -356,7 +356,7 @@ class Audit:
         state = self.snapshot(order, buyer)
         self.observed.update(refundStatuses=statuses, afterRefund=state)
         expect(all(s == 204 for s in statuses) and state["refundStatus"] == "CONFIRMED" and state["validTickets"] == 0,
-               "Los reembolsos duplicados no convergieron a entradas invalidadas")
+               "Duplicate refunds did not converge to invalidated tickets")
 
     def oversell(self):
         buyer = self.buyer("oversell")
@@ -374,7 +374,7 @@ class Audit:
         self.observed = {"statuses": [r.status for r in responses], "accepted": len(accepted),
                          "stockWhileReserved": before, "stockAfterRelease": self.stock("oversell")}
         expect(len(accepted) == 2 and all(r.status in (201, 409) for r in responses) and before == 0
-               and self.observed["stockAfterRelease"] == 2, "No se respetó el inventario de dos entradas")
+               and self.observed["stockAfterRelease"] == 2, "The inventory limit of two tickets was not enforced")
 
     def race(self):
         outcomes = []
@@ -399,7 +399,7 @@ class Audit:
             consistent = (state["status"] == "PAID" and state["validTickets"] == 1 and after == stock - 1
                           or state["status"] == "CANCELLED" and state["validTickets"] == 0 and after == stock
                           and state["refundStatus"] == "REQUIRED")
-            expect(consistent and statuses[0] == 204 and statuses[1] in (200, 409, 422), "Captura/cancelación dejó un estado inconsistente")
+            expect(consistent and statuses[0] == 204 and statuses[1] in (200, 409, 422), "Capture/cancellation left an inconsistent state")
 
     def dropped_response(self):
         buyer = self.buyer("dropped")
@@ -429,14 +429,14 @@ class Audit:
             server.server_close()
             thread.join(timeout=5)
         if not first or first[0].status != 201:
-            raise Precondition("No se confirmó el commit antes de perder la respuesta")
+            raise Precondition("The commit was not confirmed before losing the response")
         replay = api.request("POST", "/api/v1/orders", token=buyer["accessToken"],
             headers={"Idempotency-Key": key}, body={"reservationId": reservation["id"]})
         listing = api.require("GET", "/api/v1/orders", token=buyer["accessToken"])
         self.observed = {"responseDropped": dropped, "committedStatus": first[0].status, "retryStatus": replay.status,
                          "sameOrder": replay.data.get("id") == first[0].data["id"], "totalOrders": listing["totalElements"]}
         expect(dropped and replay.status == 200 and self.observed["sameOrder"] and listing["totalElements"] == 1,
-               "El reintento después del commit no recuperó la misma orden")
+               "Retry after commit did not retrieve the same order")
 
     def reordered(self):
         buyer = self.buyer("reorder")
@@ -450,7 +450,7 @@ class Audit:
         final = self.snapshot(order, buyer)
         self.observed = {"statuses": statuses, "afterEarlyRefund": pending, "afterCaptureAndReplays": final}
         expect(all(s == 204 for s in statuses) and pending["status"] == "PENDING_PAYMENT" and final["status"] == "PAID"
-               and final["validTickets"] == 1, "La repetición o fallo tardío hizo retroceder el pago")
+               and final["validTickets"] == 1, "A repeated or late failure incorrectly reversed the payment")
 
     def simulator(self):
         buyer = self.buyer("simulator")
@@ -462,19 +462,19 @@ class Audit:
                                         headers={**headers, "Origin": "https://untrusted.example"})
         anonymous = self.frontend.request("POST", "/demo/payment", body=body, headers=headers)
         self.observed = {"blockedStatuses": [missing.status, foreign.status, anonymous.status]}
-        expect(self.observed["blockedStatuses"] == [403, 403, 401], "El simulador no bloqueó solicitudes sin origen o autenticación")
+        expect(self.observed["blockedStatuses"] == [403, 403, 401], "The simulator did not reject requests without origin or authentication")
         control = self.frontend.request("POST", "/demo/payment", body=body, token=buyer["accessToken"], headers=headers)
         state = self.snapshot(order, buyer)
         self.observed.update(validSimulationStatus=control.status, order=state)
         expect(control.status == 200 and state["totalAmount"] == 45 and state["currency"] == "USD"
-               and state["validTickets"] == 1, "El simulador aceptó importe del navegador o no pudo completar el control")
+               and state["validTickets"] == 1, "The simulator accepted a browser-provided amount or could not complete the control")
 
     def static_files(self):
         paths = ("/.env", "/dev_server.py", "/../.env", "/%2e%2e/.env", "/src/main.ts", "/package.json")
         statuses = [self.frontend.request("GET", path).status for path in paths]
         host = self.frontend.request("GET", "/", headers={"Host": "untrusted.example"})
         self.observed = {"paths": list(paths), "statuses": statuses, "foreignHostStatus": host.status}
-        expect(all(s == 404 for s in statuses) and host.status == 403, "El servidor local expuso un archivo privado o aceptó otro Host")
+        expect(all(s == 404 for s in statuses) and host.status == 403, "The local server exposed a private file or accepted a foreign Host")
 
     def search_input(self):
         control = self.api.require("GET", "/api/v1/events?q=" + self.run_id)
@@ -485,26 +485,26 @@ class Audit:
             attempts.append({"query": query, "httpStatus": response.status, "results": count})
         self.observed = {"controlResults": control["totalElements"], "attempts": attempts}
         expect(control["totalElements"] == 1 and all(r["httpStatus"] == 400 or r["httpStatus"] == 200 and r["results"] == 0
-               for r in attempts), "La búsqueda no trató las cadenas SQL como texto literal")
+               for r in attempts), "Search did not treat SQL-looking strings as literal text")
 
     def run(self):
         cases = [
-            ("HTTP-01", "Acceso a compras ajenas", "403/404 y ninguna modificación ajena", self.access),
-            ("HTTP-02", "JWT alterado y escalada de rol", "401/403 y registro como USER", self.auth),
-            ("HTTP-03", "Cantidades inválidas", "Rechazar negativos, fracciones, booleanos, nulos, overflow y exceso", self.quantity),
-            ("HTTP-04", "Precio manipulado", "Importe y moneda calculados por el servidor", self.price),
-            ("HTTP-05", "Firma ausente, falsa o cuerpo modificado", "Cabecera ausente 400/401; firma inválida 401; sin entradas; control válido sí funciona", self.signature),
-            ("HTTP-06", "Importe o moneda contradictorios", "Rechazar incluso evidencia firmada inválida del proveedor simulado", self.financial_evidence),
-            ("HTTP-07", "Seis órdenes simultáneas con la misma clave", "Una orden; conflicto al cambiar payload", self.duplicate_orders),
-            ("HTTP-08", "Capturas y reembolsos duplicados", "Una entrada y una invalidación efectiva", self.duplicate_payments),
-            ("HTTP-09", "Eventos distintos para una operación", "Aplicar una vez y rechazar contradicciones", lambda: self.duplicate_payments(True)),
-            ("HTTP-10", "Veinte reservas para dos entradas", "Exactamente dos reservas y stock nunca negativo", self.oversell),
-            ("HTTP-11", "Pagar y cancelar a la vez", "Tres carreras conservan inventario y estado financiero coherentes", self.race),
-            ("HTTP-12", "Respuesta perdida después del commit", "Reintento recupera la misma orden", self.dropped_response),
-            ("HTTP-13", "Eventos de pago fuera de orden", "Repetir el mismo evento o fallo tardío no revierte la captura", self.reordered),
-            ("HTTP-14", "Límites del simulador local", "Origen y sesión obligatorios; importe desde la API", self.simulator),
-            ("HTTP-15", "Archivos privados y Host ajeno", "404 para archivos y 403 para Host", self.static_files),
-            ("HTTP-16", "Cadenas SQL en búsqueda", "Búsqueda literal, sin errores ni acceso ampliado", self.search_input),
+            ("HTTP-01", "Access to another buyer's orders", "403/404 without changes to foreign orders", self.access),
+            ("HTTP-02", "Tampered JWT and role escalation", "401/403; registered role remains USER", self.auth),
+            ("HTTP-03", "Invalid quantities", "Reject negatives, fractions, booleans, null, overflow and over-limit values", self.quantity),
+            ("HTTP-04", "Manipulated price", "Server-controlled amount and currency", self.price),
+            ("HTTP-05", "Missing/forged signature or modified body", "Missing header 400/401; invalid signature 401; no tickets; valid control succeeds", self.signature),
+            ("HTTP-06", "Contradictory amount or currency", "Reject inconsistent evidence even when signed by the test provider", self.financial_evidence),
+            ("HTTP-07", "Six concurrent orders with the same idempotency key", "One order; changing the payload produces a conflict", self.duplicate_orders),
+            ("HTTP-08", "Duplicate captures and refunds", "One ticket and one effective invalidation", self.duplicate_payments),
+            ("HTTP-09", "Distinct events for a single operation", "Apply once and reject contradictions", lambda: self.duplicate_payments(True)),
+            ("HTTP-10", "Twenty reservations competing for two tickets", "Exactly two reservations and nonnegative stock", self.oversell),
+            ("HTTP-11", "Pay and cancel concurrently", "Three races preserve inventory and financial state", self.race),
+            ("HTTP-12", "Response lost after commit", "Retry retrieves the same order", self.dropped_response),
+            ("HTTP-13", "Out-of-order payment events", "Repeating an event or receiving a late failure does not revert capture", self.reordered),
+            ("HTTP-14", "Local simulator boundaries", "Origin and session required; amount comes from the API", self.simulator),
+            ("HTTP-15", "Private files and foreign Host", "404 for private files and 403 for foreign Host", self.static_files),
+            ("HTTP-16", "SQL-looking strings in search", "Literal search without errors or broader access", self.search_input),
         ]
         for args in cases:
             self.case(*args)
@@ -515,17 +515,17 @@ def main():
     parser.add_argument("--api", type=local_url, default="http://127.0.0.1:8080")
     parser.add_argument("--frontend", type=local_url, default="http://127.0.0.1:5173")
     parser.add_argument("--output", type=Path, default=ROOT / "reports/adversarial" / datetime.now().strftime("run-%Y%m%d-%H%M%S"))
-    parser.add_argument("--with-integration", action="store_true", help="También usa Docker/Testcontainers aislados; máximo 10 minutos")
+    parser.add_argument("--with-integration", action="store_true", help="Also run isolated Docker/Testcontainers tests; maximum 10 minutes")
     args = parser.parse_args()
     if (args.output / "http.json").exists() or args.with_integration and (args.output / "integration.json").exists():
-        parser.error("La evidencia ya existe; utiliza otra carpeta.")
+        parser.error("Evidence already exists; use a different output directory.")
     audit = Audit(args.api, args.frontend, args.output.resolve())
     try:
         audit.setup()
         audit.run()
     except (Precondition, OSError, ValueError, KeyError) as error:
-        print("Preparación incompleta: " + (str(error) if isinstance(error, Precondition) else type(error).__name__), file=sys.stderr)
-        audit.results.append({"id": "SETUP", "title": "Preparación", "expected": "Servicios y fixtures disponibles",
+        print("Setup incomplete: " + (str(error) if isinstance(error, Precondition) else type(error).__name__), file=sys.stderr)
+        audit.results.append({"id": "SETUP", "title": "Setup", "expected": "Services and fixtures available",
                               "status": "INCONCLUSIVE", "reason": type(error).__name__, "observed": {}})
         audit.save()
     integration_code = 0

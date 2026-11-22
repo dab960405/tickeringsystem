@@ -1,17 +1,14 @@
-# Frontend Angular de Ticketing
+# Ticketing Angular frontend
 
-Interfaz del comprador con Angular 22.2.6, CLI 22.2.7 y TypeScript estricto.
-Conserva los contratos existentes de la API Java: catálogo, autenticación, reservas,
-órdenes, pagos simulados, reembolsos y tickets. El servidor Python es únicamente una
-herramienta local para servir la compilación y firmar los webhooks ficticios.
+A buyer-facing application built with Angular 22.2.6, Angular CLI 22.2.7 and strict TypeScript. It preserves the existing Java API contracts for the event catalog, authentication, reservations, orders, simulated payments, refunds and tickets. The Python server is a **local-only development tool** that serves the compiled Angular bundle and signs simulated payment webhooks.
 
-## Requisitos y arranque
+## Requirements and startup
 
-- Node 24 LTS (24.15 o superior; versión utilizada: 24.22.3, indicada en `.nvmrc`).
-- npm 11 o 12, Python 3.10+, API Java y PostgreSQL/Redis iniciados.
-- `.env` configurado en la raíz; `PAYMENT_WEBHOOK_SECRET` debe coincidir con la API.
+- Node.js 24 LTS (24.15 or later; tested historical version 24.22.3, see `.nvmrc`).
+- npm 11 or 12, Python 3.10 or later, a running Java API, PostgreSQL and Redis.
+- A root `.env` file with `PAYMENT_WEBHOOK_SECRET` matching the API configuration.
 
-Desde la raíz del repositorio, instala las dependencias una vez:
+Install dependencies from the repository root:
 
 ```bash
 cd frontend
@@ -20,70 +17,50 @@ cd ..
 bash scripts/local.sh ui
 ```
 
-Abre <http://localhost:5173>. `ui` compila Angular en modo producción y sirve el resultado
-con el simulador local. `Ctrl+C` detiene la interfaz. Consulta
-[LOCAL_RUN.md](../docs/LOCAL_RUN.md) para levantar la API.
+Open <http://localhost:5173>. The `ui` command builds Angular in production mode and serves the compiled files with the local simulator. Stop with `Ctrl+C`. See [LOCAL_RUN.md](../docs/LOCAL_RUN.md) for starting the backend.
 
-Si Node está instalado fuera del `PATH`, puedes definir `NODE_HOME` en tu `.env` local
-con la carpeta de instalación que contiene `bin/node`. `local.sh ui` añade ese `bin`
-al `PATH` del proceso. Para ejecutar npm directamente, añade también esa carpeta al
-`PATH` de tu terminal. No se requiere instalar Angular CLI globalmente.
+If Node.js is installed outside the `PATH`, specify `NODE_HOME` in the local `.env` file, pointing to the installation directory containing `bin/node`. The `local.sh ui` command prepends its `bin` directory to the process `PATH`. For direct npm commands, add the same directory to your shell `PATH`. A globally installed Angular CLI is not necessary.
 
-Para editar con recompilación automática, deja el servidor local iniciado y ejecuta
-`npm run watch` desde `frontend` en otra terminal. Recarga el navegador después de los
-cambios. No se utiliza el servidor de `ng serve`: la misma dirección local sirve
-Angular, la API y el simulador, sin introducir una configuración CORS adicional.
+For rebuilds during development, keep the local server running and execute `npm run watch` from `frontend` in another terminal. Refresh the browser after changes. The demo does not rely on `ng serve`: the same localhost origin serves Angular, API requests and the simulator, avoiding an extra CORS configuration.
 
-## Organización y decisiones
+## Structure and design decisions
 
 ```text
 src/app/
-  core/       DTOs, cliente HTTP, autenticación, interceptor, guardas y avisos
-  catalog/    Búsqueda paginada; filtros en la URL
-  auth/       Registro e inicio de sesión con formularios reactivos tipados
-  purchase/   Reserva, orden, contador y acciones de pago/reembolso
-  account/    Compras y entradas del comprador
-  app.*       Navegación, composición y configuración
+  core/       DTOs, HTTP client, authentication, interceptor, guards and notices
+  catalog/    Paginated event search and URL-based filters
+  auth/       Registration and sign-in with typed reactive forms
+  purchase/   Reservation, order, countdown and simulated payment/refund actions
+  account/    Buyer orders and tickets
+  app.*       Navigation, composition and application configuration
 ```
 
-- Componentes standalone y organización por funcionalidad. Las páginas se cargan
-  bajo demanda mediante Angular Router; no hay NgModules ni un store externo.
-- `signal`/`computed` para estado local y compartido pequeño, componentes `OnPush` y
-  listas con `@for` y claves estables. El checkout sobrevive a la navegación interna.
-- `HttpClient` y DTOs tipados centralizan el contrato. Un interceptor funcional limita
-  el envío del token a las rutas locales, comparte una renovación concurrente y
-  reintenta el 401 una vez. No reintenta automáticamente mutaciones por errores de red.
-- Formularios reactivos tipados, validación explícita, estados vacíos, errores,
-  reintentos y bloqueo de envíos repetidos. La API sigue validando cantidades e importes.
-- Las búsquedas usan `switchMap` y `takeUntilDestroyed`. El contador se cancela al salir
-  de la vista. Las acciones asíncronas comprueban `DestroyRef` antes de emitir tras navegar.
-- Tokens solo en memoria. Recargar exige volver a entrar; compras y tickets persisten
-  en el backend. Las guardas ayudan a navegar, pero la autorización pertenece a la API.
-- Interpolación de Angular; no `innerHTML`, bypass del sanitizador ni secretos en el bundle.
-- Presupuesto de tamaño del CLI, compilación AOT, TypeScript y plantillas estrictos,
-  formateo con Prettier y dependencias reproducibles mediante `package-lock.json`.
+- Standalone Angular components are organized by feature. Pages are lazy-loaded with Angular Router, without NgModules or a separate state-management library.
+- `signal` and `computed` handle small shared/local state. Components use `OnPush`, and `@for` uses stable keys. Checkout state persists across internal navigation.
+- Typed `HttpClient` DTOs centralize the existing API contract. A functional interceptor sends access tokens only to the local API/simulator routes, shares concurrent token refresh and retries an HTTP 401 once. Network failures do **not** automatically retry mutating operations.
+- Typed reactive forms provide explicit validation, loading, empty/error states and duplicate-submission protection. The Java API remains authoritative for quantities and financial amounts.
+- Searches use `switchMap` and `takeUntilDestroyed`. Leaving the checkout view cancels its countdown. Asynchronous UI actions check `DestroyRef` before emitting after navigation. Checkout selections are protected while a reservation mutation is in progress to prevent mixing different events.
+- Access tokens remain in memory. Reloading requires sign-in; orders and tickets persist in the backend. Route guards assist navigation, but the API enforces authorization.
+- Angular interpolation is used without `innerHTML` or sanitizer bypasses. No HMAC secret is included in the browser bundle.
+- Size budgets, AOT compilation, strict TypeScript/templates, Prettier and `package-lock.json` support reproducible builds.
+- Canonical UI routes are English (`/events`, `/login`, `/register`, `/orders` and `/tickets`). Temporary redirects for historical Spanish bookmarks are kept explicitly for compatibility; they are not the canonical navigation language.
 
-## Recorrido funcional
+## Buyer journey
 
-1. Busca un evento y pulsa **Ver entradas**.
-2. Regístrate o inicia sesión; volverás al evento elegido.
-3. Elige tipo y cantidad. Reserva y crea la orden antes de vencer el contador.
-4. Simula un pago aprobado para recibir tickets, o uno rechazado para comprobar el fallo.
-5. Consulta **Mis entradas**, copia los códigos o utiliza la impresión del navegador.
-6. En **Mis compras**, cancela una orden pendiente o solicita y confirma un reembolso.
-   Después de confirmarlo, sus entradas dejan de estar vigentes.
+1. Find an event and choose **View tickets**.
+2. Register or sign in and return to the selected event.
+3. Choose a ticket type and quantity, reserve tickets, and create an order before the countdown expires.
+4. Simulate a successful payment to receive tickets, or simulate a failure to verify rejection.
+5. Open **My tickets** to copy ticket codes or use the browser print dialog.
+6. Under **My orders**, cancel a pending order or request and simulate a refund. A confirmed refund invalidates its issued tickets.
 
-Antes de crear una orden puedes liberar la reserva. Después se utiliza la cancelación
-de la orden, para no dejar una orden pendiente sin su reserva. La clave de idempotencia
-se conserva al reintentar la creación. Los importes y la moneda del pago se leen desde
-la API con el token del propietario, nunca desde datos financieros elegidos por el navegador.
+Before an order exists, the buyer can release their reservation. After creating an order, the buyer uses order cancellation rather than orphaning the pending order. The idempotency key is preserved when retrying order creation. Payment amounts and currency come from an API response accessed with the buyer's token, never from financial fields supplied by the browser.
 
-## Verificación
+## Verification
 
-El recorrido ejecutado, los resultados y sus límites están registrados en
-[VERIFICATION.md](VERIFICATION.md).
+The historical local browser walkthrough and its limitations appear in [VERIFICATION.md](VERIFICATION.md). The current GitHub Actions pipeline also runs Java, Angular and Python checks; verify the **matching SHA and successful run** instead of assuming historical local results apply to later changes.
 
-Desde `frontend`:
+From `frontend`:
 
 ```bash
 npm test
@@ -92,37 +69,26 @@ npm run format:check
 python3 -m unittest discover -s . -p 'test_*.py' -v
 ```
 
-Las pruebas Angular usan Vitest, TestBed y HttpTestingController. Cubren renovación
-concurrente, límites de envío del token, cierre de sesión, formularios, idempotencia,
-reserva duplicada, confirmación de entrega y destrucción del componente al navegar.
-Las pruebas Python cubren firma/propiedad, reintentos, origen local y entrega de archivos
-compilados/rutas Angular. No necesitan Docker, aunque Python abre un puerto efímero.
-Las pruebas Java siguen ejecutándose con los comandos del repositorio.
+Angular tests use Vitest, TestBed and HttpTestingController for concurrent refresh, token scoping, sign-out, forms, order idempotency, duplicate reservations, completion handling and component destruction after navigation. Additional tests protect checkout selection during in-flight reservations. Python tests check simulated signing and ownership, retries, localhost origin restrictions and safe serving of compiled files and SPA routes. They do not require Docker, though Python binds an ephemeral localhost port. The Java backend has separate integration tests with Testcontainers.
 
-## Fuentes oficiales utilizadas
+## Official documentation consulted
 
-Consultadas el 15 de noviembre de 2026; las versiones efectivas están fijadas en el lockfile.
+Sources documented for the original frontend implementation on 2026-11-15. Effective versions are pinned in the lockfile.
 
-| Decisión | Fuente |
+| Decision | Official source |
 | --- | --- |
-| Node, TypeScript y RxJS compatibles | [Angular: Version compatibility](https://angular.dev/reference/versions) |
-| Archivos por funcionalidad y componentes enfocados | [Angular: Style guide](https://angular.dev/style-guide) |
-| Estado reactivo sencillo | [Angular: Signals](https://angular.dev/guide/signals) |
-| Formularios reactivos y tipados | [Angular: Reactive forms](https://angular.dev/guide/forms/reactive-forms), [Typed forms](https://angular.dev/guide/forms/typed-forms) |
-| Autenticación HTTP transversal | [Angular: Interceptors](https://angular.dev/guide/http/interceptors) |
-| Rutas y carga de páginas | [Angular: Define routes](https://angular.dev/guide/routing/define-routes) |
-| Limpieza al destruir vistas | [Angular: DestroyRef](https://angular.dev/api/core/DestroyRef) |
-| Compilación e interpolación seguras | [Angular: Security](https://angular.dev/best-practices/security) |
-| Pruebas del cliente HTTP y componentes | [Angular: HTTP testing](https://angular.dev/guide/http/testing), [Testing overview](https://angular.dev/guide/testing) |
+| Compatible Node, TypeScript and RxJS | [Angular version compatibility](https://angular.dev/reference/versions) |
+| Feature-based code layout and focused components | [Angular style guide](https://angular.dev/style-guide) |
+| Simple reactive state | [Angular signals](https://angular.dev/guide/signals) |
+| Reactive and typed forms | [Reactive forms](https://angular.dev/guide/forms/reactive-forms) and [typed forms](https://angular.dev/guide/forms/typed-forms) |
+| Cross-cutting HTTP authentication | [Angular interceptors](https://angular.dev/guide/http/interceptors) |
+| Routes and lazy loading | [Angular routing](https://angular.dev/guide/routing/define-routes) |
+| Cleanup on view destruction | [Angular DestroyRef](https://angular.dev/api/core/DestroyRef) |
+| Safe rendering and interpolation | [Angular security](https://angular.dev/best-practices/security) |
+| HTTP and component tests | [Angular HTTP testing](https://angular.dev/guide/http/testing) and [testing overview](https://angular.dev/guide/testing) |
 
-## Alcance
+## Scope and deployment boundary
 
-Demo local del comprador. No implementa una pasarela comercial, panel administrativo,
-escáner de acceso ni correo. Los tickets usan el código real de la API; no se inventa
-un formato QR. Los contratos de órdenes/tickets no incluyen el nombre del evento, por
-eso se identifican por el número de compra y sus identificadores.
+This is a localhost buyer demo, **not a production payment gateway**. It does not implement an administrative dashboard, venue-access scanner, real email or real payments. Tickets display their actual API codes; no QR format is invented. Existing order/ticket DTOs omit the event title, so purchase IDs and ticket identifiers distinguish them.
 
-`dev_server.py` escucha exclusivamente en `127.0.0.1`; no es un servidor para producción.
-`FRONTEND_PORT` y `TICKETING_API_PORT` permiten cambiar los puertos locales. El secreto
-HMAC permanece en Python. Los archivos servidos se limitan a `dist/ticketing-ui/browser`;
-no se expone el código fuente ni `.env`. No se incorpora SSR para este recorrido local.
+`dev_server.py` binds only to `127.0.0.1` and must not be deployed publicly. `FRONTEND_PORT` and `TICKETING_API_PORT` configure the local ports. HMAC secrets stay in Python and are not sent to Angular. Static files are restricted to `dist/ticketing-ui/browser`; neither source files nor `.env` are served. Server-side rendering is intentionally absent from this local demo.
