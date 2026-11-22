@@ -1,52 +1,54 @@
-# F5-01 — Diseño técnico integral de Fase 5 (PROPUESTO)
+# F5-01 — Proposed Phase 5 comprehensive technical design
 
-- **Estado:** diseño propuesto al Tech Lead; no aprobado ni implementado.
-- **Fecha:** 2026-11-14.
-- **Rama / SHA estudiado:** `dev` / `73eb12d307af696533ba182574d7f9f54ab2ec42`.
-- **CI base:** #310, `success`; 390 pruebas unitarias y 170 integraciones, Spotless y JaCoCo correctos.
-- **Requisito de entrada:** cierres formales de Fases 3 y 4 y autorización explícita para implementar Fase 5.
-- **Objetivo:** probar el proyecto actual **en local primero**; implementar después Transactional Outbox → Kafka → notification-service → MongoDB con notificaciones simuladas. Sin AWS, pagos reales ni correo real.
+- **Status:** **PROPOSED / NOT APPROVED / NOT IMPLEMENTED. Phase 5 BLOCKED.**
+- **Design date:** 2026-11-14.
+- **Historical audited branch/SHA:** former `dev` at `73eb12d307af696533ba182574d7f9f54ab2ec42`.
+- **Historical CI baseline:** #310 `success`; 390 API unit tests, 170 integration tests, Spotless and JaCoCo. This is **not current main evidence**.
+- **Mandatory entry:** independent formal Phase 3 and Phase 4 closure, review of proposed ADR-023 and separate explicit Phase 5 start authorization.
+- **Goal after authorization:** validate the existing application locally, then build Transactional Outbox → Kafka → notification-service → MongoDB with simulated notifications. **No AWS, real payments or real email.**
 
-## 1. Fuentes y auditoría de la base existente
+## 1. Sources and original baseline review
 
-El alcance procede de la especificación técnica entregada, especialmente secciones 1–3, 12–16, 22 y 24. Se revisaron el árbol GitHub (431 entradas), los módulos Maven, migraciones hasta V16, servicios de transición, pruebas, documentación F4-01–F4-05 y ADR-016–022. **No hay una validación funcional local completa**, por lo que el diseño no presume un conocimiento empírico del 100 % de los caminos en ejecución.
+The scope came from the original technical specification (``1–3, 12–16, 22 and 24). At the historical SHA, the reviewer inspected the GitHub tree (431 entries), Maven modules, Flyway V1–V16, business-transition services, tests, F4-01–F4-05 and ADR-016–022. The old design explicitly lacked a complete local manual validation, so it did not claim empirical coverage of every execution path. A later local API smoke walkthrough was recorded separately and must not be backdated into this design.
 
-| Componente | Presente en el SHA | Implicación |
+| Component | Present at historical SHA | Proposed approach |
 | --- | --- | --- |
-| Monorepo Java 21 / Spring Boot 3.5.16 | `ticketing-api`, `common-events`, `notification-service` | Mantener monolito modular, consumidor separado |
-| PostgreSQL 17 y Flyway V1–V16 | Tablas negocio, operaciones, generaciones, outbox | No tocar migraciones históricas |
-| V10 `outbox_events` | `id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload`, `created_at`, `updated_at`, `published_at`, índice parcial de no publicados | Reutilizar V10 en primera versión, sin V17 |
-| `EventEnvelope<T>` | `eventId`, `eventType`, `occurredAt`, `version`, `data` | Mantener este envoltorio; añadir records de datos |
-| `notification-service` | Solo aplicación Spring Boot, web y Actuator | Añadir Kafka/Mongo y consulta protegida |
-| Docker Compose `infra` | PostgreSQL, Redis, Kafka KRaft y Mongo, broker con auto-create desactivado | Crear tópicos explícitamente, ejecutar apps en host |
-| Pruebas | PostgreSQL/Redis Testcontainers, CI #310 verde | Añadir tests Kafka/Mongo especializados |
-| Contrato pagos | Solo SIMULATED; ADR-022 propuesto | No incluir proveedor real ni reabrir H84 fuera de aprobación |
+| Java 21 / Spring Boot 3.5.16 monorepo | `ticketing-api`, `common-events`, `notification-service` | Keep modular monolith and separate consumer |
+| PostgreSQL 17 / Flyway V1–V16 | Business, operation, generation and outbox tables | Never edit applied migrations |
+| V10 `outbox_events` | `id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload`, timestamps, `published_at`, unpublished partial index | Reuse initially; no V17 without proof/approval |
+| `EventEnvelope<T>` | `eventId`, `eventType`, `occurredAt`, `version`, `data` | Preserve envelope; add typed event-data records |
+| `notification-service` | Spring Boot application with web/Actuator only | Later add Kafka/Mongo and protected internal query |
+| Docker Compose `infra` | PostgreSQL, Redis, Kafka KRaft and Mongo; auto-create topics off | Explicit topic creation, applications initially run on host |
+| Existing tests | PostgreSQL/Redis Testcontainers, historical CI #310 green | Add specialized Kafka/Mongo integration suites |
+| Payments | SIMULATED provider only; ADR-022 proposed | Never integrate real payment service or invent a refund |
 
-**Deuda previa:** `docs/erd.md` todavía describe V1–V11 aunque el esquema contiene V12–V16. También resta dictamen de `EventCancellationService` (Fase 3) y de ADR-022/H84 (Fase 4). No alterar estos contratos sin autorización.
+**Historical documentation debt:** at the time, `docs/erd.md` described V1–V11 although the database had V12–V16. The ERD was subsequently updated to 22 tables/V16. Event-cancellation ADR-024 and simulated-refund ADR-022 remain proposed. This translation does **not** approve either design or initiate Phase 5.
 
-## 2. Requisitos y no objetivos
+## 2. Future requirements and non-goals
 
-**Funcionales:** eventos `OrderConfirmed`, `OrderCancelled`, `OrderRefunded`, `ReservationExpired`, `EventCancelled`; tópicos `ticketing.orders`, `ticketing.reservations`, `ticketing.events`; 3 particiones y réplica 1 en desarrollo; publicación cada segundo desde outbox; consumidor con ack manual, 3 entregas máximas (intento inicial + 2 reintentos de 1 segundo), DLT `<topic>.DLT`; documento de notificación en Mongo; GET paginado `/notifications?userId=` con API key; notificación = texto simulado y registro, nunca email real. Idempotencia respaldada por índice único de `eventId` en Mongo.
+**Proposed functions:** `OrderConfirmed`, `OrderCancelled`, `OrderRefunded`, `ReservationExpired` and `EventCancelled`; Kafka topics `ticketing.orders`, `ticketing.reservations` and `ticketing.events`, each with three partitions and replication factor 1 **for local development**; a one-second outbox relay; a consumer with manual acknowledgment and dead-letter topics `<topic>.DLT`; persisted simulated Mongo notification with unique `eventId`; internal paginated `GET /notifications?userId=...` protected by an API key. Notification means a simulated text record, **never SMTP/email delivery**.
 
-**No funcionales:** atomicidad de negocio y outbox en una sola transacción PostgreSQL; reenvío **at-least-once** de Kafka, consumo idempotente; claves por ID de agregado para orden por partición; evitar bloquear el negocio si Kafka cae; integraciones con Testcontainers y pruebas manuales locales reproducibles; configuración por entorno sin secretos reales ni dependencia AWS.
+**Proposed nonfunctional behavior:** atomic business + outbox in one PostgreSQL transaction; at-least-once Kafka delivery and idempotent consumer; aggregate ID as Kafka partition key; Kafka outage must not block already committed business; Testcontainers and reproducible local runs; environment-configured secrets; zero paid infrastructure.
 
-**No objetivos:** exactly-once end-to-end; 2PC PostgreSQL/Kafka/Mongo; sagas, CQRS, Debezium/Kafka Connect, plataforma cloud, correo real, panel administrativo o rediseño de pagos.
+**Explicit non-goals:** end-to-end exactly-once; distributed PostgreSQL/Kafka/Mongo 2PC; sagas/CQRS; Debezium/Kafka Connect; cloud platform; real emails; admin dashboard; redesign of payment/refund policy.
 
-## 3. Arquitectura de contenedores y flujo
+**Open inconsistency to resolve:** original specification mentions three delivery attempts, an older outline says three retries, while this detailed design proposes initial + two retries. Record a definite contract before implementation, rather than silently choosing one.
+
+## 3. Container architecture and proposed flow
 
 ```mermaid
 flowchart LR
-  User["Usuario / API REST"]
-  subgraph API["ticketing-api · monolito modular"]
-    Business["Servicios de negocio"]
-    Writer["OutboxWriter · TX del negocio"]
-    Relay["OutboxRelay · @Scheduled 1s"]
+  User["Buyer / REST API"]
+  subgraph API["ticketing-api · modular monolith"]
+    Business["Business services"]
+    Writer["OutboxWriter · same business TX"]
+    Relay["OutboxRelay · scheduled every 1s"]
   end
-  PG[("PostgreSQL 17 · negocio + outbox_events")]
+  PG[("PostgreSQL 17 · business + outbox_events")]
   Broker[["Kafka KRaft · 3 topics + 3 DLT"]]
   subgraph NS["notification-service"]
-    Listener["KafkaListener · ack manual"]
-    Logic["NotificationService · deduplicación"]
+    Listener["KafkaListener · manual acknowledgment"]
+    Logic["NotificationService · deduplication"]
     Query["GET /notifications · API key"]
   end
   Mongo[("MongoDB 7 · notifications")]
@@ -65,49 +67,51 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Client as Cliente
-  participant API as Servicio de negocio
+  participant Client as Buyer
+  participant API as Business service
   participant DB as PostgreSQL
   participant Relay as OutboxRelay
   participant K as Kafka
   participant N as notification-service
   participant M as MongoDB
-  Client->>API: Acción válida (ej. captura simulada)
-  API->>DB: BEGIN: mutación comercial + INSERT outbox
+  Client->>API: Valid request (e.g., simulated capture)
+  API->>DB: BEGIN + business mutation + INSERT outbox
   DB-->>API: COMMIT
-  API-->>Client: Respuesta normal
-  loop Cada 1 s, hasta lote configurado
+  API-->>Client: Normal response
+  loop Every 1s, up to configured batch size
     Relay->>DB: BEGIN + SELECT ... FOR UPDATE SKIP LOCKED
-    DB-->>Relay: Un evento elegible
-    Relay->>K: send(topic, aggregateId, envelope JSON)
-    K-->>Relay: ack del broker
+    DB-->>Relay: One eligible event
+    Relay->>K: send(topic, aggregateId, persisted JSON)
+    K-->>Relay: Broker ACK
     Relay->>DB: UPDATE published_at + COMMIT
   end
-  K->>N: Entrega (puede repetirse)
-  N->>M: INSERT notification (eventId único)
-  M-->>N: OK o duplicado conocido
-  N->>K: ACK/commit de offset
+  K->>N: Delivery (may repeat)
+  N->>M: INSERT notification (unique eventId)
+  M-->>N: OK or known duplicate
+  N->>K: ACK / commit offset
 ```
 
-**Garantía precisa:** el commit negocio/outbox es atómico; Kafka y PostgreSQL no forman una transacción distribuida. Si Kafka confirma el mensaje y la base falla antes de `published_at`, el mensaje reaparece. Eso es esperado; el consumidor deduplica por `eventId`.
+**Precise guarantee:** Business/outbox are committed atomically in PostgreSQL. Kafka and PostgreSQL do **not** share a distributed transaction. If the broker ACKs before PostgreSQL records `published_at` and PostgreSQL later rolls back, the same message may be published again. Duplicate delivery is expected; the consumer must deduplicate by `eventId`.
 
-## 4. Contrato de eventos V1
+## 4. Proposed V1 event contract
 
-Reutilizar `EventEnvelope<T>` en `common-events` (no añadir brokers como dependencias a ese módulo). Crear records de datos con `recipientUserId`, `recipientEmail`, `correlationId`, el identificador del agregado y solo los campos necesarios para el texto simulado; para `EventCancelled` incluir nombre/título resumido del evento. No incluir tokens, firmas HMAC ni referencias financieras. UUID del sobre `eventId` **igual** a la PK `outbox_events.id`. `version=1`, `occurredAt` fijado al registrar, no al republicar. Payload JSONB de outbox = **sobre completo**, sin reconstrucción al reenvío. La clave Kafka = `aggregateId.toString()`.
+Reuse `EventEnvelope<T>` from `common-events`, **without adding Kafka dependencies to that module**. Add typed event-data records with `recipientUserId`, `recipientEmail`, `correlationId`, aggregate identity and only fields needed for simulated message composition; `EventCancelled` includes a concise event title/name.
 
-| Tipo | Tópico | Agregado / clave Kafka | Momento único de publicación |
+Never include bearer tokens, HMAC secrets/signatures or financial provider references. The envelope `eventId` must be the same as `outbox_events.id`. Use `version=1` and fix `occurredAt` at persistence time, **not each retransmission**. Persist the **entire envelope JSON** in the outbox `payload` and publish it unchanged. Kafka record key is `aggregateId.toString()`.
+
+| Event type | Kafka topic | Aggregate / Kafka key | Exactly when to write |
 | --- | --- | --- | --- |
-| `OrderConfirmed` | `ticketing.orders` | orderId | Pago confirmado **y** tickets emitidos/orden cumplida; no `UNFULFILLABLE` |
-| `OrderCancelled` | `ticketing.orders` | orderId | Cambio efectivo de orden a `CANCELLED` (usuario, fallo de pago, cancelación de evento) |
-| `OrderRefunded` | `ticketing.orders` | orderId | Confirmación real de reembolso y efecto comercial `APPLIED`, nunca `PENDING`/`FAILED`/`NO_OP` |
-| `ReservationExpired` | `ticketing.reservations` | reservationId | Cambio efectivo de reserva `ACTIVE → EXPIRED` por TTL/expiración de orden; no por reenvío |
-| `EventCancelled` | `ticketing.events` | eventId | Cambio efectivo a `CANCELLED`; propuesta: una notificación-evento por destinatario distinto |
+| `OrderConfirmed` | `ticketing.orders` | orderId | Payment confirmed, tickets issued and order fulfilled; **not** `UNFULFILLABLE` |
+| `OrderCancelled` | `ticketing.orders` | orderId | Effective order transition to `CANCELLED` (buyer, payment failure or event cancellation) |
+| `OrderRefunded` | `ticketing.orders` | orderId | **Real signed** refund evidence with actual `APPLIED` commercial effect; not `PENDING`, `FAILED` or `NO_OP` |
+| `ReservationExpired` | `ticketing.reservations` | reservationId | Actual `ACTIVE → EXPIRED` via TTL/order expiration, not duplicate replay |
+| `EventCancelled` | `ticketing.events` | eventId | Actual transition to `CANCELLED`; **proposal:** a distinct notification event per eligible recipient |
 
-**Destinatarios de EventCancelled (punto específico para aprobar):** el organizador y usuarios afectados se identifican desde `ticketing-api` en la misma transacción de cancelación; se emite un evento único por destinatario (cada uno con UUID propio, pero con la **misma clave Kafka eventId del agregado**). Así `notification-service` no consulta PostgreSQL ni necesita transacciones Mongo multidocumento. Duplicados de destinatario en un mismo evento se eliminan antes de insertar el outbox. El Tech Lead debe aceptar esta regla antes de implementarla.
+**EventCancelled recipients — requires explicit approval:** The organizer and affected buyers would be identified inside `ticketing-api` during the same event-cancellation transaction. The proposal writes one unique outbox event per recipient (own UUID) using the **same event aggregate ID as Kafka key**, avoiding PostgreSQL access or Mongo multi-document transactions in `notification-service`. Deduplicate recipients before insertion. Decide eligible reservation/order states and a bounded transactional fan-out limit before implementing.
 
-**Correlación:** datos de evento contienen `correlationId`. Si la acción empieza por HTTP, registrar/capturar `X-Correlation-Id` mediante un filtro mínimo; en tareas programadas generar un UUID técnico. El relay lo transmite también como header Kafka, recuperándolo del payload persistido; la notificación registra solo IDs técnicos en logs.
+**Correlation:** Data includes `correlationId`. An HTTP request would capture or generate `X-Correlation-Id` through a minimal validated filter; scheduled jobs generate a technical UUID. The relay would also forward the persisted correlation ID as a Kafka header. Logs use technical IDs, not complete emails/secrets. HTTP correlation is still an AUD-10 decision before implementation.
 
-**Ejemplo del contrato JSON V1** (IDs ficticios; la referencia de pago simulado no se transmite):
+### Example envelope V1 — synthetic IDs
 
 ```json
 {
@@ -124,23 +128,23 @@ Reutilizar `EventEnvelope<T>` en `common-events` (no añadir brokers como depend
 }
 ```
 
-**Compatibilidad:** `EventEnvelope` conserva sus cinco campos y los contratos públicos actuales no cambian. Un consumidor valida `version` y `eventType` y redirige evidencia no reconocida a DLT sin inventar notificaciones. Es posible agregar records sin cambiar el POM padre.
+**Compatibility:** The existing `EventEnvelope` retains its five fields; current public APIs need not change. Consumer validates `version` and `eventType`, routes unsupported evidence to DLT and must not fabricate notifications. New typed records do not necessarily require a parent-POM change.
 
-## 5. Escritura del outbox dentro de la transacción del negocio
+## 5. Proposed outbox writes in business transactions — NOT IMPLEMENTED
 
-Crear en `ticketing-api` una interfaz/servicio mínimo `OutboxWriter`, con persistencia JDBC y propagación `MANDATORY`, invocado **solo** después de confirmar una transición válida y mientras sigue abierta la misma transacción. No insertar un evento en un bloque `afterCommit` (se perdería la atomicidad); tampoco llamar a Kafka en los servicios de negocio.
+Introduce a minimal `OutboxWriter` service/interface under `ticketing-api`, using JDBC and Spring propagation `MANDATORY`, invoked **only for an actual eligible state transition while the same business transaction is still open**. Do **not** write outbox records in `afterCommit` (would lose atomicity). Do **not** call Kafka directly from business services.
 
-Ejemplos de puntos de emisión: `OrderPaymentService.processSuccess` tras tickets; `OrderPaymentService.confirmRefund` tras confirmación; cancelación pendiente por `OrderCancellationService`, `OrderPaymentService.processFailure` o `EventCancellationService`; expiración por `ReservationExpirationService` y `OrderExpirationProcessor` cuando realmente expiran la reserva; `EventCancellationService` si cambia el estado del evento. Evitar doble publicación entre coordinadores y servicios internos.
+Candidate emission sites: `OrderPaymentService.processSuccess` after tickets; `OrderPaymentService.confirmRefund` after valid refund; `OrderCancellationService` / `OrderPaymentService.processFailure` / `EventCancellationService` for pending order cancellation; `ReservationExpirationService` / `OrderExpirationProcessor` when a reservation truly expires; `EventCancellationService` when event actually becomes cancelled. Prevent duplicate emission across coordinators and nested services.
 
-Usar `created_at=clock_timestamp()` explícito al insertar el outbox para reflejar la hora real de inserción y no el comienzo de una transacción larga. Orden estable `(created_at,id)` por agregado; el test debe demostrar secuencia bajo carreras. En caso de fallo de negocio, **rollback también elimina el outbox**.
+Explicit `created_at=clock_timestamp()` would reflect actual DB insertion time rather than the beginning of a long transaction. The original plan orders by `(created_at,id)` per aggregate; **this is deterministic for visible timestamps but does not prove real business commit ordering under concurrent transactions**. Require a PostgreSQL concurrency test and an approved ordering contract before claiming per-aggregate business order.
 
-No alterar la máquina de estados ni la regla de pagos simulados. En el flujo técnico `TX-APPLY`, registrar el outbox en la transacción que ya aplica negocio; un `NO_OP` no genera notificación.
+If the business transaction fails, the outbox row must roll back with it. For RX/CLAIM/APPLY/PROJECT, only the already existing **business-changing APPLY transaction** writes a relevant outbox event. A `NO_OP` produces no notification.
 
-## 6. Relay Kafka mínimo y tolerante a fallos
+## 6. Proposed minimum Kafka relay — NOT IMPLEMENTED
 
-**Elección recomendada para el portafolio:** reutilizar `outbox_events` V10 sin V17, con **una fila por transacción**, `SELECT FOR UPDATE SKIP LOCKED` y espera acotada del acuse Kafka. Mantener las transacciones muy cortas y no bloquear tablas de negocio. La publicación puede procesar hasta 50 filas secuenciales por ciclo `@Scheduled(fixedDelay=1000)`; cada mensaje usa su propia transacción.
+**Original portfolio recommendation, not accepted:** reuse V10 `outbox_events` without V17, one row per transaction, `SELECT ... FOR UPDATE SKIP LOCKED` and a bounded Kafka ACK wait. Avoid locking business tables. Up to 50 messages sequentially per `@Scheduled(fixedDelay=1000)` cycle; each message uses its own short transaction.
 
-Consulta conceptual; revisar `EXPLAIN ANALYZE` en Postgres local antes de afirmar rendimiento:
+Conceptual query; analyze local PostgreSQL plan and the actual global lock requirements before implementation:
 
 ```sql
 SELECT o.id, o.aggregate_type, o.aggregate_id, o.event_type, o.payload
@@ -159,73 +163,102 @@ LIMIT 1
 FOR UPDATE OF o SKIP LOCKED;
 ```
 
-Mientras el registro está bloqueado, `KafkaTemplate<String,String>.send(...)` envía el **JSON almacenado** y se espera el acuse con timeout configurado (propuesta inicial: 2 s). Solo después se ejecuta `UPDATE outbox_events SET published_at=clock_timestamp(), updated_at=clock_timestamp() WHERE id=?` y COMMIT. Si el broker rechaza o no contesta, la transacción revierte y el evento sigue pendiente. No hacer loops de reintentos agresivos dentro del mismo lock.
+The original proposal would call `KafkaTemplate<String,String>.send(...)` on the **persisted JSON** while holding the selected outbox row lock, waiting for the broker ACK with a configured initial limit of **2 seconds**. Only then would it run:
 
-**Orden por agregado:** el predicado `NOT EXISTS older` impide reclamar un evento nuevo mientras exista otro anterior del mismo agregado sin publicar; varios workers sí pueden procesar agregados distintos. La clave Kafka fija la partición en el tópico. Se probará el orden en dos procesos/threads de relay con PostgreSQL real. Con reloj/timestamps empatados, `id` ofrece un orden determinista; esto no equivale a un orden total global de commits y el caso deberá auditarse si se exige mayor garantía.
+```sql
+UPDATE outbox_events
+SET published_at = clock_timestamp(), updated_at = clock_timestamp()
+WHERE id = ?;
+```
 
-**Trade-off explícito:** el broker se consulta mientras hay una transacción PostgreSQL abierta. Se acepta provisionalmente solo para el laboratorio local por la espera corta y un único lock de outbox. **Si el Tech Lead rechaza I/O de Kafka bajo transacción**, proponer una V17 *nueva* con claim/lease y confirmación condicionada, previa autorización de esquema/locks, nunca ampliar V10 retrospectivamente. Ni esta propuesta ni los tests constituyen aprobación de V17.
+and COMMIT. A broker timeout/rejection would roll back the transaction, leaving the outbox entry pending. No aggressive retry loop should hold the same lock.
 
-Configurar `acks=all`, `enable.idempotence=true` y límites/reintentos de productor compatibles con Kafka; con **replicación 1 no existe HA**. Crear los tres tópicos y sus tres DLT explícitamente porque Compose desactiva auto-creación. Los DLT son `ticketing.orders.DLT`, `ticketing.reservations.DLT` y `ticketing.events.DLT`, cada uno con tres particiones y replicación 1. Los `NewTopic` de Spring Kafka pueden definirlos desde la API; inicio local: broker primero, API después, consumidor al final.
+**Aggregate order:** `NOT EXISTS older` prevents claiming a later *visible* unpublished event of the same aggregate; workers may process different aggregates concurrently. Kafka key keeps the aggregate in one partition. Timestamp ties use `id` for deterministic order. **Caveat:** visibility and `created_at` ordering are not a complete guarantee about concurrent commit order; test two relays and concurrent producers against actual PostgreSQL before specifying a stronger guarantee.
 
-## 7. Consumidor e idempotencia MongoDB
+**Explicit trade-off requiring Tech Lead decision:** Waiting for Kafka I/O while a PostgreSQL transaction is open. It may be acceptable only for a zero-cost local demo with a short timeout and one outbox row locked; it is not an automatically recommended production practice. If rejected, propose an **additive, separately authorized V17** with claim/lease and conditional publication, rather than editing V10 in place. No migration is authorized by this proposed design.
 
-Agregar a `notification-service` `spring-kafka`, `spring-boot-starter-data-mongodb` y dependencias de validación/test pertinentes; versiones desde BOM de Spring Boot y Testcontainers existente. No dependencia de notification-service hacia ticketing-api.
+Producer settings `acks=all`, `enable.idempotence=true` and compatible retry/limit values should be considered; **replication factor 1 provides no high availability**. Since Compose disables auto-topic creation, explicitly define:
+- `ticketing.orders` and `ticketing.orders.DLT`
+- `ticketing.reservations` and `ticketing.reservations.DLT`
+- `ticketing.events` and `ticketing.events.DLT`
 
-- `@KafkaListener` por tópico con `group.id=ticketing-notifications`, `enable.auto.commit=false` y `AckMode.MANUAL_IMMEDIATE`.
-- Leer `String` JSON, validar `eventType`, `version=1`, destinatario, datos mínimos y convertir `data` al record adecuado con Jackson. No habilitar deserialización polimórfica arbitraria.
-- Persistir un documento de notificación por mensaje (una persona destinataria); `eventId` único en MongoDB. Creación del índice **explícita** mediante `MongoTemplate.indexOps(...).ensureIndex(...)` en el arranque, no presumir creación automática por anotación.
-- Documento: `eventId`, `type`, `recipientUserId`, `recipientEmail`, `subject`, `body`, `status` = `SENT`/`FAILED` (entrega **simulada**), `createdAt`. `SENT` significa «registrada y simulada», nunca envío SMTP real.
-- Si `eventId` ya existe con el **mismo tipo/destinatario**, tratar como duplicado legítimo y ACK; si contradice la evidencia persistida, error a DLT. No hacer `exists → insert` sin restricción única (carrera).
-- Confirmar offset después de guardar o reconocer el duplicado. Cuando Mongo falla, lanzar excepción sin ACK.
-- `DefaultErrorHandler` + `FixedBackOff(1000,2)`: **tres entregas totales** (inicial + dos reintentos), luego `DeadLetterPublishingRecoverer` con destino explícito `<topic>.DLT` (no confiar en sufijo predeterminado `-dlt`). Confirmar recuperación solo después del ACK de publicación a DLT; probar esta interacción con `MANUAL_IMMEDIATE`.
-- No implementar reenvío automático de DLT en Fase 5; documentar inspección/reprocesamiento manual seguro. Si la caída Mongo es temporal y supera los reintentos, la notificación queda en DLT y requiere intervención; no declarar recuperación automática.
+Each was proposed with three partitions/replication 1 for local use. Spring Kafka `NewTopic` could create them in the API. Historical startup order: Kafka broker, then API, then consumer.
 
-**Virtual threads (Java 21):** el proyecto ya tiene `spring.threads.virtual.enabled=true` en `notification-service`, pero **Spring Boot no garantiza que ese ajuste cambie automáticamente el executor interno de los Kafka listeners**. Spring Kafka 3.3 permite configurar `ContainerProperties.consumerExecutor`; para cumplir la especificación, diseñar un `SimpleAsyncTaskExecutor` con `setVirtualThreads(true)` para el listener cuando resulte compatible, mantener procesamiento y `acknowledge()` en el mismo hilo de consumo, y probarlo mediante `Thread.currentThread().isVirtual()` y redeliveries. No usar `@Async` sobre el método listener ni ACK desde otro thread sin validación. Con virtual threads, considerar `spring.main.keep-alive=true` para evitar salida de JVM cuando solo queden hilos daemon. Validar en integración en vez de asumir compatibilidad.
+## 7. Proposed consumer and Mongo idempotency — NOT IMPLEMENTED
 
-**Endpoint requerido:** `GET /notifications?userId=<UUID>&page=0&size=20`, limitado a 100, orden `createdAt DESC, eventId`, autenticado mediante `X-Api-Key` de `NOTIFICATION_API_KEY` por variable entorno y comparación de tiempo constante. Acceso mínimo: no exponer colección sin API key; pruebas de 401, paginación y aislamiento por userId. Documentar que una **API key compartida no proporciona aislamiento por usuario**: se considera endpoint interno de desarrollo, nunca API pública multiusuario.
+Add `spring-kafka`, `spring-boot-starter-data-mongodb` and only justified validation/test dependencies to `notification-service`, taking supported versions from the actual Spring Boot BOM/Testcontainers configuration. Do not couple notification-service to ticketing-api.
 
-## 8. Infraestructura de desarrollo y observabilidad
+- `@KafkaListener` for each topic, `group.id=ticketing-notifications`, `enable.auto.commit=false`, `AckMode.MANUAL_IMMEDIATE`.
+- Read String JSON, validate `eventType`, `version=1`, recipient and minimum data; convert data to an approved typed record with Jackson. **Do not enable arbitrary polymorphic deserialization.**
+- Persist one simulated notification document per recipient with a **unique Mongo `eventId` index**. Create the index explicitly at startup using `MongoTemplate.indexOps(...).ensureIndex(...)` rather than relying on an annotation alone.
+- Proposed fields: `eventId`, `type`, `recipientUserId`, `recipientEmail`, `subject`, `body`, `status` (`SENT`/`FAILED` — simulated only) and `createdAt`. `SENT` means recorded/simulated, **never actual email delivery**.
+- Recognize duplicate `eventId` only after comparing sufficient canonical persisted evidence, **not just type and recipient**. The original text compared same type/recipient, but the proposed F5-T18 requires detecting contradictory payload contents; resolve the inconsistency in the contract first. Enforce uniqueness atomically and do not rely on `exists → insert`.
+- ACK the offset after successful persistence or a verified identical duplicate. When Mongo fails, throw without successful ACK.
+- Proposed `DefaultErrorHandler` and `FixedBackOff(1000,2)` give **three total deliveries** (original + two retries), then `DeadLetterPublishingRecoverer` to explicit `<topic>.DLT` (not default `-dlt`). Confirm recovery only after actual DLT publication ACK; test with `MANUAL_IMMEDIATE`.
+- No automatic DLT replay in Phase 5; document safe manual inspection/reprocessing. If Mongo outage outlasts retries, a DLT entry requires human action, **not** an automatic-recovery claim.
 
-Conservar `docker-compose.yml` perfil `infra` con PostgreSQL 17, Redis 7, Kafka 4 KRaft y MongoDB 7. En esta fase **las aplicaciones se ejecutan en el host**, con `KAFKA_BOOTSTRAP_SERVERS=localhost:9092` y `MONGODB_URI` apuntando a `localhost`. Los contenedores usan listeners internos separados; no intentar resolver `localhost` desde un contenedor como si fuera el broker.
+**Java 21 virtual threads:** `spring.threads.virtual.enabled=true` already exists in the notification scaffold, but Boot does not thereby guarantee the Kafka listener executor uses virtual threads. Spring Kafka supports a configurable consumer executor. The historical proposal was `SimpleAsyncTaskExecutor` with `setVirtualThreads(true)` where supported, processing and acknowledging on the same listener thread. Verify with `Thread.currentThread().isVirtual()` and redelivery tests; do not put `@Async` on listeners or ACK from a separate thread without evidence. Consider `spring.main.keep-alive=true` where virtual threads allow JVM exit. Verify the actual resolved framework version before implementing.
 
-**Aislamiento de pruebas existentes:** no iniciar Kafka en las 170 integraciones anteriores por añadir `spring-kafka`. Proponer `ticketing.messaging.enabled=false` en el perfil `test` heredado, condicionado solo al relay/KafkaAdmin/listeners, **no** al `OutboxWriter` transaccional. Habilitarlo explícitamente en los nuevos `*IT` con KafkaContainer; para `notification-service`, usar perfil/test slice apropiado para que su actual prueba de contexto no requiera Mongo/Kafka accidentalmente. Verificar Spring Boot `@ServiceConnection` y el arranque de topics en test. No cambiar el comportamiento de `dev` a modo silencioso por una prueba.
+**Proposed protected query:** `GET /notifications?userId=<UUID>&page=0&size=20` (max 100, `createdAt DESC, eventId` stable ordering), secured by an environment-provided `NOTIFICATION_API_KEY` in `X-Api-Key` and constant-time comparison. Missing/wrong key should reject requests. A **shared API key does not provide per-user authorization**; this is an **internal development-only endpoint**, never a public multi-user API or browser-bundled secret.
 
-El perfil `full`, Dockerfiles multi-stage, Grafana, Prometheus y AWS pertenecen a fases posteriores. Proponer métricas básicas de outbox pendiente, publicación con fallo, eventos consumidos, duplicados y DLT, junto con logs por `eventId`/`correlationId`, sin correos completos ni secretos. No exigir Grafana para aprobar Fase 5.
+## 8. Development infrastructure, testing isolation and monitoring
 
-**Riesgos y controles**: (a) duplicado después del ACK Kafka y antes del commit PG → índice único Mongo; (b) Mongo caído → retries+DLT; (c) Kafka caído → outbox pendiente sin perder negocio; (d) relay concurrente → SKIP LOCKED y exclusión de anterior por agregado; (e) mensajes malformados → DLT; (f) API key ausente → rechazo al arrancar o 401, no modo abierto; (g) event cancellation fan-out → transacción acotada y deduplicación de destinatarios, sin acceso PG desde notification-service.
+Keep the Compose `infra` scaffold with PostgreSQL 17, Redis 7, Kafka 4 KRaft and MongoDB 7. The original Phase 5 plan runs applications **on the host** with `KAFKA_BOOTSTRAP_SERVERS=localhost:9092` and `MONGODB_URI` referring to host Mongo. Containers use different internal addresses; do not assume `localhost` inside a container resolves the Kafka broker.
 
-## 9. Entregas incrementales, todas con CI
+**Existing tests must remain isolated:** adding `spring-kafka` must not make the preexisting ~170 integration tests start Kafka/Mongo. The original proposal suggested `ticketing.messaging.enabled=false` for test relay/KafkaAdmin/listeners, **not** the transactional outbox writer. Explicit Kafka-enabled integration tests would use KafkaContainer and proper Spring dynamic properties or `@ServiceConnection`. Notification-service's existing context test must remain runnable without accidental broker/database requirements. Do not silently make development mode disable required features to satisfy a test.
 
-| Incremento | Código/documentación y prueba del mismo cambio | Salida requerida |
+Full Compose, production multi-stage Dockerfiles, Prometheus/Grafana and AWS are later phases. Basic metrics proposed: pending outbox count, publication failures, consumed and deduplicated events, DLT count, and technical logs with event/correlation IDs (not complete email addresses or secrets). **Grafana is not a Phase 5 entry gate.**
+
+Principal future hazards:
+1. Kafka ACK before PostgreSQL publication commit → possible duplicate → unique Mongo identity.
+2. Mongo unavailable → bounded retries + DLT.
+3. Kafka unavailable → committed business remains valid; outbox pending.
+4. Concurrent relays → `SKIP LOCKED` plus per-aggregate predecessor contract.
+5. Malformed messages → DLT without invented notifications.
+6. Missing API key → fail securely, never unprotected query.
+7. EventCancelled recipients → bounded transaction/fanout and deduplication, no notification-service PostgreSQL dependency.
+
+## 9. Proposed increments — each would require its own successful CI
+
+| Increment | Future implementation and tests | Required outcome |
 | --- | --- | --- |
-| F5-00 | **Primero validar en local** con `LOCAL_RUN.md`, seed del perfil dev y webhooks firmados; corregir bloqueos reales de arranque sin ampliar funcionalidades | Docker `healthy`, health 200, Swagger, reserva→orden→captura→tickets, evidencia registrada |
-| F5-01 | Records de cinco eventos, JSON y contrato `EventEnvelope`, tests de serialización/versión, ADR de decisiones | Contrato V1 estable y aprobado |
-| F5-02 | `OutboxWriter` y puntos de inserción transaccional, tests de rollback, idempotencia y todos los orígenes | Negocio+outbox atómicos |
-| F5-03 | Producer, topics y relay; tests Kafka detenido/restaurado, duplicado y dos publishers sobre PostgreSQL | Outbox → Kafka con at-least-once y orden por agregado |
-| F5-04 | Mongo, consumidor, API key, templates text blocks, retries y DLT; tests de duplicado/errores/endpoint | Un documento por eventId y consumo seguro |
-| F5-05 | Integration Testcontainers PG/Redis/Kafka/Mongo y smoke local flujo completo con Awaitility | Notificación observada en Mongo, CI verde |
-| F5-06 | Documento de operaciones, evidencia del test real local, matriz final, auditoría y decisión de cierre | Aprobación formal de Fase 5 |
+| F5-00 | **First validate existing local stack** using LOCAL_RUN, explicit dev seed and signed webhooks; fix genuine startup failures only | Docker healthy, health 200, Swagger and reservation→order→capture→tickets with recorded evidence |
+| F5-01 | Five typed event records and V1 JSON/EventEnvelope version tests, approved ADR decisions | Stable approved V1 contract |
+| F5-02 | OutboxWriter and business TX emission sites; rollback, idempotence, all source paths | Atomic business + outbox |
+| F5-03 | Kafka producer/topics/relay with offline/recovery, duplicates and competing relays in PG | Outbox → Kafka at-least-once, approved per-aggregate ordering |
+| F5-04 | Mongo consumer, protected internal query, simulated text, bounded retries/DLT and identity tests | One valid document per eventId |
+| F5-05 | Testcontainers PG/Redis/Kafka/Mongo full journey and local Awaitility smoke | Persisted simulated notification observed; green CI |
+| F5-06 | Operations guide, actual local results, acceptance matrix, review and closure recommendation | Independent formal Phase 5 acceptance |
 
-## 10. Pruebas/aceptación obligatorias
+**None of these increments is authorized or implemented merely because it is described here.**
 
-El detalle de escenarios, evidencias y comando de ejecución está en [F5-02](F5-02-test-and-acceptance-plan.md). Preservar todos los tests actuales y el umbral JaCoCo de 70 % para `service`/`domain`; no reducir cobertura, no silenciar errores ni eliminar tests para obtener CI verde.
+## 10. Future test and acceptance requirements
 
-La prueba de extremo a extremo exigida por la especificación es: crear usuario/evento → reservar → crear orden → captura firmada SIMULATED → generar tickets → INSERT outbox transaccional → publicar Kafka → consumidor ACK → notificación simulada en MongoDB; todo con espera acotada por Awaitility, nunca `Thread.sleep`. Además incluir fallos, duplicación y DLT.
+The [proposed F5-02 matrix](F5-02-test-and-acceptance-plan.md) lists T01–T27, evidence and commands. Preserve current unit/integration tests and minimum 70% package-scoped JaCoCo for service/domain; never lower coverage, silence failures or delete tests for green CI.
 
-## 11. Dictamen solicitado / condiciones para iniciar
+The original end-to-end acceptance path is: buyer/event → reservation → order → signed SIMULATED capture → tickets → transactional outbox → Kafka → consumer ACK → Mongo simulated notification, with bounded Awaitility waits, **not Thread.sleep**. Add outage, replay, contradictory duplicate and DLT cases. Those are **future Phase 5 exit criteria**, not tests already passed.
 
-El Tech Lead debe aprobar expresamente: (1) un registro por transacción con ACK Kafka bajo lock de outbox; (2) matriz de eventos y su destinatario `EventCancelled`; (3) contrato V1 y versionado; (4) tres entregas totales y DLT `.DLT`; (5) política de consulta interna mediante API key; (6) secuencia de incrementos. Si se exige cambiar esquema, locks globales o API existente, autorización separada antes de implementar.
+## 11. Explicit verdict needed before any Phase 5 implementation
 
-**Este documento es un diseño, no prueba de implementación. Fase 4 permanece abierta y Fase 5 bloqueada hasta los cierres y aprobaciones expresos.**
+The Tech Lead must approve or reject at least:
 
-## 12. Documentación de referencia
+1. Outbox relay one-row PG lock with Kafka ACK under bounded DB transaction **versus an additive claim/lease architecture**.
+2. Precise event taxonomy, recipient selection and EventCancelled fan-out.
+3. V1 envelope schema, canonical duplicate equivalence/digest and versioning.
+4. Number of retries/deliveries and explicit `.DLT` contract.
+5. Internal API-key query security and its scope.
+6. Correlation ID ownership and persistence.
+7. Incremental rollout and tests.
+8. Any new migration/API/lock order under the appropriate separate authorization.
 
-- Especificación técnica Ticketing, secciones 12, 13, 15, 22 y 24.
-- [PostgreSQL 17 — SELECT y SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html); [restricciones](https://www.postgresql.org/docs/17/ddl-constraints.html).
-- [Spring Kafka 3.3 — KafkaTemplate](https://docs.spring.io/spring-kafka/reference/3.3/kafka/sending-messages.html), [listeners y ACK](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html), [errores y DLT](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html).
-- [Spring Data MongoDB — creación de índices](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html).
-- [Spring Boot 3.5 — Testcontainers y ServiceConnection](https://docs.spring.io/spring-boot/3.5/reference/testing/testcontainers.html); [virtual threads y keep-alive](https://docs.spring.io/spring-boot/3.5/reference/features/spring-application.html); [task execution](https://docs.spring.io/spring-boot/3.5/reference/features/task-execution-and-scheduling.html); [Spring Kafka — consumer executor](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/container-thread-naming.html).
-- [Testcontainers — Apache Kafka](https://java.testcontainers.org/modules/kafka/).
-- [Docker Compose — perfiles](https://docs.docker.com/compose/how-tos/profiles/).
-- [Apache Kafka — producer config](https://kafka.apache.org/40/configuration/producer-configs/).
-- [Transactional Outbox, patrón de ingeniería](https://microservices.io/patterns/data/transactional-outbox.html) (referencia de patrón, no normativa oficial).
+This design is **not evidence of implementation or Tech Lead acceptance**. **Phase 5 remains BLOCKED** until F3/F4 are formally closed and a separate owner authorization is recorded.
+
+## 12. Historical technical references
+
+- Original Ticketing specification ``12, 13, 15, 22 and 24.
+- [PostgreSQL 17 SELECT / SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html), [constraints](https://www.postgresql.org/docs/17/ddl-constraints.html).
+- [Spring Kafka 3.3 KafkaTemplate](https://docs.spring.io/spring-kafka/reference/3.3/kafka/sending-messages.html), [listeners/ACK](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/message-listener-container.html), [error handling/DLT](https://docs.spring.io/spring-kafka/reference/3.3/kafka/annotation-error-handling.html). Verify the actual resolved version **after** Phase 5 is authorized.
+- [Spring Data MongoDB index management](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html).
+- [Spring Boot 3.5 Testcontainers](https://docs.spring.io/spring-boot/3.5/reference/testing/testcontainers.html), [virtual threads/keep-alive](https://docs.spring.io/spring-boot/3.5/reference/features/spring-application.html), [task execution](https://docs.spring.io/spring-boot/3.5/reference/features/task-execution-and-scheduling.html), [Spring Kafka consumer executor](https://docs.spring.io/spring-kafka/reference/3.3/kafka/receiving-messages/container-thread-naming.html).
+- [Testcontainers Apache Kafka](https://java.testcontainers.org/modules/kafka/), [Docker Compose profiles](https://docs.docker.com/compose/how-tos/profiles/), [Apache Kafka producer configuration](https://kafka.apache.org/40/configuration/producer-configs/).
+- [Transactional Outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html) — an engineering-pattern reference, not a normative technology specification.

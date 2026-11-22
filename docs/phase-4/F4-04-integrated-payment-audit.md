@@ -1,102 +1,122 @@
-# F4-04 — Validación integral de operaciones y reembolsos
+# F4-04 — Integrated operations and simulated-refund audit
 
-- **Fecha:** 2026-11-14
-- **Alcance:** H78, H79, H80, H82 y H84; ADR-018/019 y F4-01/F4-02.
-- **Línea base de evidencia:** `88a8f717d4c3079d124166dff487167e373fec6d`, GitHub Actions CI #295; última validación ampliada: `b8f1037b9a6f923b70ab92ef0071423c0479b1c0`, CI #306 (sobre los escenarios financieros validados en CI #302 y el fencing de CI #304).
-- **Estado:** clasificación de disposiciones, progresión `FAILED → REFUNDED` y carrera `PENDING`/`REFUNDED` validadas en CI #302. Referencias evolutivas y conciliación fuera de orden permanecen pendientes; recuperación tras APPLY, fencing de proyección obsoleta y transición interrumpida `PENDING → REFUNDED` con referencia estable están validados en CI #304/#306. **No se declara H84 ni Fase 4 cerrados.**
+- **Date:** 2026-11-14.
+- **Scope:** H78, H79, H80, H82 and H84; ADR-018/019 and F4-01/F4-02.
+- **Historical evidence baseline:** `88a8f717d4c3079d124166dff487167e373fec6d`, CI #295; later expanded validation `b8f1037b9a6f923b70ab92ef0071423c0479b1c0`, CI #306, following CI #302 financial cases and CI #304 fencing checks.
+- **Historical status:** Disposition classification, `FAILED → REFUNDED` and `PENDING/REFUNDED` races passed CI #302. Recovery after APPLY, stale-projection fencing and interrupted `PENDING → REFUNDED` with a stable reference passed CI #304/#306. **Provider-reference evolution, early refund reconciliation contract, H84 and formal Phase 4 closure were still pending.**
+- **Later finding and correction:** The original tests did not fully exercise interrupted APPLY/PROJECT where an early `NO_OP` refund is recovered after a separate successful capture. REV-DEV-01 later reproduced erroneous same-job reapplication; current main implemented a durable outcome regression/fix. Historical CI must not be presented as proof that this later bug was already absent.
 
-## Evidencia histórica y de la corrección
+## Historic CI evidence
 
-CI #295: [workflow](https://github.com/dab960405/tickeringsystem/actions/runs/43634870599).
+[CI #295](https://github.com/dab960405/tickeringsystem/actions/runs/43634870599) was successful:
 
-| Suite o control | Resultado |
+| Suite or gate | Recorded result |
 | --- | --- |
-| Surefire de `ticketing-api` | 390; 0 fallos, 0 errores, 0 omitidos |
-| Failsafe de `ticketing-api` | 152; 0 fallos, 0 errores, 0 omitidos |
+| `ticketing-api` Surefire | 390; zero failures/errors/skips |
+| `ticketing-api` Failsafe | 152; zero failures/errors/skips |
 | `OrderPaymentFlowIT` | 20/20 |
 | `OperationWorkerIT` | 10/10 |
 | `OperationPropertiesTest` | 16/16 |
-| Spotless | 220 archivos Java de `ticketing-api` limpios |
-| JaCoCo | checks del build superados |
+| Spotless | 220 clean API Java files |
+| JaCoCo | All configured checks met |
 | Maven | `BUILD SUCCESS` |
 
-Las cuatro pruebas añadidas tras CI #293 documentan: reembolso `FAILED` sin confirmación financiera ni cancelación de ticket; estado `PENDING_RECONCILIATION` sin fingir reembolso; evidencia `REFUNDED` fuera de orden antes de captura; y recuperación de proyección de reembolso por worker sin repetir efectos en un nuevo claim. Las suites de concurrencia, reservas, emisión y expiración también forman parte del mismo `verify`.
+Four tests introduced after CI #293 covered a `FAILED` refund without financial confirmation/ticket cancellation, `PENDING_RECONCILIATION` without false refund confirmation, a premature `REFUNDED` before capture, and worker projection recovery without intended duplicate effects on a new claim. Concurrency/reservation/ticket/expiration suites also ran in `verify`.
 
-La validación H82 de `OperationPropertiesTest` cubre límites y defaults; `OperationTransactionExecutor` configura `lock_timeout` y `statement_timeout` con `SET LOCAL`. El commit `522a2dcf706122760ffee4fd46e8027e41e2723d` añadió una prueba que consulta esos valores dentro de TX-RX/CLAIM/APPLY/PROJECT con PostgreSQL real. CI #296 terminó verde: 390 unitarios y 153 integraciones (`OperationWorkerIT` 11/11), sin fallos; Spotless y JaCoCo correctos; `BUILD SUCCESS`. [Run #296](https://github.com/dab960405/tickeringsystem/actions/runs/43635133428).
+H82 validation in `OperationPropertiesTest` covered limits/defaults. `OperationTransactionExecutor` uses PostgreSQL `SET LOCAL` for `lock_timeout` and `statement_timeout`. Commit `522a2dcf706122760ffee4fd46e8027e41e2723d` added an actual PostgreSQL query test inside RX/CLAIM/APPLY/PROJECT. [CI #296](https://github.com/dab960405/tickeringsystem/actions/runs/43635133428) succeeded with 390 units, 153 integrations, `OperationWorkerIT` 11/11, JaCoCo/Spotless.
 
-### Verificación de la corrección — CI #298
+## CI #298 — Correctly classify actual business effects
 
-El commit `4acb8240e951cebc2ac3178d3543db1a74549d23` separó el resultado `PaymentEffectOutcome` del conflicto de inserción en `semantic_applications`. `PaymentOperationService` ahora registra `APPLIED` / `NO_OP` y su payload JSON en función del efecto comercial real; `OrderPaymentService` mantiene el método público `process` y añade `processWithOutcome`. No hubo migraciones ni alteración del orden de adquisición de locks.
+Commit `4acb8240e951cebc2ac3178d3543db1a74549d23` separated `PaymentEffectOutcome` from the result of inserting a semantic identity row into `semantic_applications`. `PaymentOperationService` now records `APPLIED` or `NO_OP` and JSON disposition according to the **actual commercial effect**, while `OrderPaymentService` retains its public `process` method and adds `processWithOutcome`. No migration or global lock order change was made.
 
-[CI #298](https://github.com/dab960405/tickeringsystem/actions/runs/43640665242) terminado en `success` sobre ese SHA: **390 pruebas unitarias, 157 pruebas de integración**, `OrderPaymentFlowIT` **24/24**, `OperationWorkerIT` **11/11**, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`. Los cuatro casos nuevos prueban `PENDING → REFUNDED` con operación y referencia idénticas, reembolso prematuro sin efecto, repetición de `REFUNDED` con evento nuevo y `REFUNDED → PENDING` sin regresión. En todos los casos la disposición coincide con el cambio comercial, y la operación conserva una sola fila en `semantic_applications`.
+[CI #298](https://github.com/dab960405/tickeringsystem/actions/runs/43640665242) completed `success`: 390 units, 157 integrations, `OrderPaymentFlowIT` 24/24, `OperationWorkerIT` 11/11, 221 clean API Java files, JaCoCo and `BUILD SUCCESS`.
 
-### Ampliación de regresiones y carrera — CI #302
+The four new cases covered:
+1. `PENDING → REFUNDED` for the same provider operation and financial reference.
+2. Premature refund with **no** business effect.
+3. Repeated `REFUNDED` via another provider event.
+4. `REFUNDED → PENDING` not regressing an already confirmed refund.
 
-Se agregaron `should_confirmRefundAfterFailedEvidenceForSameProviderOperation` y `should_notLoseRefund_whenPendingAndRefundedArriveConcurrently` (`@RepeatedTest(10)`), reutilizando `providerOperationId` y la referencia financiera dentro de cada caso, con referencias de captura/reembolso distintas entre fixtures. La prueba concurrente verifica `REFUNDED`, disposición `APPLIED` del evento final, `APPLIED`/`NO_OP` de `PENDING` según interleaving, un solo registro de `semantic_applications` y ticket cancelado.
+Disposition matched the actual business change; each provider operation retained one `semantic_applications` identity row.
 
-La evidencia CI tiene trazabilidad completa: CI #300 falló por referencias fijas incompatibles con `uq_payments_provider_reference` entre repeticiones; CI #301 ejecutó **390 unitarias y 168 integraciones sin errores**, pero falló exclusivamente en un cambio de formato Spotless; se aplicó el diff exacto en `30517047d80e7b861874b0a81284fe921ba1e068`. [CI #302](https://github.com/dab960405/tickeringsystem/actions/runs/43642005154) terminó en **success** sobre este SHA: **390 unitarias, 168 integraciones, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`**. No se omitió ni debilitó ninguna prueba.
+## CI #302 — Extended refund transitions and concurrency
 
-### Recuperación financiera y fencing tras interrupción — CI #304
+Added `should_confirmRefundAfterFailedEvidenceForSameProviderOperation` and `should_notLoseRefund_whenPendingAndRefundedArriveConcurrently` with `@RepeatedTest(10)`. Each test reused provider operation ID and financial reference across states, with distinct capture/refund references among fixtures. The concurrent test asserted eventual `REFUNDED`, an `APPLIED` final event, `APPLIED` or `NO_OP` for `PENDING` depending on interleaving, a single semantic identity and cancelled tickets.
 
-El commit `f12cc6c5ce9d48772c54dd729597d5f2ff51ce36` amplió `should_recoverRefundProjectionWithoutRepeatingFinancialEffects` de `OperationWorkerIT` con una aserción que exige `OperationFencingException` si el worker interrumpido intenta proyectar después de que otro worker recupere la operación. La prueba ya verificaba estado de orden/pago/reembolso, cancelación de ticket exactamente una vez, una sola identidad semántica, dos ejecuciones, disposiciones `APPLIED` y `NO_OP`, y proyección `COMPLETED`. El escenario utiliza un evento `REFUNDED` directo; **no cubre por sí solo la interrupción del cambio `PENDING → REFUNDED` de una misma operación**.
+Historical sequence:
+- CI #300 failed because the same fixed provider reference collided with `uq_payments_provider_reference` across repetitions.
+- CI #301 ran **390 unit and 168 integration tests successfully**, but failed only Spotless formatting.
+- Commit `30517047d80e7b861874b0a81284fe921ba1e068` applied the exact format diff.
+- [CI #302](https://github.com/dab960405/tickeringsystem/actions/runs/43642005154) **SUCCESS** on that SHA: 390 unit, 168 integration, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, 221 clean Java, JaCoCo, `BUILD SUCCESS`; no tests were removed or weakened.
 
-[CI #304](https://github.com/dab960405/tickeringsystem/actions/runs/43642792880) terminó en `success` sobre ese SHA: **390 unitarias, 168 integraciones, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`**, sin fallos, errores ni omitidos. También pasó [CI #303](https://github.com/dab960405/tickeringsystem/actions/runs/43642435399) para el commit documental anterior.
+## CI #304 — Refund projection recovery and stale fencing
 
-### Recuperación de transición PENDING → REFUNDED — CI #306
+Commit `f12cc6c5ce9d48772c54dd729597d5f2ff51ce36` extended `OperationWorkerIT.should_recoverRefundProjectionWithoutRepeatingFinancialEffects`. It added an assertion that a stale interrupted worker projecting after another worker's successful recovery receives `OperationFencingException`.
 
-El commit `b8f1037b9a6f923b70ab92ef0071423c0479b1c0` agregó `should_recoverInterruptedPendingToRefundedTransitionAndFenceStaleProjection` a `OperationWorkerIT`. Con compra pagada y cancelación solicitada, se recibe `PENDING` y después `REFUNDED` con la **misma** operación, referencia, importe y moneda, pero distinto `providerEventId`. Se interrumpe el flujo de prueba después de `APPLY`, antes de `PROJECT`, y otro worker recupera el job; el intento de proyección del claim original debe arrojar `OperationFencingException`. Se comprueban confirmación del reembolso, ticket cancelado, una sola identidad en `semantic_applications`, dos ejecuciones, disposiciones `APPLIED`/`NO_OP`, proyección `COMPLETED` y estado financiero proyectado `REFUNDED`. Esta prueba controla el punto de interrupción; no simula la caída real de un proceso externo.
+Earlier assertions checked correct order/payment/refund state, exactly-once ticket cancellation, one semantic identity, two worker executions, `APPLIED`/`NO_OP` dispositions and a `COMPLETED` projection. The scenario started from a direct `REFUNDED` provider event; **it did not prove interruption of a state progression `PENDING → REFUNDED` within the same operation**.
 
-[CI #306](https://github.com/dab960405/tickeringsystem/actions/runs/43644409880) terminó en **success** para ese SHA: **390 unitarias, 169 integraciones, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 12/12, Spotless 221 Java limpios, JaCoCo y `BUILD SUCCESS`**, sin fallos, errores ni omitidos. El [CI #305](https://github.com/dab960405/tickeringsystem/actions/runs/43644135889) validó previamente el commit documental `6c5bdacb14bf7fb22804fe3a4e00593f6d4fc6a7`.
+[CI #304](https://github.com/dab960405/tickeringsystem/actions/runs/43642792880) **SUCCESS**: 390 units, 168 integrations, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 11/11, Spotless 221, JaCoCo and `BUILD SUCCESS`. Prior [CI #303](https://github.com/dab960405/tickeringsystem/actions/runs/43642435399) also passed for the earlier document-only commit.
 
-## H84-01 — identidad semántica y evolución de estado de reembolso
+## CI #306 — Interrupted PENDING → REFUNDED transition
 
-**Estado:** el defecto original de clasificación y la carrera `PENDING`/`REFUNDED` están validados con PostgreSQL en CI #302; quedan la definición contractual de referencia mutable y la conciliación de evidencia anticipada. La transición interrumpida `PENDING → REFUNDED` con identidad estable cuenta con regresión validada en CI #306. Se conserva la criticidad original sin reclasificación unilateral.
+Commit `b8f1037b9a6f923b70ab92ef0071423c0479b1c0` introduced `OperationWorkerIT.should_recoverInterruptedPendingToRefundedTransitionAndFenceStaleProjection`.
 
-### Secuencia validada en CI #298
+After a paid purchase requested refund, `PENDING` and later `REFUNDED` arrived for the **same provider operation**, reference, amount and currency but distinct `providerEventId`. The test deliberately interrupted execution after APPLY but before PROJECT, recovered with another worker and expected `OperationFencingException` from the original worker's stale projection attempt.
 
-1. Una compra pagada solicita reembolso, quedando `refund_status=REQUESTED`.
-2. El proveedor envía `PAYMENT_REFUND` con `status=PENDING`, `providerOperationId=R`, `providerEventId=E1`, referencia, importe y moneda válidos. La orden pasa a `PENDING_RECONCILIATION`; la operación R se registra en `semantic_applications`.
-3. El mismo proveedor envía un segundo evento `E2` para la **misma operación R**, con `status=REFUNDED` y sin cambiar orden, referencia, importe ni moneda.
-4. E2 materializa la transición financiera y la disposición queda `APPLIED`, pese a que ambas notificaciones comparten una sola identidad en `semantic_applications`. Se validó con referencia estable.
+Assertions covered confirmed refund, cancelled ticket, one semantic identity row, two executions, `APPLIED`/`NO_OP` dispositions, a `COMPLETED` projection and projected financial status `REFUNDED`. This was **controlled transaction interruption**, not an actual external process crash.
 
-### Diagnóstico del defecto original (SHA `23893305`)
+[CI #306](https://github.com/dab960405/tickeringsystem/actions/runs/43644409880) **SUCCESS**: 390 units, 169 integrations, `OrderPaymentFlowIT` 35/35, `OperationWorkerIT` 12/12, Spotless/JaCoCo and `BUILD SUCCESS`. [CI #305](https://github.com/dab960405/tickeringsystem/actions/runs/43644135889) had already passed the preceding documentation commit `6c5bdacb14bf7fb22804fe3a4e00593f6d4fc6a7`.
 
-- `PaymentEvidenceDigest.semantic` calcula el digest de `orderId`, `operationKind`, `providerReference`, importe y moneda; **no incluye `status`**. Por tanto, E1 y E2 presentan el mismo digest semántico.
-- `ProviderEventInboxService.registerOperation` acepta la identidad R ya registrada cuando el digest coincide; `registerEvent` acepta E2 como un evento nuevo si su `providerEventId` es distinto.
-- `OperationCycleService.register` genera una participación/job para E2; el job puede llegar a APPLY.
-- `SemanticApplicationService.apply` ejecuta `application.run()` **antes** de intentar el `INSERT ... ON CONFLICT DO NOTHING` en `semantic_applications`. Para R repetida, el conflicto devuelve un resultado semántico `false` (NO_OP), **después** de ejecutar el servicio comercial.
-- `OrderPaymentService.processRefund` permite que E2 (`REFUNDED`) confirme el reembolso, transforme el pago a `REFUNDED` y cancele tickets si el pago era `SUCCEEDED`, incluso si E1 ya había consumido R con `PENDING`.
+## H84-01 — Semantic identity versus evolving refund status
 
-Este flujo justificó la prueba que fallaría en el SHA anterior: **`NO_OP` con un efecto financiero real**, y también `APPLIED` sin efecto para una notificación `REFUNDED` anticipada. La corrección y las pruebas correspondientes están validadas en CI #298; el párrafo anterior es diagnóstico histórico y no describe el código actual.
+**Historical status:** The original effect-classification bug and `PENDING/REFUNDED` race passed CI #302; provider reference changes and financial reconciliation were still contractual decisions. CI #306 covered interrupted progression with a stable reference. The original H84 severity is preserved (not unilaterally reclassified).
 
-### Semántica implementada y decisiones pendientes
+### State progression verified in CI #298
 
-- **Decisión aplicada:** una operación de proveedor puede comunicar estados sucesivos sin crear otra identidad. La disposición de la ejecución describe el efecto comercial observado bajo locks (`APPLIED`/`NO_OP`), mientras la fila única de `semantic_applications` preserva la identidad y digest originales. La aclaración queda en ADR-019.
-- **Restricciones conservadas:** `UNIQUE(provider_operation_id)`, `idempotency_key VARCHAR(100)`, trigger append-only y orden global ADR-016; no se añadió `#status`, columna ni nuevo lock.
-- **Pendiente de contrato externo:** `PENDING` con `providerReference=null` seguido de `REFUNDED` con referencia nueva actualmente se rechaza por digest distinto (HTTP 409). No se ha autorizado relajar esa protección ni definir una política de enriquecimiento de referencia.
-- **Pendiente de recuperación:** decidir si un `REFUNDED` anterior a la captura queda solo archivado o debe reconciliarse automáticamente al recibir evidencia de captura.
-- **Pruebas completadas en CI #302:** `FAILED → REFUNDED` con identidad estable y diez carreras `PENDING`/`REFUNDED`, sin duplicación de efecto financiero.
-- **Validado en CI #304:** después de aplicar un reembolso directo, un worker posterior recupera la proyección sin duplicar efectos y el worker anterior queda impedido de proyectar con fencing obsoleto.
-- **Validado en CI #306:** interrupción controlada entre APPLY y PROJECT durante `PENDING → REFUNDED` de una misma operación; preserva identidad única, disposiciones, proyección final y fencing. Faltan casos de referencia evolutiva y conciliación posterior cuando el Tech Lead defina el contrato.
+1. A paid order requests a refund: `refund_status=REQUESTED`.
+2. The simulated provider sends `PAYMENT_REFUND` with `status=PENDING`, `providerOperationId=R`, `providerEventId=E1`, and valid reference/amount/currency. Order becomes `PENDING_RECONCILIATION`; provider operation R is present in `semantic_applications`.
+3. Another signed provider event E2 arrives for **the same operation R**, `status=REFUNDED` and otherwise unchanged order/reference/amount/currency.
+4. E2 confirms the business/financial change with `APPLIED` disposition **despite the one shared semantic identity**. This was verified using a stable reference.
 
-### Decisiones contractuales requeridas al Tech Lead (sin implementación)
+### Original bug diagnosis — SHA `23893305`
 
-1. **Referencia evolutiva:** decidir si `providerReference=null → referencia` para la **misma** operación puede aceptarse como enriquecimiento de evidencia bajo condiciones verificables, o si el HTTP 409 actual es el contrato definitivo. Debe explicitarse la protección frente a una referencia diferente/no autorizada y la inmutabilidad del digest de evidencia histórica.
-2. **Reembolso anticipado:** decidir si una evidencia `REFUNDED` recibida antes de la captura debe conservarse como `NO_OP` definitivo o reexaminarse automáticamente después de una captura posterior. Definir autorización y orden de aplicación sin reembolso ficticio ni doble efecto.
-3. **Recuperación y fencing:** criterio técnico cubierto para interrupción controlada entre APPLY y PROJECT durante `PENDING → REFUNDED` en CI #306; no requiere ampliar contrato. Esto no sustituye las decisiones contractuales 1 y 2.
+- `PaymentEvidenceDigest.semantic` included `orderId`, `operationKind`, `providerReference`, amount and currency, **not `status`**; E1 and E2 therefore shared a semantic digest.
+- `ProviderEventInboxService.registerOperation` accepted existing operation R if digest matched; `registerEvent` accepted new E2 because `providerEventId` differed.
+- `OperationCycleService.register` created a new participation/job for E2.
+- `SemanticApplicationService.apply` evaluated `application.run()` **before** `INSERT ... ON CONFLICT DO NOTHING` on `semantic_applications`. A conflict for existing R returned a semantic `false`/`NO_OP` **after the commercial callback had executed**.
+- `OrderPaymentService.processRefund` could confirm refund, mark payment `REFUNDED` and cancel tickets for a successful capture even though the earlier E1 had registered R with `PENDING`.
 
-**Propuesta para el portafolio:** [ADR-022](../adr/ADR-022-simulated-refund-evidence-contract.md) recomienda conservar HTTP 409 para cambio de referencia y usar nueva notificación HMAC con identidad semántica constante para reevaluar un `REFUNDED` anterior a la captura. Se añadió la regresión `should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture` en `8e2c8787a7fe5bb3c8c8d1571bf523295e413154`; CI #308 pasó todas las pruebas pero falló en Spotless. El commit de formato `a8013f67bffe3a5826606469485335b61e13a93d` pasó [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382): 390 unitarias, 170 integraciones, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, JaCoCo y Spotless correctos, `BUILD SUCCESS`. **Contrato propuesto, no aprobado por el Tech Lead.** La publicación documental no cierra H84/Fase 4.
+The pre-fix tests exposed `NO_OP` accompanying a real financial change, or `APPLIED` when a premature refund had no effect. The history above describes the **old code**, not current main.
 
-## Dictamen de avance
+### Implemented semantics and unresolved contracts
 
-- H78: workers, fencing y recuperación probados en CI para los escenarios cubiertos; sin autorización de cierre formal.
-- H79: captura tardía, gracia, inventario e imposibilidad de entrega probados en la suite de pago; la política sigue regida por ADR-019.
-- H80: identidades persistentes, append-only e idempotencia probadas; H84-01 ya registra disposiciones por efecto real sin romper unicidad de operación; falta la política de referencia mutable y conciliación.
-- H82: límites operativos y timeouts PostgreSQL verificados en CI #296 sobre el SHA exacto; queda la aceptación del expediente integral, no un defecto técnico detectado en H82.
-- H84: regresiones CI #298/#302, carrera `PENDING`/`REFUNDED` y recuperación con fencing CI #304/#306. La prueba del reenvío firmado tras captura está verificada en CI #309 sobre `a8013f67`. **Se solicita dictamen** del contrato mínimo de simulación propuesto en ADR-022; no se declara cerrado.
+- **Implemented:** A provider operation can publish successive states without creating a second provider-operation identity. Each execution's disposition describes its **actual business effect under locks**; unique `semantic_applications` identity/digest remains append-only.
+- **Preserved:** `UNIQUE(provider_operation_id)`, `idempotency_key VARCHAR(100)`, append-only trigger and global ADR-016 lock order. No new status column or lock was introduced.
+- **Unresolved reference evolution:** An initial `PENDING` with `providerReference=null` followed by `REFUNDED` with a new reference currently conflicts because digest changes, yielding HTTP 409. No silent enrichment of immutable evidence was approved.
+- **Unresolved early refund:** Decide whether a `REFUNDED` before capture is forever `NO_OP` unless a new signed event arrives, or should trigger automatic re-evaluation after capture. Do not invent financial reconciliation.
+- **CI #302:** `FAILED → REFUNDED` with stable identity and ten `PENDING/REFUNDED` races, no duplicate business effect.
+- **CI #304:** direct-refund projection recovery with stale-worker fencing and no duplicate effect.
+- **CI #306:** controlled APPLY/PROJECT interruption during `PENDING → REFUNDED` with semantic uniqueness, final projection and fencing.
+- **Later critical qualification:** Subsequent adversarial REV-DEV-01 found that **recovering the same old early-refund job after a later successful capture could re-run commercial application**. A distinct new provider event must be separated from recovery of the same committed APPLY. The subsequent main correction added a permanent regression; consult [the updated remediation dossier](../audit/MAIN-REMEDIATION-2026-11-21.md) and its final CI evidence.
 
-La excepción cross-module de `EventCancellationService` permanece pendiente del dictamen del Tech Lead para el cierre formal de Fase 3. Este documento no aprueba cambios de arquitectura, no cierra Fase 4 y no habilita Fase 5.
+### Contract decisions requested of the Tech Lead — not automatically approved
 
-## Expediente consolidado
+1. **Changing reference:** May `providerReference=null → non-null` be accepted as constrained enrichment for **the same operation**, or is existing HTTP 409 the definitive contract? Protect against unapproved different references and preserve evidence immutability.
+2. **Early refund:** Should `REFUNDED` received before capture remain `NO_OP` until a **new signed event** (minimal simulated-provider proposal), or should it be automatically reconciled upon later capture? Specify authorization/ordering without fictitious refunds/double effects.
+3. **Recovery and fencing:** Controlled interruption between APPLY and PROJECT during a stable-reference `PENDING → REFUNDED` passed CI #306. This does not replace decisions 1/2; the later same-job replay regression also requires validation.
 
-[F4-05 — revisión de cierre de Fase 4](F4-05-closure-review.md). La aprobación técnica del contrato mínimo y el cierre formal permanecen reservados al Tech Lead/responsable. Fase 5 bloqueada.
+**Portfolio recommendation:** [ADR-022](../adr/ADR-022-simulated-refund-evidence-contract.md) proposes retaining HTTP 409 for reference changes and accepting **a new HMAC-signed notification** with stable semantic identity after a capture. `OrderPaymentFlowIT.should_applyPreviouslyEarlyRefund_whenNewSignedEventArrivesAfterCapture` was added in `8e2c8787a7fe5bb3c8c8d1571bf523295e413154`; CI #308 passed tests but failed Spotless. The format commit `a8013f67bffe3a5826606469485335b61e13a93d` passed [CI #309](https://github.com/dab960405/tickeringsystem/actions/runs/43647059382): 390 units, 170 integrations, `OrderPaymentFlowIT` 36/36, `OperationWorkerIT` 12/12, JaCoCo/Spotless, `BUILD SUCCESS`.
+
+**ADR-022 remains PROPOSED, not Tech Lead-approved.** Documentation publication does not close H84/Phase 4.
+
+## Historical technical disposition
+
+- **H78:** Workers, fencing and recovery tested for covered scenarios; no formal acceptance or Phase 4 closure. Later REV-DEV-01 specifically strengthened same-job recovery.
+- **H79:** Late capture, recovery grace, inventory and `UNFULFILLABLE` behavior tested; accepted ADR-019 governs the policy.
+- **H80:** Persisted identities, append-only constraints and semantic idempotency tested. H84-01's dispositions now report actual effects while preserving one operation identity; mutable reference policy remains pending.
+- **H82:** Worker configuration/transaction timeout values tested with PostgreSQL in CI #296; pending integration dossier acceptance is not a demonstrated H82 code defect.
+- **H84:** Original classification and `PENDING/REFUNDED` race tested in CI #298/#302; stale recovery fencing in #304/#306; new signed event after capture in #309. **Contract verdict still required.**
+
+The cross-module `EventCancellationService` exception remained proposed for Tech Lead review to close Phase 3; see ADR-024 and [F3-01](../phase-3/F3-01-closure-review.md).
+
+**This document neither approves architecture, closes Phase 4 nor authorizes Phase 5.** Consolidated reviewer dossier: [F4-05](F4-05-closure-review.md).
